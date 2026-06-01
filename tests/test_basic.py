@@ -740,3 +740,38 @@ def test_python_includes_local_module(tmp_path):
     )
     fn = validate_loader(db, "local")
     assert fn("/x") == "local:/x"
+
+
+# ----- Item 12: Default loaders — text formats -----
+
+def test_default_loader_json(tmp_path):
+    from datamanifest.default_loaders import default_loader
+    import json
+
+    f = tmp_path / "data.json"
+    f.write_text(json.dumps({"a": 1, "b": [2, 3]}))
+    result = default_loader("json")(str(f))
+    assert result == {"a": 1, "b": [2, 3]}
+
+
+def test_default_loader_toml(tmp_path):
+    from datamanifest.default_loaders import default_loader
+
+    f = tmp_path / "data.toml"
+    f.write_text('[section]\nkey = "value"\n')
+    result = default_loader("toml")(str(f))
+    assert result == {"section": {"key": "value"}}
+
+
+def test_default_loader_unknown_raises():
+    from datamanifest.default_loaders import default_loader
+
+    with pytest.raises(ValueError, match="No default loader for format"):
+        default_loader("unknown_xyz")
+
+
+def test_default_loader_empty_raises():
+    from datamanifest.default_loaders import default_loader
+
+    with pytest.raises(ValueError, match="No loader provided"):
+        default_loader("")
