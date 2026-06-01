@@ -28,7 +28,9 @@ from .config import (
     DEFAULT_DATASETS_FOLDER_PATH,
     HIDE_STRUCT_FIELDS,
     get_default_toml,
+    get_extract_path,
     logger,
+    sha256_path,
 )
 
 
@@ -394,6 +396,176 @@ def search_dataset(db, name: str, raise_: bool = True, **kwargs):
         )
         logger.warning(message)
     return results[0]
+
+
+# ----- Path resolution (Databases.jl:319-346) -----
+def get_dataset_path(
+    entry: "DatasetEntry",
+    datasets_folder: str = "",
+    extract=None,
+    project_root: str = "",
+) -> str:
+    """Return the on-disk path for *entry*.
+
+    ``local_path`` and ``skip_download`` extensions are wired in a later item.
+    """
+    if extract is None:
+        extract = entry.extract
+    key = entry.key
+    if extract:
+        key = get_extract_path(key)
+    folder = datasets_folder if datasets_folder else DEFAULT_DATASETS_FOLDER_PATH
+    return os.path.join(folder, key)
+
+
+# ----- Checksum, update, delete (Databases.jl:464-617) -----
+def _maybe_persist_database(db: "Database", persist: bool = True) -> None:
+    if persist and db.datasets_toml:
+        tail = db.datasets_toml[-60:]
+        logger.info("Write database to ...%s", tail)
+        db.write(db.datasets_toml)
+
+
+def verify_checksum(
+    db: "Database",
+    dataset: "DatasetEntry",
+    persist: bool = True,
+    extract=None,
+):
+    """Verify or auto-fill the sha256 checksum for *dataset* (Databases.jl:472-502)."""
+    if extract is not None and extract != dataset.extract:
+        logger.warning(
+            "dataset.extract=%s but required extract=%s. Skip verifying checksum.",
+            dataset.extract,
+            extract,
+        )
+        return
+    local_path = get_dataset_path(dataset, db.datasets_folder)
+    if db.skip_checksum or dataset.skip_checksum:
+        return True
+    if not os.path.isfile(local_path) and not os.path.isdir(local_path):
+        return True
+    if os.path.isdir(local_path) and db.skip_checksum_folders:
+        return True
+    checksum = sha256_path(local_path)
+    if dataset.sha256 == "":
+        dataset.sha256 = checksum
+        _maybe_persist_database(db, persist)
+        return True
+    if dataset.sha256 != checksum:
+        raise ValueError(
+            f"Checksum mismatch for dataset at {local_path}. "
+            f"Expected: {dataset.sha256}, got: {checksum}. "
+            "Possible resolutions:"
+            "\n- remove the file"
+            "\n- reset the `sha256` field"
+            "\n- use a different `key`"
+            "\n- remove Entry checksum checks (`dataset.skip_checksum = true`)"
+            "\n- remove Database checksum checks (`db.skip_checksum = true`)"
+        )
+    return True
+
+
+def update_entry(
+    db: "Database",
+    oldname: str,
+    oldentry: "DatasetEntry",
+    newname: str,
+    newentry: "DatasetEntry",
+    overwrite: bool = False,
+    persist: bool = True,
+):
+    """Replace or rename an existing entry (Databases.jl:504-551)."""
+    if (
+        oldentry.key != newentry.key
+        and oldentry.uri != newentry.uri
+        and oldentry.version != newentry.version
+        and oldname != newname
+    ):
+        raise ValueError(
+            "At least one of the name or any of the following fields must match "
+            "to update: key, uri"
+        )
+    if oldentry == newentry and oldname == newname:
+        logger.info("Dataset entry [%s] already exists.", newname)
+        return (oldname, oldentry)
+    verify_checksum(db, oldentry, persist=False)
+    verify_checksum(db, newentry, persist=False)
+    if oldentry == newentry:
+        if not overwrite:
+            raise ValueError(
+                f"Dataset entry already exists with name {oldname!r}. "
+                f"Pass `overwrite=True` to update with new name {newname!r}."
+            )
+        logger.warning("Rename %s => %s", oldname, newname)
+        del db.datasets[oldname]
+        db.datasets[newname] = newentry
+        _maybe_persist_database(db, persist)
+        return (newname, newentry)
+    message = f"Possible duplicate found {oldname} =>\n{oldentry}"
+    existing_datapath = get_dataset_path(oldentry, db.datasets_folder)
+    new_datapath = get_dataset_path(newentry, db.datasets_folder)
+    if existing_datapath != new_datapath and (
+        os.path.isfile(existing_datapath) or os.path.isdir(existing_datapath)
+    ):
+        if os.path.isfile(new_datapath) or os.path.isdir(new_datapath):
+            message += (
+                "\n\nBoth old and new datasets exist on disk at:"
+                f"\n    {existing_datapath} SHA-256: {oldentry.sha256}"
+                f"\n    {new_datapath} SHA-256: {newentry.sha256}"
+            )
+        else:
+            message += f"\nExisting dataset found at\n    {existing_datapath}\n."
+        message += (
+            "\n\nCleanup manually if needed."
+            "Note you may explicitly specify the keys to point to a dataset, e.g."
+            f'\n    key="{oldentry.key}"'
+            f'\n    key="{newentry.key}"'
+        )
+    if overwrite:
+        logger.warning("%s\n\nOverwriting with new entry %s =>\n%s", message, newname, newentry)
+        if oldname in db.datasets:
+            del db.datasets[oldname]
+        db.datasets[newname] = newentry
+        _maybe_persist_database(db, persist)
+        return (newname, newentry)
+    raise ValueError(
+        f"{message}\n\nPlease manually remove the old entry or set `overwrite=True` "
+        f"to update with dataset {newname} =>\n{newentry} or pass "
+        "`check_duplicate=False` to register nonetheless"
+    )
+
+
+def _remove_dataset_from_disk(db: "Database", entry: "DatasetEntry") -> None:
+    """Delete the on-disk files for *entry* (Databases.jl:589-605)."""
+    if entry.skip_download or entry.local_path != "":
+        return
+    download_path = get_dataset_path(entry, db.datasets_folder, extract=False)
+    if entry.extract:
+        local_path = get_dataset_path(entry, db.datasets_folder, extract=True)
+        if os.path.isdir(local_path):
+            import shutil
+            shutil.rmtree(local_path, ignore_errors=True)
+    if os.path.isfile(download_path):
+        os.remove(download_path)
+    elif os.path.isdir(download_path):
+        import shutil
+        shutil.rmtree(download_path, ignore_errors=True)
+
+
+def delete_dataset(
+    db: "Database",
+    name: str,
+    keep_cache: bool = False,
+    persist: bool = True,
+) -> None:
+    """Remove a dataset entry and (optionally) its cached files (Databases.jl:607-617)."""
+    resolved_name, entry = search_dataset(db, name)
+    if not keep_cache:
+        _remove_dataset_from_disk(db, entry)
+    del db.datasets[resolved_name]
+    if persist and db.datasets_toml:
+        db.write(db.datasets_toml)
 
 
 # ----- Database (Databases.jl:147-258, 553-825) -----

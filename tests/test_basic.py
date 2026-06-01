@@ -1,5 +1,6 @@
 import hashlib
 import os
+import pytest
 
 
 def test_import():
@@ -188,7 +189,6 @@ def test_search_by_repo_name_alias():
 def test_search_missing_raises():
     from datamanifest.database import search_dataset
     db = _fixture_db()
-    import pytest
     with pytest.raises(ValueError, match="Available datasets:"):
         search_dataset(db, "nonexistent_dataset_xyz")
 
@@ -199,3 +199,65 @@ def test_repr_datasets():
     text = repr_datasets(db)
     lines = [l for l in text.splitlines() if l.startswith("- ")]
     assert len(lines) == len(db.datasets)
+
+
+# --- Item 6: Checksum verify, delete, update ---
+
+def _make_db_with_file(tmp_path, filename="data.bin", content=b"test content"):
+    from datamanifest.database import Database, init_dataset_entry
+    f = tmp_path / filename
+    f.write_bytes(content)
+    db = Database(datasets_folder=str(tmp_path), persist=False)
+    db.datasets_toml = ""
+    entry = init_dataset_entry(uri=f"https://h/{filename}")
+    entry.key = filename
+    return db, entry, f
+
+
+def test_verify_checksum_autofill(tmp_path):
+    from datamanifest.database import verify_checksum
+    db, entry, f = _make_db_with_file(tmp_path)
+    assert entry.sha256 == ""
+    result = verify_checksum(db, entry, persist=False)
+    assert result is True
+    assert entry.sha256 == hashlib.sha256(b"test content").hexdigest()
+
+
+def test_verify_checksum_mismatch_raises(tmp_path):
+    from datamanifest.database import verify_checksum
+    db, entry, _ = _make_db_with_file(tmp_path)
+    entry.sha256 = "wrong_hash_value"
+    with pytest.raises(ValueError, match="Possible resolutions"):
+        verify_checksum(db, entry, persist=False)
+
+
+def test_verify_checksum_skip(tmp_path):
+    from datamanifest.database import verify_checksum
+    db, entry, _ = _make_db_with_file(tmp_path)
+    entry.sha256 = "wrong_hash_value"
+    db.skip_checksum = True
+    assert verify_checksum(db, entry, persist=False) is True
+
+
+def test_delete_dataset_removes_entry(tmp_path):
+    from datamanifest.database import Database, delete_dataset
+    db = Database(datasets_folder=str(tmp_path), persist=False)
+    db.datasets_toml = ""
+    db.register_dataset("https://h/a/b.csv", name="testentry", persist=False)
+    assert "testentry" in db.datasets
+    delete_dataset(db, "testentry", keep_cache=True, persist=False)
+    assert "testentry" not in db.datasets
+
+
+def test_delete_dataset_removes_file(tmp_path):
+    from datamanifest.database import Database, delete_dataset, init_dataset_entry
+    db = Database(datasets_folder=str(tmp_path), persist=False)
+    db.datasets_toml = ""
+    f = tmp_path / "b.csv"
+    f.write_bytes(b"data")
+    entry = init_dataset_entry(uri="https://h/a/b.csv")
+    entry.key = "b.csv"
+    db.datasets["b"] = entry
+    delete_dataset(db, "b", keep_cache=False, persist=False)
+    assert not f.exists()
+    assert "b" not in db.datasets
