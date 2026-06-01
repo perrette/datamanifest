@@ -1,0 +1,20 @@
+[CMIP6_lgm_tos]
+uri = "ssh://albedo1.dmawi.de:/albedo/work/projects/p_forclima/preproc_data_esmvaltool/LGM/recipe_cmip6_lgm_tos_20241114_151009/preproc/lgm/tos_CLIM"
+sha256 = "7f28454b5c399226f923be60393ecbb2983c15538f9733864e5ce0f9f4b83601"
+
+[herzschuh2023]
+uri = "https://doi.pangaea.de/10.1594/PANGAEA.930512?format=zip"
+format = "zip"
+sha256 = "4e40e43ac0f1ddea125cb5314eee46e332aacbcb18aff7efbf59f1d8b1d84a13"
+doi = "10.1594/PANGAEA.930512"
+extract = true
+
+[jonkers2024]
+uri = "https://download.pangaea.de/dataset/962852/files/LGM_foraminifera_assemblages_20240110.csv"
+sha256 = "35ee6e8b94dc355973276da609fb18846ee1156d0fa848c1a9b221edd3715513"
+doi = "10.1594/PANGAEA.962852"
+
+["jesstierney/lgmDA"]
+uri = "https://github.com/jesstierney/lgmDA/archive/refs/tags/v2.1.zip"
+sha256 = "da5f85235baf7f858f1b52ed73405f5d4ed28a8f6da92e16070f86b724d8bb25"
+extract = true
