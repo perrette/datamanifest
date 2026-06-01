@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=61", "setuptools_scm[toml]>=6.2", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "datamanifest"
+dynamic = ["version"]
+description = "Python port of DataManifest.jl — declare and manage data dependencies for scientific projects"
+authors = [
+    { name="Mahé Perrette", email="mahe.perrette@gmail.com" }
+]
+readme = "README.md"
+license = { file="LICENSE" }
+requires-python = ">=3.10"
+dependencies = [
+    "httpx",
+    "tqdm",
+    "tomli_w",
+    "tomli; python_version<'3.11'",
+]
+
+[project.optional-dependencies]
+csv = ["pandas"]
+parquet = ["pandas", "pyarrow"]
+nc = ["xarray", "netcdf4"]
+yaml = ["pyyaml"]
+all = ["pandas", "pyarrow", "xarray", "netcdf4", "pyyaml"]
+dev = ["pytest"]
+
+[project.scripts]
+datamanifest = "datamanifest.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["datamanifest"]
+
+[tool.setuptools_scm]
+write_to = "datamanifest/_version.py"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

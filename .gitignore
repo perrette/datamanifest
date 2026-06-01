@@ -1,8 +1,8 @@
 datamanifest/_version.py
 
 # Autonomous roadmap workflows (local coordination artifacts; never committed)
-workflows/
-.worktrees/
+/workflows/
+/.worktrees/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
