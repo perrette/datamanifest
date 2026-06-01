@@ -731,3 +731,36 @@ class Database:
         with open(datasets_toml, "rb") as f:
             config = tomllib.load(f)
         self.register_datasets(config, **kwargs)
+
+    # ----- loader registry (Databases.jl:734-749) -----
+    def register_loaders(self, loaders=None, python_includes=None, persist: bool = True):
+        """Register named loaders / python include paths (Databases.jl:734-749).
+
+        Loader values are ``"pkg.mod:func"`` entry-point references (or the name
+        of another loader, treated as an alias) — never inline code. Resetting
+        the registry clears the resolution cache.
+        """
+        if loaders is not None:
+            self.loaders = {
+                str(k): (v if isinstance(v, str) else repr(v))
+                for k, v in loaders.items()
+            }
+        if python_includes is not None:
+            self.loaders_python_includes = [str(x) for x in python_includes]
+        self.loader_cache.clear()
+        if persist and self.datasets_toml != "":
+            self.write(self.datasets_toml)
+
+
+# ----- loader validation (Databases.jl:751-762) -----
+def validate_loader(db: "Database", name: str):
+    """Resolve loader *name* to its callable, raising if it cannot (Databases.jl:751-754)."""
+    from .pipelines import _get_loader_function
+
+    return _get_loader_function(db, name)
+
+
+def validate_loaders(db: "Database") -> None:
+    """Eagerly resolve every registered loader (Databases.jl:756-762)."""
+    for name in list(db.loaders.keys()):
+        validate_loader(db, name)

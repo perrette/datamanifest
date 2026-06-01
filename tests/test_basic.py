@@ -661,3 +661,82 @@ def test_shell_template_project_root_required():
     entry = init_dataset_entry(key="x", shell="echo $project_root")
     with pytest.raises(ValueError, match="project_root"):
         expand_shell_template("cd $project_root", entry, "/tmp/out", project_root="")
+
+
+# ----- Item 11: Loader registry + python entry-point hook (no exec) -----
+
+
+def test_register_and_validate_loader():
+    """A named loader resolves to its callable via validate_loader."""
+    from datamanifest.database import Database, validate_loader
+
+    from tests.helpers.loaders import my_loader
+
+    db = Database(persist=False)
+    db.register_loaders(
+        loaders={"myfmt": "tests.helpers.loaders:my_loader"}, persist=False
+    )
+    fn = validate_loader(db, "myfmt")
+    assert fn is my_loader
+    assert fn("/some/path") == ("loaded", "/some/path")
+
+
+def test_python_hook_runs_during_download(tmp_path):
+    """entry.python is resolved + called as a download-phase hook with kwargs."""
+    from datamanifest.database import Database, init_dataset_entry
+    from datamanifest.pipelines import download_dataset
+
+    from tests.helpers.loaders import my_downloader
+
+    db = Database(datasets_folder=str(tmp_path / "cache"), persist=False)
+    db.datasets_toml = ""
+    db.skip_checksum = True
+    entry = init_dataset_entry(key="hooked", python="tests.helpers.loaders:my_downloader")
+    db.datasets["hooked"] = entry
+
+    path = download_dataset(db, "hooked")
+
+    assert Path(path).read_text() == "hook ran"
+    assert my_downloader.last_call["entry"] is entry
+    assert my_downloader.last_call["key"] == "hooked"
+    assert "requires_paths" in my_downloader.last_call
+
+
+def test_loader_alias_chain_resolves():
+    """A loader value that names another loader is resolved transitively."""
+    from datamanifest.database import Database, validate_loader
+
+    from tests.helpers.loaders import my_loader
+
+    db = Database(persist=False)
+    db.register_loaders(
+        loaders={"a": "b", "b": "tests.helpers.loaders:my_loader"}, persist=False
+    )
+    assert validate_loader(db, "a") is my_loader
+
+
+def test_loader_alias_cycle_raises():
+    """A loader alias cycle raises a clear error."""
+    from datamanifest.database import Database, validate_loader
+
+    db = Database(persist=False)
+    db.register_loaders(loaders={"a": "b", "b": "a"}, persist=False)
+    with pytest.raises(ValueError, match="cycle"):
+        validate_loader(db, "a")
+
+
+def test_python_includes_local_module(tmp_path):
+    """python_includes makes a user-local module importable for loader resolution."""
+    from datamanifest.database import Database, validate_loader
+
+    (tmp_path / "mymod.py").write_text(
+        "def loadit(path):\n    return 'local:' + path\n"
+    )
+    db = Database(persist=False)
+    db.register_loaders(
+        loaders={"local": "mymod:loadit"},
+        python_includes=[str(tmp_path)],
+        persist=False,
+    )
+    fn = validate_loader(db, "local")
+    assert fn("/x") == "local:/x"

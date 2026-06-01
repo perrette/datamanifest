@@ -16,11 +16,13 @@ with a ``tqdm`` progress bar), mirroring Julia's ``Downloads.download`` model
 sidecar file and resumed via an HTTP ``Range:`` header when re-run.
 """
 
+import importlib
 import os
 import shlex
 import shutil
 import socket
 import subprocess
+import sys
 
 import httpx
 from tqdm import tqdm
@@ -129,6 +131,122 @@ def expand_shell_template(
     for i, path in enumerate(required_paths_ordered, start=1):
         result = result.replace(f"$path_{i}", path)
     return result
+
+
+# ----- Loader registry + entry-point resolution (PipeLines.jl:111-198) -----
+#
+# Julia resolves loader strings either as a module path (`A.B.func`) via runtime
+# `getfield`, or — failing that — by compiling arbitrary source with
+# `Base.include_string`. The Python port deliberately drops the compile path:
+# every loader value and every ``entry.python`` value is a ``"pkg.mod:func"``
+# entry-point reference, resolved via ``importlib`` + ``getattr``. No dynamic
+# code compilation anywhere (roadmap §C).
+
+
+def _resolve_entry_point(ref: str, python_includes=None):
+    """Resolve a ``"pkg.mod:func"`` reference to a callable.
+
+    The portion before ``:`` is imported with :func:`importlib.import_module`;
+    the portion after ``:`` is a (possibly dotted) attribute path looked up via
+    :func:`getattr`. Directories in *python_includes* are temporarily prepended
+    to ``sys.path`` so user-local modules next to ``datasets.toml`` resolve.
+    """
+    ref = ref.strip()
+    if ":" not in ref:
+        raise ValueError(
+            f"Invalid entry-point reference {ref!r}: expected 'pkg.mod:func' "
+            "(inline code is not allowed)."
+        )
+    module_path, _, attr_path = ref.partition(":")
+    if not module_path or not attr_path:
+        raise ValueError(
+            f"Invalid entry-point reference {ref!r}: both a module and an "
+            "attribute are required ('pkg.mod:func')."
+        )
+
+    added = []
+    if python_includes:
+        for inc in python_includes:
+            p = os.path.abspath(inc)
+            if p not in sys.path:
+                sys.path.insert(0, p)
+                added.append(p)
+    try:
+        obj = importlib.import_module(module_path)
+        for part in attr_path.split("."):
+            obj = getattr(obj, part)
+    finally:
+        for p in added:
+            try:
+                sys.path.remove(p)
+            except ValueError:
+                pass
+
+    if not callable(obj):
+        raise ValueError(
+            f"Entry point {ref!r} did not resolve to a callable (got {type(obj)})."
+        )
+    return obj
+
+
+def _get_loader_function(db, name_or_code: str, cache_key=None, _alias_chain=None):
+    """Resolve a named loader or entry-point reference to a callable.
+
+    Port of ``PipeLines.jl:169-198`` (with the ``include_string`` compile path
+    removed). ``name_or_code`` is either a key in ``db.loaders`` or a bare
+    ``"pkg.mod:func"`` reference. A loader value that is exactly the name of
+    another loader is treated as an alias and resolved transitively, with cycle
+    detection. Results are memoized in ``db.loader_cache``.
+    """
+    if _alias_chain is None:
+        _alias_chain = set()
+    key = name_or_code if cache_key is None else cache_key
+    if key in db.loader_cache:
+        return db.loader_cache[key]
+
+    code = db.loaders.get(name_or_code, name_or_code)
+    # Alias: the value is exactly another loader name -> resolve it.
+    if isinstance(code, str) and code in db.loaders and code != name_or_code:
+        if name_or_code in _alias_chain:
+            raise ValueError(
+                f'Loader alias cycle involving "{name_or_code}" and "{code}".'
+            )
+        chain = _alias_chain | {name_or_code}
+        fn = _get_loader_function(db, code, _alias_chain=chain)
+        db.loader_cache[key] = fn
+        return fn
+
+    fn = _resolve_entry_point(code, db.loaders_python_includes)
+    db.loader_cache[key] = fn
+    return fn
+
+
+def _run_python_hook(
+    dataset,
+    download_path: str,
+    project_root: str = "",
+    required_paths_ordered=None,
+    python_includes=None,
+):
+    """Run ``entry.python`` as a download-phase hook (replaces Julia's ``_run_julia``).
+
+    The resolved callable is invoked with the same keyword names the shell
+    template exposes, so a single project can use either mechanism
+    (``PipeLines.jl:83-114``).
+    """
+    fn = _resolve_entry_point(dataset.python, python_includes)
+    fn(
+        download_path=download_path,
+        project_root=project_root,
+        entry=dataset,
+        uri=dataset.uri,
+        key=dataset.key,
+        version=dataset.version,
+        doi=dataset.doi,
+        format=dataset.format,
+        branch=dataset.branch,
+        requires_paths=list(required_paths_ordered or []),
+    )
 
 
 # ----- Multi-URI helpers (PipeLines.jl:200-222) -----
@@ -273,6 +391,7 @@ def _download_dataset(
     overwrite: bool = False,
     required_paths_by_ref=None,
     required_paths_ordered=None,
+    python_includes=None,
 ) -> None:
     os.makedirs(os.path.dirname(download_path) or ".", exist_ok=True)
 
@@ -286,6 +405,18 @@ def _download_dataset(
             file_path = os.path.join(download_path, rel)
             os.makedirs(os.path.dirname(file_path) or ".", exist_ok=True)
             _download_uri(uri, file_path)
+        return
+
+    # Python hook: run the resolved entry-point callable instead of a URI
+    # download (replaces Julia's _run_julia, PipeLines.jl:251-257).
+    if dataset.python != "":
+        _run_python_hook(
+            dataset,
+            download_path,
+            project_root,
+            required_paths_ordered=required_paths_ordered,
+            python_includes=python_includes,
+        )
         return
 
     # Shell hook: run the expanded template instead of a URI download
@@ -431,6 +562,7 @@ def download_dataset(db, dataset, extract=None, overwrite: bool = False):
             overwrite=overwrite,
             required_paths_by_ref=req_paths_by_ref,
             required_paths_ordered=req_paths_ordered,
+            python_includes=db.loaders_python_includes,
         )
     else:
         logger.info("Dataset already exists at: %s", download_path)
