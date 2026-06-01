@@ -1038,3 +1038,71 @@ def test_skip_download_raises_if_path_missing(tmp_path):
 
     with pytest.raises(FileNotFoundError, match="documented URI is"):
         download_dataset(db, "skipme")
+
+
+# ----- Item 17: default-database convenience + public API -----
+
+def test_public_api_imports():
+    """All expected names are importable directly from datamanifest."""
+    from datamanifest import (  # noqa: F401
+        Database,
+        DatasetEntry,
+        add,
+        delete_dataset,
+        download_dataset,
+        download_datasets,
+        get_dataset_path,
+        load_dataset,
+        register_dataset,
+    )
+
+
+def test_default_db_get_dataset_path(tmp_path):
+    """get_dataset_path() from the top-level API resolves against a tmp toml."""
+    import json
+    from datamanifest import database as _db_module
+
+    # Reset the singleton so this test always gets a fresh one.
+    _db_module._default_db = None
+
+    toml_content = '[mydata]\nuri = "https://example.com/data.json"\nformat = "json"\n'
+    toml_path = tmp_path / "datasets.toml"
+    toml_path.write_text(toml_content)
+
+    import datamanifest
+    old_env = os.environ.get("DATAMANIFEST_TOML")
+    try:
+        os.environ["DATAMANIFEST_TOML"] = str(toml_path)
+        _db_module._default_db = None  # force re-init with new env
+        path = datamanifest.get_dataset_path("mydata")
+        assert "mydata" in path or "example.com" in path or path.endswith("data.json")
+    finally:
+        if old_env is None:
+            os.environ.pop("DATAMANIFEST_TOML", None)
+        else:
+            os.environ["DATAMANIFEST_TOML"] = old_env
+        _db_module._default_db = None
+
+
+def test_default_db_missing_toml():
+    """Default-DB functions raise RuntimeError when no datasets.toml is found."""
+    import datamanifest
+    from datamanifest import database as _db_module
+
+    _db_module._default_db = None
+    old_env = {k: os.environ.pop(k, None) for k in ("DATAMANIFEST_TOML", "DATASETS_TOML")}
+    old_cwd = os.getcwd()
+    import tempfile
+    try:
+        # Switch to a tmp dir with no pyproject.toml / datasets.toml
+        tmpdir = tempfile.mkdtemp()
+        os.chdir(tmpdir)
+        _db_module._default_db = None
+        with pytest.raises(RuntimeError, match="No datasets.toml"):
+            datamanifest.get_dataset_path("anything")
+    finally:
+        os.chdir(old_cwd)
+        for k, v in old_env.items():
+            if v is not None:
+                os.environ[k] = v
+        _db_module._default_db = None

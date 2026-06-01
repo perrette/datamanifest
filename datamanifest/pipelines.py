@@ -663,3 +663,52 @@ def load_dataset(db, dataset, loader=None, **kwargs):
         return path
 
     return default_loader(db, entry.format)(path)
+
+
+# ----- module-level convenience wrappers (Item 17) -----
+# These use *_db* (a different signature: name-only, no explicit db arg)
+# to avoid shadowing the db-taking implementations above.
+
+def _get_default_db():
+    from .database import get_default_database
+    return get_default_database()
+
+
+def _module_register_dataset(uri: str = "", name: str = "", **kwargs):
+    """Register a dataset in the default database."""
+    return _get_default_db().register_dataset(uri=uri, name=name, **kwargs)
+
+
+def _module_add(uri: str = "", name: str = "", **kwargs):
+    """Alias for register_dataset (shorter name for interactive use)."""
+    return _module_register_dataset(uri=uri, name=name, **kwargs)
+
+
+def _module_delete_dataset(name: str, **kwargs):
+    """Delete a dataset from the default database."""
+    from .database import delete_dataset as _delete_dataset
+    return _delete_dataset(_get_default_db(), name, **kwargs)
+
+
+def _module_get_dataset_path(name: str, **kwargs):
+    """Return the on-disk path for a dataset in the default database."""
+    db = _get_default_db()
+    _, entry = search_dataset(db, name)
+    from .database import get_dataset_path as _gdp
+    return _gdp(entry, datasets_folder=db.datasets_folder,
+                project_root=db.get_project_root(), **kwargs)
+
+
+def _module_download_dataset(name, **kwargs):
+    """Download a dataset from the default database."""
+    return download_dataset(_get_default_db(), name, **kwargs)
+
+
+def _module_download_datasets(names=None, **kwargs):
+    """Download datasets from the default database."""
+    return download_datasets(_get_default_db(), names=names, **kwargs)
+
+
+def _module_load_dataset(name, loader=None, **kwargs):
+    """Download and load a dataset from the default database."""
+    return load_dataset(_get_default_db(), name, loader=loader, **kwargs)

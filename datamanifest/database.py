@@ -769,6 +769,29 @@ class Database:
             self.write(self.datasets_toml)
 
 
+# ----- default database (process-wide singleton) -----
+_default_db: "Database | None" = None
+
+
+def get_default_database() -> "Database":
+    """Return the process-wide default :class:`Database`, creating it lazily.
+
+    The database is constructed from :func:`~datamanifest.config.get_default_toml`
+    (env-var / cwd-walk logic). Raises ``RuntimeError`` when no ``datasets.toml``
+    can be located, so callers get a clear message rather than a silent no-op.
+    """
+    global _default_db
+    if _default_db is None:
+        toml_path = get_default_toml()
+        if not toml_path or not os.path.isfile(toml_path):
+            raise RuntimeError(
+                "No datasets.toml found. Activate a project (a directory "
+                "containing datasets.toml) or pass a Database explicitly."
+            )
+        _default_db = Database(datasets_toml=toml_path)
+    return _default_db
+
+
 # ----- loader validation (Databases.jl:751-762) -----
 def validate_loader(db: "Database", name: str):
     """Resolve loader *name* to its callable, raising if it cannot (Databases.jl:751-754)."""
