@@ -24,9 +24,48 @@ import httpx
 from tqdm import tqdm
 
 from .config import logger
-from .database import get_dataset_path, search_dataset, verify_checksum
+from .database import get_dataset_path, parse_uri_metadata, search_dataset, verify_checksum
 
 _CHUNK_SIZE = 65536
+
+
+# ----- Multi-URI helpers (PipeLines.jl:200-222) -----
+
+def _uri_relative_paths(uris):
+    """Strip common leading directory segments from URI paths (PipeLines.jl:200-222).
+
+    Example: ["/data/a/x.csv", "/data/b/x.csv"] → ["a/x.csv", "b/x.csv"].
+    Never consumes the filename segment.
+    """
+    segments = [[s for s in parse_uri_metadata(u)["path"].split("/") if s] for u in uris]
+    if any(not s for s in segments):
+        return [os.path.basename(parse_uri_metadata(u)["path"]) for u in uris]
+    min_len = min(len(s) for s in segments)
+    n_common = 0
+    for i in range(min_len - 1):  # never consume the filename
+        if all(s[i] == segments[0][i] for s in segments):
+            n_common = i + 1
+        else:
+            break
+    return [os.path.join(*s[n_common:]) for s in segments]
+
+
+def _download_uri(uri, dest_path):
+    """Download a single URI to dest_path (used for each file in a multi-URI batch)."""
+    parsed_scheme = parse_uri_metadata(uri)["scheme"]
+    if parsed_scheme in ("http", "https"):
+        _http_download(uri, dest_path)
+    elif parsed_scheme == "file":
+        from urllib.parse import urlparse
+        src = urlparse(uri).path
+        if os.path.isdir(src):
+            shutil.copytree(src, dest_path)
+        else:
+            shutil.copy2(src, dest_path)
+    else:
+        raise NotImplementedError(
+            f"Scheme {parsed_scheme!r} not supported in multi-URI batches. URI: {uri}"
+        )
 
 
 # ----- Archive extraction (Databases.jl:619-630) -----
@@ -132,6 +171,18 @@ def _download_dataset(
     overwrite: bool = False,
 ) -> None:
     os.makedirs(os.path.dirname(download_path) or ".", exist_ok=True)
+
+    # Multi-URI batch: download each URI to a relative sub-path (PipeLines.jl:231-249).
+    if dataset.uris:
+        os.makedirs(download_path, exist_ok=True)
+        rel_paths = _uri_relative_paths(dataset.uris)
+        for uri, rel in zip(dataset.uris, rel_paths):
+            if not rel:
+                raise ValueError(f"Cannot determine filename from URI: {uri}")
+            file_path = os.path.join(download_path, rel)
+            os.makedirs(os.path.dirname(file_path) or ".", exist_ok=True)
+            _download_uri(uri, file_path)
+        return
 
     scheme = _resolve_scheme(dataset)
 

@@ -496,6 +496,41 @@ def test_download_git_clone_with_branch(tmp_path):
     assert called_with["cmd"][idx + 1] == "dev"
 
 
+# --- Item 9: Multi-URI batch entries ---
+
+def test_multi_uri_key_derivation():
+    """init_dataset_entry derives key from common host+path prefix for multi-URI entries."""
+    from datamanifest.database import init_dataset_entry
+
+    e = init_dataset_entry(uris=["http://h/a/b/x.csv", "http://h/a/c/y.csv"])
+    assert e.key == "h/a"
+
+
+def test_download_multi_uri(tmp_path):
+    """Multi-URI entry downloads each file to datasets_folder/<key>/<rel_path>."""
+    from datamanifest.database import Database
+    from datamanifest.pipelines import download_dataset
+
+    src = tmp_path / "src"
+    (src / "b").mkdir(parents=True)
+    (src / "c").mkdir(parents=True)
+    (src / "b" / "x.csv").write_bytes(b"x data")
+    (src / "c" / "y.csv").write_bytes(b"y data")
+
+    uris = [f"file://{src}/b/x.csv", f"file://{src}/c/y.csv"]
+
+    folder = tmp_path / "cache"
+    db = Database(datasets_folder=str(folder), persist=False)
+    db.datasets_toml = ""
+    db.skip_checksum = True
+    db.register_dataset(uris=uris, key="testmulti", name="multi", persist=False)
+    path = download_dataset(db, "multi")
+
+    assert os.path.isdir(path)
+    assert (Path(path) / "b" / "x.csv").read_bytes() == b"x data"
+    assert (Path(path) / "c" / "y.csv").read_bytes() == b"y data"
+
+
 def test_download_ssh_rsync(tmp_path):
     """ssh:// URI builds the correct rsync -arvzL command."""
     from unittest.mock import patch
