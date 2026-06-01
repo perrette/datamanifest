@@ -27,7 +27,8 @@ import sys
 import httpx
 from tqdm import tqdm
 
-from .config import logger, project_root_from_paths
+from . import default_loaders
+from .config import COMPRESSED_FORMATS, logger, project_root_from_paths
 from .database import get_dataset_path, parse_uri_metadata, search_dataset, verify_checksum
 
 _CHUNK_SIZE = 65536
@@ -587,3 +588,71 @@ def download_datasets(db, names=None, **kwargs):
         names = list(db.datasets.keys())
     for name in names:
         download_dataset(db, name, **kwargs)
+
+
+# ----- Load pipeline (PipeLines.jl:425-491) -----
+
+def default_loader(db, format: str):
+    """Return a ``path -> value`` loader for *format*, consulting ``db.loaders`` first.
+
+    Port of ``PipeLines.jl:434-443``. Resolution: (1) a named loader in
+    ``db.loaders`` whose name matches *format* case-insensitively, resolved via
+    :func:`_get_loader_function`; (2) else the built-in
+    :func:`datamanifest.default_loaders.default_loader`.
+    """
+    f = format.strip().lower()
+    if not f:
+        raise ValueError(
+            "No loader provided and dataset format is empty. "
+            "Pass a loader function, e.g. loader=lambda path: open(path).read()."
+        )
+    for name in db.loaders:
+        if name.lower() == f:
+            return _get_loader_function(db, name)
+    return default_loaders.default_loader(format)
+
+
+def load_dataset(db, dataset, loader=None, **kwargs):
+    """Download *dataset* then load it, returning the loaded value.
+
+    Port of ``PipeLines.jl:462-491``. Resolution order for the loader:
+    explicit *loader* arg → ``entry.loader`` → named loader in ``db.loaders``
+    matching ``entry.format`` → built-in default loader for ``entry.format``.
+    For an extracted archive (``entry.extract`` and ``entry.format`` in
+    :data:`COMPRESSED_FORMATS`) the path is a directory, so the empty format is
+    passed to :func:`default_loader` rather than the archive format.
+    """
+    if isinstance(dataset, str):
+        _, entry = search_dataset(db, dataset)
+    else:
+        entry = dataset
+
+    path = download_dataset(db, entry, **kwargs)
+
+    if loader is not None and loader != "":
+        if isinstance(loader, str):
+            if loader in db.loaders:
+                loader = _get_loader_function(db, loader)
+            else:
+                try:
+                    loader = default_loaders.default_loader(loader)
+                except ValueError:
+                    raise ValueError(
+                        "loader must be a callable or a loader name defined in "
+                        "_LOADERS, or a built-in format (csv, parquet, nc, "
+                        "dimstack, md, txt, json, yaml, yml, toml, zip, tar, "
+                        f'tar.gz). Got: "{loader}"'
+                    )
+        return loader(path)
+
+    if entry.loader != "":
+        fn = _get_loader_function(db, entry.loader)
+        return fn(path)
+
+    # For an extracted archive the resolved path is a directory and there is no
+    # single-file format to load; return the directory path directly
+    # (PipeLines.jl:488 passes the empty format, which here means "identity").
+    if entry.extract and entry.format in COMPRESSED_FORMATS:
+        return path
+
+    return default_loader(db, entry.format)(path)

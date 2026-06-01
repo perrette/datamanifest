@@ -901,3 +901,93 @@ def test_default_loader_nc_missing_xarray():
     with patch("datamanifest.default_loaders.importlib.import_module", side_effect=fake_import_module):
         with pytest.raises(ImportError, match="pip install xarray netcdf4"):
             loader_fn("/any/path.nc")
+
+
+# ----- Item 15: load_dataset pipeline -----
+
+def test_load_dataset_json(tmp_path):
+    """load_dataset downloads + parses a json-format dataset, returning the dict."""
+    import json
+
+    from datamanifest.database import Database
+    from datamanifest.pipelines import load_dataset
+
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "data.json").write_text(json.dumps({"a": 1, "b": [2, 3]}))
+
+    db = Database(datasets_folder=str(tmp_path / "cache"), persist=False)
+    db.datasets_toml = ""
+    db.skip_checksum = True
+    db.register_dataset(f"file://{src}/data.json", name="jsonentry", persist=False)
+
+    result = load_dataset(db, "jsonentry")
+    assert result == {"a": 1, "b": [2, 3]}
+
+
+def test_load_dataset_explicit_loader_overrides(tmp_path):
+    """An explicit loader= callable overrides the entry's format-based loader."""
+    import json
+
+    from datamanifest.database import Database
+    from datamanifest.pipelines import load_dataset
+
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "data.json").write_text(json.dumps({"a": 1}))
+
+    db = Database(datasets_folder=str(tmp_path / "cache"), persist=False)
+    db.datasets_toml = ""
+    db.skip_checksum = True
+    db.register_dataset(f"file://{src}/data.json", name="jsonentry", persist=False)
+
+    result = load_dataset(db, "jsonentry", loader=lambda path: "OVERRIDDEN")
+    assert result == "OVERRIDDEN"
+
+
+def test_load_dataset_named_loader_precedes_builtin(tmp_path):
+    """A named loader in db.loaders matching the format wins over the builtin."""
+    import json
+
+    from datamanifest.database import Database
+    from datamanifest.pipelines import load_dataset
+
+    from tests.helpers.loaders import my_loader
+
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "data.json").write_text(json.dumps({"a": 1}))
+
+    db = Database(datasets_folder=str(tmp_path / "cache"), persist=False)
+    db.datasets_toml = ""
+    db.skip_checksum = True
+    db.register_loaders(
+        loaders={"json": "tests.helpers.loaders:my_loader"}, persist=False
+    )
+    db.register_dataset(f"file://{src}/data.json", name="jsonentry", persist=False)
+
+    result = load_dataset(db, "jsonentry")
+    # my_loader returns ("loaded", path) rather than the parsed json dict.
+    assert result[0] == "loaded"
+    assert os.path.isfile(result[1])
+
+
+def test_load_dataset_extracted_archive_returns_dir(tmp_path):
+    """An extracted-archive entry with no loader returns the extracted directory."""
+    from datamanifest.database import Database
+    from datamanifest.pipelines import load_dataset
+
+    served = tmp_path / "served"
+    served.mkdir()
+    _make_zip(served / "bar.zip", {"inner.txt": b"hello inside"})
+
+    db = Database(datasets_folder=str(tmp_path / "cache"), persist=False)
+    db.datasets_toml = ""
+    db.skip_checksum = True
+
+    with _http_server(served) as base:
+        db.register_dataset(f"{base}/bar.zip", name="bar", extract=True, persist=False)
+        result = load_dataset(db, "bar")
+
+    assert os.path.isdir(result)
+    assert (Path(result) / "inner.txt").read_bytes() == b"hello inside"
