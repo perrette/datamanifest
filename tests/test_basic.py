@@ -775,3 +775,73 @@ def test_default_loader_empty_raises():
 
     with pytest.raises(ValueError, match="No loader provided"):
         default_loader("")
+
+
+# ----- Item 13: Default loaders — tabular + archives -----
+
+def test_default_loader_zip(tmp_path):
+    """_zip_loader extracts to a temp dir and returns its path."""
+    import zipfile
+    from datamanifest.default_loaders import default_loader
+
+    z = tmp_path / "archive.zip"
+    with zipfile.ZipFile(z, "w") as zf:
+        zf.writestr("hello.txt", "hello from zip")
+
+    result = default_loader("zip")(str(z))
+    assert os.path.isdir(result)
+    assert os.path.isfile(os.path.join(result, "hello.txt"))
+    assert open(os.path.join(result, "hello.txt")).read() == "hello from zip"
+
+
+def test_default_loader_tar(tmp_path):
+    """_tar_loader extracts to a temp dir and returns its path."""
+    import tarfile
+    from datamanifest.default_loaders import default_loader
+
+    content = b"hello from tar"
+    member = tmp_path / "member.txt"
+    member.write_bytes(content)
+
+    t = tmp_path / "archive.tar"
+    with tarfile.open(t, "w") as tf:
+        tf.add(str(member), arcname="member.txt")
+
+    result = default_loader("tar")(str(t))
+    assert os.path.isdir(result)
+    assert open(os.path.join(result, "member.txt"), "rb").read() == content
+
+
+@pytest.mark.skipif(
+    __import__("importlib").util.find_spec("pandas") is None,
+    reason="pandas not installed",
+)
+def test_default_loader_csv(tmp_path):
+    """_csv_loader returns a pandas DataFrame."""
+    from datamanifest.default_loaders import default_loader
+
+    f = tmp_path / "data.csv"
+    f.write_text("# comment\na,b\n1,2\n3,4\n")
+    result = default_loader("csv")(str(f))
+    import pandas
+    assert isinstance(result, pandas.DataFrame)
+    assert list(result.columns) == ["a", "b"]
+    assert len(result) == 2
+
+
+def test_default_loader_csv_missing_pandas(monkeypatch):
+    """csv loader raises ImportError with pip install hint when pandas is absent."""
+    from unittest.mock import patch
+    from datamanifest.default_loaders import default_loader
+
+    loader_fn = default_loader("csv")
+
+    def fake_import_module(name):
+        if name == "pandas":
+            raise ImportError("mocked missing pandas")
+        import importlib as _importlib
+        return _importlib.import_module(name)
+
+    with patch("datamanifest.default_loaders.importlib.import_module", side_effect=fake_import_module):
+        with pytest.raises(ImportError, match="pip install pandas"):
+            loader_fn("/any/path.csv")
