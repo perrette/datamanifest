@@ -28,6 +28,7 @@ all = ["pandas", "pyarrow", "xarray", "netcdf4", "pyyaml"]
 dev = ["pytest"]
 
 [project.scripts]
+datamanifest = "datamanifest.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
