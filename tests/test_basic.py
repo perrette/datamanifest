@@ -845,3 +845,59 @@ def test_default_loader_csv_missing_pandas(monkeypatch):
     with patch("datamanifest.default_loaders.importlib.import_module", side_effect=fake_import_module):
         with pytest.raises(ImportError, match="pip install pandas"):
             loader_fn("/any/path.csv")
+
+
+# --- Item 14: Default loader — NetCDF (xarray) ---
+
+@pytest.mark.skipif(
+    __import__("importlib").util.find_spec("xarray") is None,
+    reason="xarray not installed",
+)
+def test_default_loader_nc(tmp_path):
+    """_nc_loader returns an xarray.Dataset for a .nc file."""
+    import xarray
+    from datamanifest.default_loaders import default_loader
+
+    ds = xarray.Dataset({"temperature": (["x"], [1.0, 2.0, 3.0])})
+    nc_path = tmp_path / "data.nc"
+    ds.to_netcdf(str(nc_path))
+
+    result = default_loader("nc")(str(nc_path))
+    assert isinstance(result, xarray.Dataset)
+    assert "temperature" in result
+
+
+@pytest.mark.skipif(
+    __import__("importlib").util.find_spec("xarray") is None,
+    reason="xarray not installed",
+)
+def test_default_loader_dimstack(tmp_path):
+    """_dimstack_loader is an alias for _nc_loader, returns xarray.Dataset."""
+    import xarray
+    from datamanifest.default_loaders import default_loader
+
+    ds = xarray.Dataset({"salinity": (["z"], [34.0, 35.0])})
+    nc_path = tmp_path / "ocean.nc"
+    ds.to_netcdf(str(nc_path))
+
+    result = default_loader("dimstack")(str(nc_path))
+    assert isinstance(result, xarray.Dataset)
+    assert "salinity" in result
+
+
+def test_default_loader_nc_missing_xarray():
+    """nc loader raises ImportError with pip install hint when xarray is absent."""
+    from unittest.mock import patch
+    from datamanifest.default_loaders import default_loader
+
+    loader_fn = default_loader("nc")
+
+    def fake_import_module(name):
+        if name == "xarray":
+            raise ImportError("mocked missing xarray")
+        import importlib as _importlib
+        return _importlib.import_module(name)
+
+    with patch("datamanifest.default_loaders.importlib.import_module", side_effect=fake_import_module):
+        with pytest.raises(ImportError, match="pip install xarray netcdf4"):
+            loader_fn("/any/path.nc")
