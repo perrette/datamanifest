@@ -109,3 +109,47 @@ def test_callable_normalized_to_python():
     d = to_dict(e)
     assert d["python"] == "pkg.mod:fn"
     assert "callable" not in d
+
+
+def test_database_read_fixture():
+    from datamanifest.database import Database
+
+    fixture = os.path.join(os.path.dirname(__file__), "..", "datasets.toml")
+    db = Database(datasets_toml=fixture, persist=False)
+    for key in ("CMIP6_lgm_tos", "herzschuh2023", "jonkers2024", "jesstierney/lgmDA"):
+        assert key in db.datasets
+    assert db.datasets["herzschuh2023"].format == "zip"
+    assert db.datasets["herzschuh2023"].extract is True
+
+
+def test_database_round_trip(tmp_path):
+    from datamanifest.database import Database
+
+    out = tmp_path / "out.toml"
+    db = Database(datasets_toml=str(out))
+    db.register_dataset("https://h/a/x.csv", name="x", persist=False)
+    db.register_dataset("https://h/b/y.csv", name="y", persist=False)
+    db.register_dataset("https://h/c/z.csv", name="z", persist=False)
+    db.write(str(out))
+
+    text = out.read_text()
+    assert text.index("[x]") < text.index("[y]") < text.index("[z]")
+
+    db2 = Database(datasets_toml=str(out))
+    assert db == db2
+
+
+def test_database_loaders_first(tmp_path):
+    from datamanifest.database import Database
+
+    out = tmp_path / "out.toml"
+    db = Database(datasets_toml=str(out))
+    db.loaders["csvloader"] = "pandas.io.parsers:read_csv"
+    db.register_dataset("https://h/a/b.csv", name="b", persist=False)
+    db.write(str(out))
+
+    text = out.read_text()
+    assert text.index("[_LOADERS]") < text.index("[b]")
+
+    db2 = Database(datasets_toml=str(out))
+    assert db2.loaders.get("csvloader") == "pandas.io.parsers:read_csv"

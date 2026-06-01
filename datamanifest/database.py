@@ -16,7 +16,20 @@ import os
 from dataclasses import dataclass, field, fields
 from urllib.parse import parse_qs, urlparse
 
-from .config import COMPRESSED_FORMATS, HIDE_STRUCT_FIELDS, logger
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10
+    import tomli as tomllib
+
+import tomli_w
+
+from .config import (
+    COMPRESSED_FORMATS,
+    DEFAULT_DATASETS_FOLDER_PATH,
+    HIDE_STRUCT_FIELDS,
+    get_default_toml,
+    logger,
+)
 
 
 # ----- Types (DatasetEntry) -----
@@ -283,3 +296,155 @@ def is_a_git_repo(entry: DatasetEntry) -> bool:
     if entry.host in known_git_hosts or app == "gitlab":
         return True
     return False
+
+
+# ----- Database (Databases.jl:147-258, 553-825) -----
+class Database:
+    """Registry of :class:`DatasetEntry` objects, with TOML persistence.
+
+    Port of Julia's ``Database`` (Databases.jl:147-172). The loader registry
+    fields are present here as empty stubs; actual loader resolution behaviour
+    is added in a later item. Without inline code execution there is no
+    ``loaders_*_modules`` field (see roadmap §C): user-local modules are made
+    importable via ``loaders_python_includes`` (paths prepended to ``sys.path``).
+    """
+
+    def __init__(
+        self,
+        datasets_toml: str = "",
+        datasets_folder: str = "",
+        persist: bool = True,
+        skip_checksum: bool = False,
+        skip_checksum_folders: bool = False,
+        datasets=None,
+        **kwargs,
+    ):
+        self.datasets = dict(datasets) if datasets is not None else {}
+        if datasets_folder == "":
+            datasets_folder = DEFAULT_DATASETS_FOLDER_PATH
+        if datasets_toml == "" and persist:
+            datasets_toml = get_default_toml()
+        toml_path = (
+            os.path.abspath(datasets_toml) if persist and datasets_toml != "" else ""
+        )
+        self.datasets_toml = toml_path
+        self.datasets_folder = datasets_folder
+        self.skip_checksum = skip_checksum
+        self.skip_checksum_folders = skip_checksum_folders
+        # Loader registry (behaviour filled in by a later item).
+        self.loaders: dict = {}
+        self.loaders_python_includes: list = []
+        self.loader_cache: dict = {}
+        if datasets_toml and os.path.isfile(datasets_toml):
+            self.register_datasets(datasets_toml, **kwargs)
+
+    # ----- equality (Databases.jl:174-179, julia_modules dropped) -----
+    def __eq__(self, other):
+        if not isinstance(other, Database):
+            return NotImplemented
+        return (
+            self.datasets == other.datasets
+            and self.datasets_folder == other.datasets_folder
+            and self.datasets_toml == other.datasets_toml
+            and self.loaders == other.loaders
+            and self.loaders_python_includes == other.loaders_python_includes
+        )
+
+    __hash__ = None
+
+    # ----- TOML serialization (Databases.jl:184-258) -----
+    def to_dict(self) -> dict:
+        loaders_table: dict = {}
+        if self.loaders_python_includes:
+            loaders_table["python_includes"] = list(self.loaders_python_includes)
+        for n, c in self.loaders.items():
+            if not _is_empty(c):
+                loaders_table[n] = c
+        result: dict = {}
+        if loaders_table:
+            result["_LOADERS"] = loaders_table
+        for key, entry in self.datasets.items():
+            result[key] = to_dict(entry)
+        return result
+
+    def write(self, datasets_toml: str) -> None:
+        data = self.to_dict()
+        # Sorted output for reproducible diffs: `_LOADERS` first, then dataset
+        # keys alphabetically (mirrors Julia's TOML.print(...; sorted=true)).
+        ordered: dict = {}
+        if "_LOADERS" in data:
+            ordered["_LOADERS"] = data["_LOADERS"]
+        for key in sorted(k for k in data if k != "_LOADERS"):
+            ordered[key] = data[key]
+        with open(datasets_toml, "wb") as f:
+            tomli_w.dump(ordered, f)
+
+    # ----- registry (Databases.jl:553-792) -----
+    def register_dataset(
+        self,
+        uri: str = "",
+        name: str = "",
+        overwrite: bool = False,
+        persist: bool = True,
+        check_duplicate: bool = True,
+        uris=None,
+        **kwargs,
+    ):
+        entry = init_dataset_entry(uri=uri, uris=uris, **kwargs)
+        if name == "":
+            if is_a_git_repo(entry):
+                name = "/".join(entry.path.strip("/").split("/")[:2])
+            else:
+                name = entry.key.strip()
+            name = os.path.splitext(name)[0]
+        if check_duplicate and name in self.datasets:
+            existing = self.datasets[name]
+            if existing == entry and not overwrite:
+                logger.info("Dataset entry [%s] already exists.", name)
+                return (name, existing)
+            if not overwrite:
+                raise ValueError(
+                    f"Dataset entry already exists with name {name!r}. "
+                    f"Pass `overwrite=True` to replace it."
+                )
+        self.datasets[name] = entry
+        if persist and self.datasets_toml != "":
+            self.write(self.datasets_toml)
+        return (name, entry)
+
+    def register_datasets(self, datasets, **kwargs):
+        if isinstance(datasets, str):
+            ext = os.path.splitext(datasets)[1]
+            if ext != ".toml":
+                raise ValueError(f"Only toml file type supported. Got: {ext}")
+            return self.register_datasets_toml(datasets, **kwargs)
+
+        loaders_section = datasets.get("_LOADERS", datasets.get("_loaders"))
+        if isinstance(loaders_section, dict):
+            includes = loaders_section.get(
+                "python_includes", loaders_section.get("julia_includes", [])
+            )
+            if isinstance(includes, list):
+                self.loaders_python_includes.extend(str(x) for x in includes)
+            for k, v in loaders_section.items():
+                if k in (
+                    "python_includes",
+                    "julia_includes",
+                    "python_modules",
+                    "julia_modules",
+                ):
+                    continue
+                self.loaders[str(k)] = v if isinstance(v, str) else repr(v)
+
+        names = [k for k in datasets if k not in ("_LOADERS", "_loaders")]
+        for i, name in enumerate(names):
+            info = dict(datasets[name])
+            persist_on_last_iteration = i == len(names) - 1
+            self.register_dataset(
+                name=name, persist=persist_on_last_iteration, **{**info, **kwargs}
+            )
+
+    def register_datasets_toml(self, datasets_toml, **kwargs):
+        with open(datasets_toml, "rb") as f:
+            config = tomllib.load(f)
+        self.register_datasets(config, **kwargs)
