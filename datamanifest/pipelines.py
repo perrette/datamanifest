@@ -1,17 +1,13 @@
 """Download + load pipeline.
 
-Port of DataManifest.jl's ``PipeLines.jl`` (download orchestration). This item
-(roadmap Item 7) implements the **HTTP** download path and archive extraction
-only:
+Port of DataManifest.jl's ``PipeLines.jl`` (download orchestration).
 
 - ``download_dataset`` / ``download_datasets`` — orchestration + checksum.
-- ``_download_dataset`` — the scheme dispatch, HTTP/HTTPS branch only.
+- ``_download_dataset`` — full scheme dispatch (HTTP, git, ssh/rsync, file).
 - ``extract_file`` — ``zip`` / ``tar`` / ``tar.gz`` extraction.
 
-Non-HTTP schemes (git/ssh/rsync/file), multi-URI batch entries, ``requires=``
-topological ordering, and the ``shell`` / ``python`` download hooks are added
-in later items; ``_download_dataset`` raises ``NotImplementedError`` for any
-scheme it does not yet handle.
+Multi-URI batch entries, ``requires=`` topological ordering, and the
+``shell`` / ``python`` download hooks are added in later items.
 
 Downloads are synchronous (``httpx.Client(follow_redirects=True)`` streaming
 with a ``tqdm`` progress bar), mirroring Julia's ``Downloads.download`` model
@@ -21,6 +17,8 @@ sidecar file and resumed via an HTTP ``Range:`` header when re-run.
 
 import os
 import shutil
+import socket
+import subprocess
 
 import httpx
 from tqdm import tqdm
@@ -109,7 +107,24 @@ def _http_download(uri: str, download_path: str) -> None:
     os.replace(partial, download_path)
 
 
-# ----- Scheme dispatch (PipeLines.jl:224-313, HTTP branch only) -----
+# ----- Scheme dispatch (PipeLines.jl:272-312) -----
+
+def _resolve_scheme(dataset) -> str:
+    """Return the effective scheme, resolving ssh/sshfs → file for local host.
+
+    Port of PipeLines.jl:274-283: when the target host matches the local
+    machine name (or its short hostname), treat the path as a local file
+    rather than an SSH remote.
+    """
+    scheme = dataset.scheme
+    if scheme in ("ssh", "sshfs"):
+        local = socket.gethostname()
+        host = dataset.host or ""
+        if host == local or host.split(".")[0] == local:
+            scheme = "file"
+    return scheme
+
+
 def _download_dataset(
     dataset,
     download_path: str,
@@ -118,14 +133,56 @@ def _download_dataset(
 ) -> None:
     os.makedirs(os.path.dirname(download_path) or ".", exist_ok=True)
 
-    scheme = dataset.scheme
+    scheme = _resolve_scheme(dataset)
+
+    # Git clone: git://, ssh+git://, or https://*.git (PipeLines.jl:285-294)
+    if scheme in ("git", "ssh+git") or (
+        scheme == "https" and dataset.path.endswith(".git")
+    ):
+        if overwrite and os.path.isdir(download_path):
+            shutil.rmtree(download_path)
+        cmd = ["git", "clone", "--depth", "1"]
+        if dataset.branch:
+            cmd += ["--branch", dataset.branch]
+        cmd += [dataset.uri, download_path]
+        subprocess.run(cmd, check=True)
+        return
+
+    # HTTP/HTTPS (non-git)
     if scheme in ("http", "https"):
         _http_download(dataset.uri, download_path)
         return
 
-    raise NotImplementedError(
-        f"Download scheme {scheme!r} is not supported yet (added in a later "
-        f"item). URI: {dataset.uri}"
+    # SSH / rsync remote (PipeLines.jl:296-298)
+    if scheme in ("ssh", "sshfs", "rsync"):
+        dest_dir = os.path.dirname(download_path).rstrip("/") + "/"
+        subprocess.run(
+            ["rsync", "-arvzL", f"{dataset.host}:{dataset.path}", dest_dir],
+            check=True,
+        )
+        return
+
+    # Local file:// (PipeLines.jl:299-302)
+    if scheme == "file":
+        src = dataset.path
+        if src != download_path:
+            remote_host = dataset.host or ""
+            if remote_host and remote_host != socket.gethostname():
+                dest_dir = os.path.dirname(download_path).rstrip("/") + "/"
+                subprocess.run(
+                    ["rsync", "-arvzL", f"{remote_host}:{src}", dest_dir],
+                    check=True,
+                )
+            elif os.path.isdir(src):
+                if overwrite and os.path.isdir(download_path):
+                    shutil.rmtree(download_path)
+                shutil.copytree(src, download_path)
+            else:
+                shutil.copy2(src, download_path)
+        return
+
+    raise ValueError(
+        f"Unsupported download scheme {scheme!r}. URI: {dataset.uri}"
     )
 
 

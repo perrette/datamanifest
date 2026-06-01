@@ -400,3 +400,134 @@ def test_extract_file_unknown_format(tmp_path):
     src.write_bytes(b"x")
     with pytest.raises(ValueError, match="Unknown format"):
         extract_file(str(src), str(tmp_path / "out"), "rar")
+
+
+# --- Item 8: Scheme dispatch — git, ssh/rsync, file ---
+
+def test_download_file_uri(tmp_path):
+    """file:// URI copies the source file to datasets_folder."""
+    from datamanifest.database import Database
+    from datamanifest.pipelines import download_dataset
+
+    src_dir = tmp_path / "src"
+    src_dir.mkdir()
+    content = b"local,data\n1,2\n"
+    (src_dir / "local.csv").write_bytes(content)
+
+    folder = tmp_path / "cache"
+    db = Database(datasets_folder=str(folder), persist=False)
+    db.datasets_toml = ""
+    db.register_dataset(f"file://{src_dir}/local.csv", name="localdata", persist=False)
+    path = download_dataset(db, "localdata")
+
+    assert os.path.isfile(path)
+    with open(path, "rb") as f:
+        assert f.read() == content
+
+
+def test_download_git_clone(tmp_path):
+    """git:// URI triggers 'git clone --depth 1 ...' via subprocess."""
+    from unittest.mock import patch
+
+    from datamanifest.database import Database
+    from datamanifest.pipelines import download_dataset
+
+    folder = tmp_path / "cache"
+    db = Database(datasets_folder=str(folder), persist=False)
+    db.datasets_toml = ""
+    db.skip_checksum = True
+    db.register_dataset(
+        "https://github.com/foo/bar.git", name="myrepo", persist=False
+    )
+
+    called_with = {}
+
+    def fake_run(cmd, **kwargs):
+        called_with["cmd"] = cmd
+
+        class Result:
+            returncode = 0
+
+        # Create the target directory so download_dataset sees it as present
+        dest = cmd[-1]
+        os.makedirs(dest, exist_ok=True)
+        return Result()
+
+    with patch("datamanifest.pipelines.subprocess.run", side_effect=fake_run):
+        download_dataset(db, "myrepo")
+
+    assert called_with["cmd"][0] == "git"
+    assert called_with["cmd"][1] == "clone"
+    assert "--depth" in called_with["cmd"]
+    assert "https://github.com/foo/bar.git" in called_with["cmd"]
+
+
+def test_download_git_clone_with_branch(tmp_path):
+    """entry.branch is forwarded to git clone --branch."""
+    from unittest.mock import patch
+
+    from datamanifest.database import Database, init_dataset_entry
+    from datamanifest.pipelines import download_dataset
+
+    folder = tmp_path / "cache"
+    db = Database(datasets_folder=str(folder), persist=False)
+    db.datasets_toml = ""
+    db.skip_checksum = True
+    entry = init_dataset_entry(uri="https://github.com/foo/bar.git", branch="dev")
+    db.datasets["myrepo"] = entry
+
+    called_with = {}
+
+    def fake_run(cmd, **kwargs):
+        called_with["cmd"] = cmd
+
+        class Result:
+            returncode = 0
+
+        dest = cmd[-1]
+        os.makedirs(dest, exist_ok=True)
+        return Result()
+
+    with patch("datamanifest.pipelines.subprocess.run", side_effect=fake_run):
+        download_dataset(db, "myrepo")
+
+    assert "--branch" in called_with["cmd"]
+    idx = called_with["cmd"].index("--branch")
+    assert called_with["cmd"][idx + 1] == "dev"
+
+
+def test_download_ssh_rsync(tmp_path):
+    """ssh:// URI builds the correct rsync -arvzL command."""
+    from unittest.mock import patch
+
+    from datamanifest.database import Database, init_dataset_entry
+    from datamanifest.pipelines import download_dataset
+
+    folder = tmp_path / "cache"
+    db = Database(datasets_folder=str(folder), persist=False)
+    db.datasets_toml = ""
+    db.skip_checksum = True
+    entry = init_dataset_entry(uri="ssh://remotehost/data/foo.csv")
+    db.datasets["remotedata"] = entry
+
+    called_with = {}
+
+    def fake_run(cmd, **kwargs):
+        called_with["cmd"] = cmd
+
+        class Result:
+            returncode = 0
+
+        # Create a placeholder file so the orchestrator sees a result
+        dest_dir = cmd[-1].rstrip("/")
+        os.makedirs(dest_dir, exist_ok=True)
+        open(os.path.join(dest_dir, "foo.csv"), "w").close()
+        return Result()
+
+    with patch("datamanifest.pipelines.subprocess.run", side_effect=fake_run):
+        download_dataset(db, "remotedata")
+
+    cmd = called_with["cmd"]
+    assert cmd[0] == "rsync"
+    assert "-arvzL" in cmd
+    assert any("remotehost:" in a for a in cmd)
