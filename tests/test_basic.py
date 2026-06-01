@@ -1,5 +1,7 @@
 import hashlib
 import os
+from pathlib import Path
+
 import pytest
 
 
@@ -261,3 +263,140 @@ def test_delete_dataset_removes_file(tmp_path):
     delete_dataset(db, "b", keep_cache=False, persist=False)
     assert not f.exists()
     assert "b" not in db.datasets
+
+
+# --- Item 7: pipelines.py — HTTP download + extract ---
+
+import contextlib
+import functools
+import io
+import threading
+import zipfile
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+
+
+@contextlib.contextmanager
+def _http_server(directory):
+    handler = functools.partial(SimpleHTTPRequestHandler, directory=str(directory))
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_address[1]}"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
+def _make_zip(path, members):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        for name, content in members.items():
+            zf.writestr(name, content)
+    path.write_bytes(buf.getvalue())
+
+
+def test_download_http_file(tmp_path):
+    from datamanifest.database import Database
+    from datamanifest.pipelines import download_dataset
+
+    served = tmp_path / "served"
+    served.mkdir()
+    content = b"col1,col2\n1,2\n"
+    (served / "foo.csv").write_bytes(content)
+
+    folder = tmp_path / "cache"
+    db = Database(datasets_folder=str(folder), persist=False)
+    db.datasets_toml = ""
+
+    with _http_server(served) as base:
+        db.register_dataset(f"{base}/foo.csv", name="foo", persist=False)
+        path = download_dataset(db, "foo")
+
+    assert os.path.isfile(path)
+    with open(path, "rb") as f:
+        assert f.read() == content
+    assert db.datasets["foo"].sha256 == hashlib.sha256(content).hexdigest()
+
+
+def test_download_http_zip_extract(tmp_path):
+    from datamanifest.database import Database
+    from datamanifest.pipelines import download_dataset
+
+    served = tmp_path / "served"
+    served.mkdir()
+    _make_zip(served / "bar.zip", {"inner.txt": b"hello inside"})
+
+    folder = tmp_path / "cache"
+    db = Database(datasets_folder=str(folder), persist=False)
+    db.datasets_toml = ""
+
+    with _http_server(served) as base:
+        db.register_dataset(f"{base}/bar.zip", name="bar", extract=True, persist=False)
+        path = download_dataset(db, "bar")
+
+    assert os.path.isdir(path)
+    assert (Path(path) / "inner.txt").read_bytes() == b"hello inside"
+    # sha256 of the extracted folder is auto-filled.
+    assert db.datasets["bar"].sha256 != ""
+
+
+def test_download_overwrite_false_noop(tmp_path):
+    from datamanifest.database import Database
+    from datamanifest.pipelines import download_dataset
+
+    served = tmp_path / "served"
+    served.mkdir()
+    content = b"data123"
+    (served / "x.bin").write_bytes(content)
+
+    folder = tmp_path / "cache"
+    db = Database(datasets_folder=str(folder), persist=False)
+    db.datasets_toml = ""
+
+    with _http_server(served) as base:
+        db.register_dataset(f"{base}/x.bin", name="x", persist=False)
+        path1 = download_dataset(db, "x")
+        # Second call with overwrite=False is a no-op and re-verifies checksum.
+        path2 = download_dataset(db, "x", overwrite=False)
+
+    assert path1 == path2
+    with open(path2, "rb") as f:
+        assert f.read() == content
+
+
+def test_download_http_resume_partial(tmp_path):
+    from datamanifest.database import Database, get_dataset_path
+    from datamanifest.pipelines import download_dataset
+
+    served = tmp_path / "served"
+    served.mkdir()
+    content = bytes(range(256)) * 64  # 16 KiB of distinctive bytes
+    (served / "big.bin").write_bytes(content)
+
+    folder = tmp_path / "cache"
+    db = Database(datasets_folder=str(folder), persist=False)
+    db.datasets_toml = ""
+
+    with _http_server(served) as base:
+        _, entry = db.register_dataset(f"{base}/big.bin", name="big", persist=False)
+        download_path = get_dataset_path(entry, db.datasets_folder, extract=False)
+        os.makedirs(os.path.dirname(download_path), exist_ok=True)
+        # Seed a partial download with the correct prefix so the Range resume
+        # appends the remainder rather than corrupting the file.
+        with open(download_path + ".download", "wb") as f:
+            f.write(content[:4096])
+        path = download_dataset(db, "big")
+
+    with open(path, "rb") as f:
+        assert f.read() == content
+
+
+def test_extract_file_unknown_format(tmp_path):
+    from datamanifest.pipelines import extract_file
+
+    src = tmp_path / "f.bin"
+    src.write_bytes(b"x")
+    with pytest.raises(ValueError, match="Unknown format"):
+        extract_file(str(src), str(tmp_path / "out"), "rar")
