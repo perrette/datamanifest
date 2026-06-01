@@ -520,17 +520,25 @@ def download_dataset(db, dataset, extract=None, overwrite: bool = False):
         for dep_name in order[:-1]:
             download_dataset(db, dep_name, extract=extract, overwrite=False)
 
+    project_root = project_root_from_paths(db.datasets_toml)
+
     if dataset.skip_download:
         logger.info(
             "Skipping download for dataset: %s (skip_download=true)", dataset.uri
         )
-        path = get_dataset_path(dataset, db.datasets_folder, extract=extract)
+        path = get_dataset_path(
+            dataset, db.datasets_folder, extract=extract, project_root=project_root
+        )
         if not (os.path.isfile(path) or os.path.isdir(path)):
             _missing_dataset_error(dataset, path)
         return path
 
-    local_path = get_dataset_path(dataset, db.datasets_folder, extract=extract)
-    download_path = get_dataset_path(dataset, db.datasets_folder, extract=False)
+    local_path = get_dataset_path(
+        dataset, db.datasets_folder, extract=extract, project_root=project_root
+    )
+    download_path = get_dataset_path(
+        dataset, db.datasets_folder, extract=False, project_root=project_root
+    )
 
     if not overwrite and (os.path.isfile(local_path) or os.path.isdir(local_path)):
         logger.info("Dataset already exists at: %s", local_path)
@@ -539,7 +547,6 @@ def download_dataset(db, dataset, extract=None, overwrite: bool = False):
 
     if overwrite or not (os.path.isfile(download_path) or os.path.isdir(download_path)):
         logger.info("Downloading dataset: %s to %s", dataset.uri, download_path)
-        project_root = project_root_from_paths(db.datasets_toml)
         req_paths_by_ref: dict = {}
         req_paths_ordered: list = []
         if reqs and (dataset.shell != "" or dataset.python != ""):

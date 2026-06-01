@@ -991,3 +991,50 @@ def test_load_dataset_extracted_archive_returns_dir(tmp_path):
 
     assert os.path.isdir(result)
     assert (Path(result) / "inner.txt").read_bytes() == b"hello inside"
+
+
+# ----- Item 16: local_path, skip_download, project-root resolution -----
+
+def test_get_dataset_path_local_path_absolute(tmp_path):
+    """Absolute local_path is returned verbatim, ignoring datasets_folder."""
+    from datamanifest.database import get_dataset_path, init_dataset_entry
+
+    entry = init_dataset_entry(key="mydata", local_path="/abs/path/to/data.csv")
+    path = get_dataset_path(entry, datasets_folder=str(tmp_path), project_root="/ignored")
+    assert path == "/abs/path/to/data.csv"
+
+
+def test_get_dataset_path_local_path_relative(tmp_path):
+    """Relative local_path is joined to project_root when available."""
+    from datamanifest.database import get_dataset_path, init_dataset_entry
+
+    entry = init_dataset_entry(key="mydata", local_path="data/foo.csv")
+    path = get_dataset_path(entry, project_root=str(tmp_path))
+    assert path == str(tmp_path / "data" / "foo.csv")
+
+
+def test_get_dataset_path_local_path_no_root():
+    """Relative local_path is returned as-is when project_root is empty."""
+    from datamanifest.database import get_dataset_path, init_dataset_entry
+
+    entry = init_dataset_entry(key="mydata", local_path="data/foo.csv")
+    path = get_dataset_path(entry, project_root="")
+    assert path == "data/foo.csv"
+
+
+def test_skip_download_raises_if_path_missing(tmp_path):
+    """skip_download=True raises FileNotFoundError with 'documented URI is' when path absent."""
+    from datamanifest.database import Database
+    from datamanifest.pipelines import download_dataset
+
+    db = Database(datasets_folder=str(tmp_path / "cache"), persist=False)
+    db.datasets_toml = ""
+    db.register_dataset(
+        "https://example.com/data.csv",
+        name="skipme",
+        skip_download=True,
+        persist=False,
+    )
+
+    with pytest.raises(FileNotFoundError, match="documented URI is"):
+        download_dataset(db, "skipme")

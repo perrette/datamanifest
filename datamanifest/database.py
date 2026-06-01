@@ -30,6 +30,7 @@ from .config import (
     get_default_toml,
     get_extract_path,
     logger,
+    project_root_from_paths,
     sha256_path,
 )
 
@@ -405,10 +406,22 @@ def get_dataset_path(
     extract=None,
     project_root: str = "",
 ) -> str:
-    """Return the on-disk path for *entry*.
+    """Return the on-disk path for *entry* (Databases.jl:319-343).
 
-    ``local_path`` and ``skip_download`` extensions are wired in a later item.
+    ``local_path``: absolute → returned verbatim; relative → joined to
+    *project_root* when available; otherwise returned as-is.
+    ``skip_download``: returns ``entry.uri`` directly (the user manages the
+    file; the pipeline raises if that path is absent).
     """
+    if entry.local_path != "":
+        if os.path.isabs(entry.local_path):
+            return entry.local_path
+        elif project_root != "":
+            return os.path.join(project_root, entry.local_path)
+        else:
+            return entry.local_path
+    if entry.skip_download:
+        return entry.uri
     if extract is None:
         extract = entry.extract
     key = entry.key
@@ -634,6 +647,10 @@ class Database:
 
     def __str__(self) -> str:
         return repr_datasets(self)
+
+    def get_project_root(self) -> str:
+        """Return the project root derived from ``datasets_toml`` (Config.jl:98-131)."""
+        return project_root_from_paths(self.datasets_toml)
 
     # ----- TOML serialization (Databases.jl:184-258) -----
     def to_dict(self) -> dict:
