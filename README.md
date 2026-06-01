@@ -1,2 +1,3 @@
 # datamanifest
-Managing data dependencies for a scientific project
+
+Python port of [DataManifest.jl](https://github.com/awi-esc/DataManifest.jl) — under construction.
