@@ -566,3 +566,98 @@ def test_download_ssh_rsync(tmp_path):
     assert cmd[0] == "rsync"
     assert "-arvzL" in cmd
     assert any("remotehost:" in a for a in cmd)
+
+
+# ----- Item 10: requires= + topological order + shell template -----
+
+def _shell_db(tmp_path):
+    from datamanifest.database import Database
+
+    db = Database(datasets_folder=str(tmp_path / "cache"), persist=False)
+    db.datasets_toml = ""
+    db.skip_checksum = True
+    return db
+
+
+def test_requires_download_order(tmp_path):
+    """A dependency declared via requires= is downloaded before the dependent."""
+    from datamanifest.database import init_dataset_entry
+    from datamanifest.pipelines import download_dataset
+
+    db = _shell_db(tmp_path)
+    log = tmp_path / "order.log"
+    db.datasets["A"] = init_dataset_entry(
+        key="A", shell=f"sh -c 'echo A >> {log}; touch $download_path'"
+    )
+    db.datasets["B"] = init_dataset_entry(
+        key="B", requires=["A"], shell=f"sh -c 'echo B >> {log}; touch $download_path'"
+    )
+
+    download_dataset(db, "B")
+
+    assert log.read_text() == "A\nB\n"
+
+
+def test_requires_circular_dependency(tmp_path):
+    """A requires-cycle raises ValueError with a 'Circular dependency' message."""
+    from datamanifest.database import init_dataset_entry
+    from datamanifest.pipelines import download_dataset
+
+    db = _shell_db(tmp_path)
+    db.datasets["A"] = init_dataset_entry(key="A", requires=["B"], shell="touch $download_path")
+    db.datasets["B"] = init_dataset_entry(key="B", requires=["A"], shell="touch $download_path")
+
+    with pytest.raises(ValueError, match="Circular dependency"):
+        download_dataset(db, "A")
+
+
+def test_shell_template_content(tmp_path):
+    """A shell template expands $download_path and runs, producing file content."""
+    from datamanifest.database import init_dataset_entry
+    from datamanifest.pipelines import download_dataset
+
+    db = _shell_db(tmp_path)
+    db.datasets["hello"] = init_dataset_entry(
+        key="hello", shell="sh -c 'echo hello > $download_path'"
+    )
+
+    path = download_dataset(db, "hello")
+
+    assert Path(path).read_text() == "hello\n"
+
+
+def test_shell_template_path_substitution(tmp_path):
+    """$path_<i> and $path_<sanitized_ref> substitute the dependency's path."""
+    from datamanifest.database import init_dataset_entry, get_dataset_path
+    from datamanifest.pipelines import download_dataset, expand_shell_template
+
+    db = _shell_db(tmp_path)
+    dep = init_dataset_entry(key="dep/one", shell="sh -c 'echo data > $download_path'")
+    db.datasets["dep/one"] = dep
+    # B copies the dependency's file using the ordered $path_1 reference.
+    db.datasets["B"] = init_dataset_entry(
+        key="B", requires=["dep/one"], shell="cp $path_1 $download_path"
+    )
+
+    path = download_dataset(db, "B")
+    assert Path(path).read_text() == "data\n"
+
+    # Direct unit check of $path_<sanitized_ref> and $requires_paths.
+    expanded = expand_shell_template(
+        "use $path_dep_one and $requires_paths",
+        db.datasets["B"],
+        "/tmp/out",
+        required_paths_by_ref={"dep_one": "/cache/dep/one"},
+        required_paths_ordered=["/cache/dep/one"],
+    )
+    assert expanded == "use /cache/dep/one and /cache/dep/one"
+
+
+def test_shell_template_project_root_required():
+    """$project_root in a template with no project_root raises ValueError."""
+    from datamanifest.database import init_dataset_entry
+    from datamanifest.pipelines import expand_shell_template
+
+    entry = init_dataset_entry(key="x", shell="echo $project_root")
+    with pytest.raises(ValueError, match="project_root"):
+        expand_shell_template("cd $project_root", entry, "/tmp/out", project_root="")

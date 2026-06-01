@@ -2,12 +2,13 @@
 
 Port of DataManifest.jl's ``PipeLines.jl`` (download orchestration).
 
-- ``download_dataset`` / ``download_datasets`` — orchestration + checksum.
-- ``_download_dataset`` — full scheme dispatch (HTTP, git, ssh/rsync, file).
+- ``download_dataset`` / ``download_datasets`` — orchestration + checksum,
+  with ``requires=`` dependencies downloaded first in topological order.
+- ``_download_dataset`` — full scheme dispatch (HTTP, git, ssh/rsync, file)
+  plus the ``shell`` template download hook.
 - ``extract_file`` — ``zip`` / ``tar`` / ``tar.gz`` extraction.
 
-Multi-URI batch entries, ``requires=`` topological ordering, and the
-``shell`` / ``python`` download hooks are added in later items.
+The ``python`` download hook is added in a later item.
 
 Downloads are synchronous (``httpx.Client(follow_redirects=True)`` streaming
 with a ``tqdm`` progress bar), mirroring Julia's ``Downloads.download`` model
@@ -16,6 +17,7 @@ sidecar file and resumed via an HTTP ``Range:`` header when re-run.
 """
 
 import os
+import shlex
 import shutil
 import socket
 import subprocess
@@ -23,10 +25,110 @@ import subprocess
 import httpx
 from tqdm import tqdm
 
-from .config import logger
+from .config import logger, project_root_from_paths
 from .database import get_dataset_path, parse_uri_metadata, search_dataset, verify_checksum
 
 _CHUNK_SIZE = 65536
+
+
+# ----- requires= topological order + shell template (PipeLines.jl:10-81) -----
+
+def _sanitize_ref(ref: str) -> str:
+    """Sanitize a dependency reference for use in shell variable names (PipeLines.jl:10)."""
+    return ref.replace("/", "_").replace(".", "_")
+
+
+def _name_for_entry(db, entry) -> str:
+    """Return the registry name under which *entry* is stored (PipeLines.jl:315-321)."""
+    for name, e in db.datasets.items():
+        if e is entry:
+            return name
+    name, _ = search_dataset(db, entry.key)
+    return name
+
+
+def _get_download_order(db, name: str):
+    """Return dataset names in topological order (dependencies first).
+
+    Port of ``PipeLines.jl:15-55``: builds the requires-graph reachable from
+    *name*, then Kahn-sorts it. Raises ``ValueError`` on a dependency cycle.
+    """
+    graph: dict = {}
+    seen: set = set()
+
+    def collect_deps(n: str) -> None:
+        if n in seen:
+            return
+        seen.add(n)
+        _, entry = search_dataset(db, n)
+        deps = []
+        for ref in entry.requires:
+            dep_name, _ = search_dataset(db, ref)
+            deps.append(dep_name)
+            collect_deps(dep_name)
+        graph[n] = deps
+
+    collect_deps(name)
+
+    in_degree = {n: len(deps) for n, deps in graph.items()}
+    queue = [n for n in graph if in_degree[n] == 0]
+    order = []
+    while queue:
+        u = queue.pop(0)
+        order.append(u)
+        for v, deps in graph.items():
+            if u in deps:
+                in_degree[v] -= 1
+                if in_degree[v] == 0:
+                    queue.append(v)
+
+    if len(order) != len(graph):
+        raise ValueError(f"Circular dependency in dataset requires: {name}")
+
+    return order
+
+
+def expand_shell_template(
+    template: str,
+    entry,
+    download_path: str,
+    project_root: str = "",
+    required_paths_by_ref=None,
+    required_paths_ordered=None,
+) -> str:
+    """Substitute ``$variable`` placeholders in a shell template (PipeLines.jl:57-81).
+
+    Supported substitutions: ``$download_path``, ``$project_root``, ``$uri``,
+    ``$key``, ``$version``, ``$doi``, ``$format``, ``$branch``,
+    ``$path_<sanitized_ref>`` (per dependency), ``$requires_paths`` (all dep
+    paths space-joined), and ``$path_<i>`` (1-based dependency index).
+    """
+    if required_paths_by_ref is None:
+        required_paths_by_ref = {}
+    if required_paths_ordered is None:
+        required_paths_ordered = []
+
+    if "$project_root" in template and project_root == "":
+        raise ValueError(
+            "Shell template contains $project_root but project root could not be "
+            "determined. Use a Database with datasets_toml set."
+        )
+
+    result = template
+    result = result.replace("$download_path", download_path)
+    result = result.replace("$project_root", project_root)
+    result = result.replace("$uri", entry.uri)
+    result = result.replace("$key", entry.key)
+    result = result.replace("$version", entry.version)
+    result = result.replace("$doi", entry.doi)
+    result = result.replace("$format", entry.format)
+    result = result.replace("$branch", entry.branch)
+    for sanitized_ref, path in required_paths_by_ref.items():
+        result = result.replace(f"$path_{sanitized_ref}", path)
+    result = result.replace("$requires_paths", " ".join(required_paths_ordered))
+    for i, path in enumerate(required_paths_ordered, start=1):
+        result = result.replace(f"$path_{i}", path)
+    return result
 
 
 # ----- Multi-URI helpers (PipeLines.jl:200-222) -----
@@ -169,6 +271,8 @@ def _download_dataset(
     download_path: str,
     project_root: str = "",
     overwrite: bool = False,
+    required_paths_by_ref=None,
+    required_paths_ordered=None,
 ) -> None:
     os.makedirs(os.path.dirname(download_path) or ".", exist_ok=True)
 
@@ -182,6 +286,21 @@ def _download_dataset(
             file_path = os.path.join(download_path, rel)
             os.makedirs(os.path.dirname(file_path) or ".", exist_ok=True)
             _download_uri(uri, file_path)
+        return
+
+    # Shell hook: run the expanded template instead of a URI download
+    # (PipeLines.jl:259-270). No shell=True — the command is tokenized with
+    # shlex and run directly, mirroring Julia's ``Cmd(split(...))``.
+    if dataset.shell != "":
+        cmd_expanded = expand_shell_template(
+            dataset.shell,
+            dataset,
+            download_path,
+            project_root,
+            required_paths_by_ref=required_paths_by_ref,
+            required_paths_ordered=required_paths_ordered,
+        )
+        subprocess.run(shlex.split(cmd_expanded), cwd=project_root or None, check=True)
         return
 
     scheme = _resolve_scheme(dataset)
@@ -252,11 +371,22 @@ def _missing_dataset_error(dataset, path: str) -> None:
 def download_dataset(db, dataset, extract=None, overwrite: bool = False):
     """Download *dataset* (a name or :class:`DatasetEntry`) and return its path.
 
-    Port of ``PipeLines.jl:333-401`` restricted to the HTTP path. ``requires=``
-    ordering and the shell/python hooks are added in later items.
+    Port of ``PipeLines.jl:333-401``. Dependencies declared via ``requires=``
+    are downloaded first in topological order; ``entry.shell`` templates are
+    expanded with the resolved dependency paths. The ``python`` hook is added
+    in a later item.
     """
     if isinstance(dataset, str):
-        _, dataset = search_dataset(db, dataset)
+        name, dataset = search_dataset(db, dataset)
+    else:
+        name = _name_for_entry(db, dataset)
+
+    # Download dependencies first, in topological order (PipeLines.jl:336-342).
+    reqs = dataset.requires
+    if reqs:
+        order = _get_download_order(db, name)
+        for dep_name in order[:-1]:
+            download_dataset(db, dep_name, extract=extract, overwrite=False)
 
     if dataset.skip_download:
         logger.info(
@@ -277,7 +407,31 @@ def download_dataset(db, dataset, extract=None, overwrite: bool = False):
 
     if overwrite or not (os.path.isfile(download_path) or os.path.isdir(download_path)):
         logger.info("Downloading dataset: %s to %s", dataset.uri, download_path)
-        _download_dataset(dataset, download_path, overwrite=overwrite)
+        project_root = project_root_from_paths(db.datasets_toml)
+        req_paths_by_ref: dict = {}
+        req_paths_ordered: list = []
+        if reqs and (dataset.shell != "" or dataset.python != ""):
+            order = _get_download_order(db, name)
+            for ref in reqs:
+                _, dep_entry = search_dataset(db, ref)
+                dep_extract = extract if extract is not None else dep_entry.extract
+                req_paths_by_ref[_sanitize_ref(ref)] = get_dataset_path(
+                    dep_entry, db.datasets_folder, extract=dep_extract
+                )
+            for dep_name in order[:-1]:
+                _, dep_entry = search_dataset(db, dep_name)
+                dep_extract = extract if extract is not None else dep_entry.extract
+                req_paths_ordered.append(
+                    get_dataset_path(dep_entry, db.datasets_folder, extract=dep_extract)
+                )
+        _download_dataset(
+            dataset,
+            download_path,
+            project_root=project_root,
+            overwrite=overwrite,
+            required_paths_by_ref=req_paths_by_ref,
+            required_paths_ordered=req_paths_ordered,
+        )
     else:
         logger.info("Dataset already exists at: %s", download_path)
 
