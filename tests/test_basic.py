@@ -153,3 +153,49 @@ def test_database_loaders_first(tmp_path):
 
     db2 = Database(datasets_toml=str(out))
     assert db2.loaders.get("csvloader") == "pandas.io.parsers:read_csv"
+
+
+# --- Item 5: Search, list, repr ---
+
+FIXTURE = os.path.join(os.path.dirname(__file__), "..", "datasets.toml")
+
+
+def _fixture_db():
+    from datamanifest.database import Database
+    return Database(datasets_toml=FIXTURE, persist=False)
+
+
+def test_getitem_by_key():
+    db = _fixture_db()
+    entry = db["herzschuh2023"]
+    assert entry.format == "zip"
+
+
+def test_search_by_doi():
+    from datamanifest.database import search_dataset
+    db = _fixture_db()
+    key, entry = search_dataset(db, "10.1594/PANGAEA.930512")
+    assert key == "herzschuh2023"
+
+
+def test_search_by_repo_name_alias():
+    from datamanifest.database import search_dataset
+    db = _fixture_db()
+    key, entry = search_dataset(db, "lgmDA")
+    assert key == "jesstierney/lgmDA"
+
+
+def test_search_missing_raises():
+    from datamanifest.database import search_dataset
+    db = _fixture_db()
+    import pytest
+    with pytest.raises(ValueError, match="Available datasets:"):
+        search_dataset(db, "nonexistent_dataset_xyz")
+
+
+def test_repr_datasets():
+    from datamanifest.database import repr_datasets
+    db = _fixture_db()
+    text = repr_datasets(db)
+    lines = [l for l in text.splitlines() if l.startswith("- ")]
+    assert len(lines) == len(db.datasets)

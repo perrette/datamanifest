@@ -298,6 +298,104 @@ def is_a_git_repo(entry: DatasetEntry) -> bool:
     return False
 
 
+# ----- search / list / repr (Databases.jl:632-732) -----
+def list_alternative_keys(entry: DatasetEntry) -> list:
+    alternatives = list(entry.aliases)
+    if entry.doi:
+        alternatives.append(entry.doi)
+    alternatives.append(entry.key)
+    alternatives.append(entry.path)
+    if is_a_git_repo(entry):
+        segs = entry.path.strip("/").split("/")
+        if len(segs) >= 2:
+            alternatives.append(segs[1])
+    seen = set()
+    unique = []
+    for alt in alternatives:
+        if alt and alt not in seen:
+            seen.add(alt)
+            unique.append(alt)
+    return unique
+
+
+def list_dataset_keys(db, alt: bool = True, flat: bool = False) -> list:
+    entries = []
+    for name, dataset in db.datasets.items():
+        row = [name]
+        if alt:
+            row.extend(list_alternative_keys(dataset))
+        entries.append(row)
+    if flat:
+        return [key for row in entries for key in row]
+    return entries
+
+
+def repr_datasets(db, alt: bool = True) -> str:
+    header = "Datasets including aliases:" if alt else "Datasets:"
+    lines = [header]
+    for keys in list_dataset_keys(db, alt=alt):
+        lines.append("- " + " | ".join(keys))
+    return "\n".join(lines)
+
+
+def print_dataset_keys(db, alt: bool = True) -> None:
+    print(repr_datasets(db, alt=alt))
+
+
+def search_datasets(db, name: str, alt: bool = True, partial: bool = False) -> list:
+    datasets = db.datasets
+    matches = []
+    seen_keys: set = set()
+    name_lower = name.lower()
+
+    for key, dataset in datasets.items():
+        if key.lower() == name_lower and key not in seen_keys:
+            matches.append((key, dataset))
+            seen_keys.add(key)
+    if alt:
+        for key, dataset in datasets.items():
+            if key not in seen_keys and name_lower in [
+                a.lower() for a in list_alternative_keys(dataset)
+            ]:
+                matches.append((key, dataset))
+                seen_keys.add(key)
+    if partial:
+        for key, dataset in datasets.items():
+            if key not in seen_keys and name_lower in key.lower():
+                matches.append((key, dataset))
+                seen_keys.add(key)
+    if alt and partial:
+        for key, dataset in datasets.items():
+            if key not in seen_keys and any(
+                name_lower in a.lower() for a in list_alternative_keys(dataset)
+            ):
+                matches.append((key, dataset))
+                seen_keys.add(key)
+    return matches
+
+
+def search_dataset(db, name: str, raise_: bool = True, **kwargs):
+    results = search_datasets(db, name, **kwargs)
+    if not results:
+        if raise_:
+            available = ", ".join(db.datasets.keys())
+            raise ValueError(
+                f"No dataset found for: `{name}`.\n"
+                f"Available datasets: {available}\n"
+                f"{repr_datasets(db)}"
+            )
+        return None
+    if len(results) > 1:
+        message = (
+            f"Multiple datasets found for {name}:\n- "
+            + "\n- ".join(
+                " | ".join(list_alternative_keys(ds)) for _, ds in results
+            )
+        )
+        logger.warning(message)
+    return results[0]
+
+
 # ----- Database (Databases.jl:147-258, 553-825) -----
 class Database:
     """Registry of :class:`DatasetEntry` objects, with TOML persistence.
@@ -351,6 +449,19 @@ class Database:
         )
 
     __hash__ = None
+
+    def __getitem__(self, name: str) -> DatasetEntry:
+        return search_dataset(self, name)[1]
+
+    def __repr__(self) -> str:
+        n = len(self.datasets)
+        return (
+            f"Database({n} dataset{'s' if n != 1 else ''}, "
+            f"toml={self.datasets_toml!r})"
+        )
+
+    def __str__(self) -> str:
+        return repr_datasets(self)
 
     # ----- TOML serialization (Databases.jl:184-258) -----
     def to_dict(self) -> dict:
