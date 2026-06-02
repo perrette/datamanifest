@@ -1,0 +1,16 @@
+spec_tag = "spec-v1.0"
+
+# Per-file SHA-256 content hashes computed from the actual pinned fixtures.
+# This constitutes the Python tool's conformance claim against the spec.
+# To update: re-download the new tag tarball, recompute hashes, and record them here.
+
+[files]
+"tests/fixtures/README.md" = "9a2c9f41882db3aca881307f4c56e059276af71bea85c7b3c4c5b32750eba683"
+"tests/fixtures/multilang.expected.json" = "e9227a25d704e84da11d18287bda8397dedecef6412d10534b919924dfb6cb43"
+"tests/fixtures/multilang.toml" = "60793653a61563c23dced82da81e6d2b69ae887f84abae659d5a0ab5df6c3014"
+"tests/fixtures/single_julia.expected.json" = "ca32e4171da18bcf03df7892deed73ed3ad088fd3da9076f76cd44cbfeccff3c"
+"tests/fixtures/single_julia.toml" = "7fae76fba97b995ca4f8bba204323f0aa5d9bc08e410b54ccbece4b55c39370f"
+"tests/fixtures/single_python.expected.json" = "6a41975b5ce5fd9a0f102dfbed55ece48b3779bee4a6922e21edb18f2da58085"
+"tests/fixtures/single_python.toml" = "9bcab1006d357e3a3875c9c07f2d453785528ea14c7f87fd73675a899fa397a3"
+"tests/fixtures/unknown_structural.expected.json" = "914001f4d8b6c13911a7f9cbb38ede564a985deb4cca0b1efa55e6996fe08522"
+"tests/fixtures/unknown_structural.toml" = "b794906d29a2d7af6ed1f4edd37d23527bf0890fc693c7811080700f779f3b64"
