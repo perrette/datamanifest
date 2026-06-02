@@ -690,9 +690,13 @@ def _warn_legacy_dir_once() -> None:
 def resolve_existing_path(db: "Database", entry: "DatasetEntry", extract=None) -> str:
     """Return the on-disk path to read *entry* from.
 
-    Searches the stores in :data:`_READ_STORE_ORDER` (``repo`` → ``data`` →
-    ``cache``) and returns the first ``<root>/<key>`` that exists. When none
-    exist, falls back to the *write* path for the entry's selected store (so a
+    Probes, in order, the entry's own resolved ``store`` **selector** folder
+    (``$folder[/subpath]``, defaulting to the project default), then the
+    built-in folders in :data:`_READ_STORE_ORDER` (``repo`` → ``data`` →
+    ``cache``) via :func:`datamanifest.storage.folder_root`, and returns the
+    first ``<root>/<key>`` that exists. A present copy in a higher-priority
+    folder shadows the others (spec-v2 portable storage model). When none exist,
+    falls back to the *write* path for the entry's selected store (so a
     subsequent fetch materializes there).
     """
     project_root = db.get_project_root()
@@ -709,13 +713,38 @@ def resolve_existing_path(db: "Database", entry: "DatasetEntry", extract=None) -
     key = entry.key
     if extract:
         key = get_extract_path(key)
+
+    # Candidate roots in priority order: the entry's own resolved store selector
+    # first, then the built-in folders repo -> data -> cache. The
+    # ``datasets_folder`` back-compat override still wins for the default data
+    # store.
+    roots = []
+    selector = entry.store or storage.project_default(db.storage_config)
+    if db.datasets_folder and selector == "$data":
+        roots.append(db.datasets_folder)
+    else:
+        roots.append(
+            storage.resolve_selector(
+                selector, project_root=project_root,
+                storage_config=db.storage_config,
+            )
+        )
     for store in _READ_STORE_ORDER:
         if store == "data" and db.datasets_folder:
-            root = db.datasets_folder
+            roots.append(db.datasets_folder)
         else:
-            root = storage.store_root(
-                store, project_root=project_root, storage_config=db.storage_config
+            roots.append(
+                storage.folder_root(
+                    store, project_root=project_root,
+                    storage_config=db.storage_config,
+                )
             )
+
+    seen = set()
+    for root in roots:
+        if root in seen:
+            continue
+        seen.add(root)
         candidate = os.path.join(root, key)
         if os.path.isfile(candidate) or os.path.isdir(candidate):
             return candidate
