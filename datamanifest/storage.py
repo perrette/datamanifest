@@ -27,6 +27,7 @@ resolved against ``project_root``.
 
 import contextlib
 import fnmatch
+import logging
 import os
 import re
 import socket
@@ -36,11 +37,15 @@ import platformdirs
 __all__ = [
     "store_root",
     "folder_root",
+    "resolve_selector",
+    "project_default",
     "legacy_data_root",
     "tmp_path",
     "lock_path",
     "marker_path",
 ]
+
+_logger = logging.getLogger("datamanifest")
 
 # Built-in folder variables with a platformdirs/project-root default. Any other
 # folder name must be defined on the resolution ladder or it is an error.
@@ -303,3 +308,78 @@ def folder_root(name, *, project_root="", storage_config=None, env=os.environ,
     if name == "repo" and not os.path.isabs(expanded):
         expanded = os.path.join(project_root or "", expanded)
     return expanded
+
+
+# Storage selectors named with a bare (non-``$``) name already warned about, so
+# the transition-shim deprecation notice fires only once per name per process.
+_BARE_SELECTORS_WARNED = set()
+
+
+def _warn_bare_selector_once(selector):
+    """One-time deprecation notice that a bare ``store`` selector was resolved
+    as if it were ``$<selector>``. Strict rejection lands in a later migration
+    step; until then this keeps old manifests working."""
+    if selector in _BARE_SELECTORS_WARNED:
+        return
+    _BARE_SELECTORS_WARNED.add(selector)
+    _logger.warning(
+        "Storage selector %r is bare (no '$'); resolving it as '$%s'. Bare "
+        "selectors are deprecated under spec-v2 and will be rejected — run "
+        "`datamanifest migrate` to rewrite it to '$%s'.",
+        selector, selector, selector,
+    )
+
+
+def project_default(storage_config=None):
+    """Return the project-wide default storage selector.
+
+    This is ``[_STORAGE].default`` when set (a selector such as ``$cache`` or
+    ``$scratch/sub``), otherwise the built-in default ``$data``. The result is a
+    *selector string*, not a resolved path — pass it through
+    :func:`resolve_selector` to obtain a directory.
+    """
+    if storage_config is None:
+        storage_config = {}
+    default = storage_config.get("default")
+    if isinstance(default, str) and default:
+        return default
+    return "$data"
+
+
+def resolve_selector(selector, *, project_root="", storage_config=None,
+                     env=os.environ, host=None, profile=None):
+    """Resolve a storage *selector* to its absolute directory path.
+
+    A selector is ``$folder[/subpath]``: the leading ``$folder`` (or
+    ``${folder}``) names a folder variable resolved via :func:`folder_root`, and
+    any trailing ``/subpath`` is appended beneath the folder's root.
+
+    As a **transition shim**, a bare (non-``$``) selector ``name`` is resolved as
+    if it were ``$name`` and logs a one-time deprecation warning. Strict
+    rejection of bare selectors lands in a later migration step; until then this
+    keeps spec-v1.1 manifests resolving.
+
+    Parameters mirror :func:`folder_root`.
+    """
+    if not selector:
+        raise ValueError("resolve_selector requires a non-empty selector")
+
+    if selector.startswith("$"):
+        body = selector[1:]
+    else:
+        _warn_bare_selector_once(selector)
+        body = selector
+
+    name, _, subpath = body.partition("/")
+    if name.startswith("{") and name.endswith("}"):
+        name = name[1:-1]
+    if not name:
+        raise ValueError(f"malformed selector {selector!r}: empty folder name")
+
+    root = folder_root(
+        name, project_root=project_root, storage_config=storage_config,
+        env=env, host=host, profile=profile,
+    )
+    if subpath:
+        root = os.path.join(root, subpath)
+    return root
