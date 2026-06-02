@@ -16,6 +16,7 @@ with a ``tqdm`` progress bar), mirroring Julia's ``Downloads.download`` model
 sidecar file and resumed via an HTTP ``Range:`` header when re-run.
 """
 
+import contextlib
 import importlib
 import os
 import shlex
@@ -27,7 +28,7 @@ import sys
 import httpx
 from tqdm import tqdm
 
-from . import default_loaders
+from . import default_loaders, storage
 from .config import COMPRESSED_FORMATS, logger, project_root_from_paths
 from .database import (
     get_dataset_path,
@@ -141,6 +142,50 @@ def expand_shell_template(
     return result
 
 
+def _binding_variables(entry, *, download_path=None, path=None, project_root=""):
+    """Build the ``$var`` substitution set for a parameterized binding.
+
+    Mirrors :func:`expand_shell_template`'s common variables. Fetchers expose
+    ``$download_path``; loaders expose ``$path``; both share ``$project_root``,
+    ``$uri``, ``$key``, ``$version``, ``$doi``, ``$format`` and ``$branch``.
+    """
+    variables = {
+        "project_root": project_root,
+        "uri": entry.uri,
+        "key": entry.key,
+        "version": entry.version,
+        "doi": entry.doi,
+        "format": entry.format,
+        "branch": entry.branch,
+    }
+    if download_path is not None:
+        variables["download_path"] = download_path
+    if path is not None:
+        variables["path"] = path
+    return variables
+
+
+def _substitute_vars(value, variables):
+    """Recursively substitute ``$name`` placeholders in the string parts of *value*.
+
+    Used for the parameterized ``{ ref, args, kwargs }`` binding form: every
+    string element (scalar, or nested inside a list / dict) has each ``$name``
+    from *variables* replaced; non-string scalars pass through unchanged; dict
+    keys are kept verbatim. Longer names are substituted first so a shorter name
+    can never partially clobber a longer one.
+    """
+    if isinstance(value, str):
+        result = value
+        for name in sorted(variables, key=len, reverse=True):
+            result = result.replace(f"${name}", variables[name])
+        return result
+    if isinstance(value, list):
+        return [_substitute_vars(v, variables) for v in value]
+    if isinstance(value, dict):
+        return {k: _substitute_vars(v, variables) for k, v in value.items()}
+    return value
+
+
 # ----- Loader registry + entry-point resolution (PipeLines.jl:111-198) -----
 #
 # Julia resolves loader strings either as a module path (`A.B.func`) via runtime
@@ -236,16 +281,32 @@ def _run_python_hook(
     required_paths_ordered=None,
     python_includes=None,
     ref: str = "",
+    args=None,
+    kwargs=None,
 ):
     """Run the in-process Python fetcher as a download-phase hook (replaces Julia's
     ``_run_julia``).
 
     *ref* is the resolved entry-point reference (own ``_LANG.python.fetcher`` or
-    legacy ``python=``); it defaults to ``dataset.python`` when not supplied. The
-    resolved callable is invoked with the same keyword names the shell template
-    exposes, so a single project can use either mechanism (``PipeLines.jl:83-114``).
+    legacy ``python=``); it defaults to ``dataset.python`` when not supplied.
+
+    When the binding carries *args* / *kwargs* (the parameterized
+    ``{ ref, args, kwargs }`` table form), ``$var`` placeholders in their string
+    values are substituted and the callable is invoked as
+    ``ref(*args, **kwargs)``. A bare-string binding (no args/kwargs) keeps the
+    conventional call: the callable is invoked with the same keyword names the
+    shell template exposes, so a single project can use either mechanism
+    (``PipeLines.jl:83-114``).
     """
     fn = _resolve_entry_point(ref or dataset.python, python_includes)
+    if args or kwargs:
+        variables = _binding_variables(
+            dataset, download_path=download_path, project_root=project_root
+        )
+        call_args = _substitute_vars(list(args or []), variables)
+        call_kwargs = _substitute_vars(dict(kwargs or {}), variables)
+        fn(*call_args, **call_kwargs)
+        return
     fn(
         download_path=download_path,
         project_root=project_root,
@@ -395,7 +456,151 @@ def _resolve_scheme(dataset) -> str:
     return scheme
 
 
+def _rsync_into(host: str, src: str, download_path: str) -> None:
+    """rsync ``host:src`` into ``download_path``'s directory (preserving the
+    source basename, per Julia's ``rsync`` idiom) then move the landed entry to
+    *download_path*.
+
+    The basename-preserving form is kept so directory and file sources behave as
+    before; the final rename is what lets the result land at the staging path
+    chosen by :func:`materialize` (which differs from the source basename)."""
+    dest_dir = os.path.dirname(download_path).rstrip("/") + "/"
+    subprocess.run(["rsync", "-arvzL", f"{host}:{src}", dest_dir], check=True)
+    landed = os.path.join(
+        os.path.dirname(download_path), os.path.basename(src.rstrip("/"))
+    )
+    if landed != download_path:
+        _remove_path(download_path)
+        os.replace(landed, download_path)
+
+
+# ----- Safe materialization (atomic publish + completion marker + lock) -----
+
+def _pid_alive(pid: int) -> bool:
+    """True when *pid* names a live process (best effort)."""
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def _read_lock_pid(lock: str) -> int:
+    """The PID recorded in *lock*, or ``0`` when unreadable/malformed."""
+    try:
+        with open(lock) as f:
+            return int(f.read().strip() or "0")
+    except (OSError, ValueError):
+        return 0
+
+
+def _acquire_lock(lock: str) -> bool:
+    """Create *lock* as an exclusive pidfile, reclaiming it when its recorded
+    PID is dead.
+
+    Returns ``True`` when this process now owns the lock (and is therefore
+    responsible for removing it), ``False`` when a live process already holds it
+    — in which case the caller proceeds without exclusivity rather than
+    deadlocking, since the completion marker still guards against acting on a
+    partial publish.
+    """
+    while True:
+        try:
+            fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            pid = _read_lock_pid(lock)
+            if pid and not _pid_alive(pid):
+                with contextlib.suppress(OSError):
+                    os.remove(lock)
+                continue
+            return False
+        with os.fdopen(fd, "w") as f:
+            f.write(str(os.getpid()))
+        return True
+
+
+def _remove_path(path: str) -> None:
+    """Remove *path* whether a file, symlink, or directory (no error if absent)."""
+    if os.path.islink(path) or os.path.isfile(path):
+        with contextlib.suppress(FileNotFoundError):
+            os.remove(path)
+    elif os.path.isdir(path):
+        shutil.rmtree(path, ignore_errors=True)
+
+
+def materialize(target: str, write_fn) -> None:
+    """Atomically publish *target*, holding a pidfile lock for the duration.
+
+    ``write_fn(tmp)`` populates the staging path ``<target>.tmp`` (a file or a
+    directory). On success the staging path is atomically moved into place via
+    :func:`os.replace` and a completion marker is created
+    (``<target>/.complete`` for a directory, ``<target>.complete`` for a file).
+    A ``<target>.lock`` pidfile is held while writing and removed afterwards. A
+    killed or failed write leaves no completion marker and no partial final
+    entry — only a leftover ``.tmp``.
+    """
+    os.makedirs(os.path.dirname(target) or ".", exist_ok=True)
+    tmp = storage.tmp_path(target)
+    lock = storage.lock_path(target)
+    owned = _acquire_lock(lock)
+    try:
+        _remove_path(tmp)
+        write_fn(tmp)
+        _remove_path(target)
+        os.replace(tmp, target)
+        with open(storage.marker_path(target), "w"):
+            pass
+    finally:
+        if owned:
+            with contextlib.suppress(OSError):
+                os.remove(lock)
+
+
+def is_complete(target: str) -> bool:
+    """True when *target* exists and carries its completion marker.
+
+    Readers treat a missing marker as absent (an interrupted or partial publish
+    that must be re-fetched).
+    """
+    return os.path.exists(target) and os.path.exists(storage.marker_path(target))
+
+
 def _download_dataset(
+    dataset,
+    download_path: str,
+    project_root: str = "",
+    overwrite: bool = False,
+    required_paths_by_ref=None,
+    required_paths_ordered=None,
+    python_includes=None,
+) -> None:
+    """Safely materialize *dataset* at *download_path*.
+
+    The fetch itself (:func:`_fetch_into_path`) writes into a
+    ``<download_path>.tmp`` staging path, which :func:`materialize` then
+    atomically publishes and marks complete under a pidfile lock. A killed or
+    failed fetch therefore leaves no ``.complete`` marker and no partial final
+    entry.
+    """
+    materialize(
+        download_path,
+        lambda tmp: _fetch_into_path(
+            dataset,
+            tmp,
+            project_root=project_root,
+            overwrite=overwrite,
+            required_paths_by_ref=required_paths_by_ref,
+            required_paths_ordered=required_paths_ordered,
+            python_includes=python_includes,
+        ),
+    )
+
+
+def _fetch_into_path(
     dataset,
     download_path: str,
     project_root: str = "",
@@ -432,6 +637,8 @@ def _download_dataset(
             required_paths_ordered=required_paths_ordered,
             python_includes=python_includes,
             ref=value,
+            args=dataset.lang_python_fetcher_args,
+            kwargs=dataset.lang_python_fetcher_kwargs,
         )
         return
 
@@ -481,11 +688,7 @@ def _download_dataset(
 
     # SSH / rsync remote (PipeLines.jl:296-298)
     if scheme in ("ssh", "sshfs", "rsync"):
-        dest_dir = os.path.dirname(download_path).rstrip("/") + "/"
-        subprocess.run(
-            ["rsync", "-arvzL", f"{dataset.host}:{dataset.path}", dest_dir],
-            check=True,
-        )
+        _rsync_into(dataset.host, dataset.path, download_path)
         return
 
     # Local file:// (PipeLines.jl:299-302)
@@ -494,11 +697,7 @@ def _download_dataset(
         if src != download_path:
             remote_host = dataset.host or ""
             if remote_host and remote_host != socket.gethostname():
-                dest_dir = os.path.dirname(download_path).rstrip("/") + "/"
-                subprocess.run(
-                    ["rsync", "-arvzL", f"{remote_host}:{src}", dest_dir],
-                    check=True,
-                )
+                _rsync_into(remote_host, src, download_path)
             elif os.path.isdir(src):
                 if overwrite and os.path.isdir(download_path):
                     shutil.rmtree(download_path)
@@ -566,7 +765,7 @@ def download_dataset(db, dataset, extract=None, overwrite: bool = False):
 
     if not overwrite and (os.path.isfile(local_path) or os.path.isdir(local_path)):
         logger.info("Dataset already exists at: %s", local_path)
-        verify_checksum(db, dataset, extract=extract)
+        verify_checksum(db, dataset, extract=extract, skip_if_complete=True)
         return local_path
 
     if overwrite or not (os.path.isfile(download_path) or os.path.isdir(download_path)):
@@ -685,6 +884,13 @@ def load_dataset(db, dataset, loader=None, **kwargs):
     loader_ref = resolve_loader_ref(db, entry)
     if loader_ref != "":
         fn = _get_loader_function(db, loader_ref)
+        if entry.lang_python_loader_args or entry.lang_python_loader_kwargs:
+            variables = _binding_variables(
+                entry, path=path, project_root=db.get_project_root()
+            )
+            call_args = _substitute_vars(list(entry.lang_python_loader_args), variables)
+            call_kwargs = _substitute_vars(dict(entry.lang_python_loader_kwargs), variables)
+            return fn(*call_args, **call_kwargs)
         return fn(path)
 
     # For an extracted archive the resolved path is a directory and there is no

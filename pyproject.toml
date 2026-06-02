@@ -49,6 +49,7 @@ dependencies = [
     "tqdm",
     "tomli_w",
     "tomli; python_version<'3.11'",
+    "platformdirs",
 ]
 
 [project.optional-dependencies]

@@ -30,9 +30,9 @@ except ModuleNotFoundError:  # Python 3.10
 
 import tomli_w
 
+from . import storage
 from .config import (
     COMPRESSED_FORMATS,
-    DEFAULT_DATASETS_FOLDER_PATH,
     HIDE_STRUCT_FIELDS,
     get_default_toml,
     get_extract_path,
@@ -67,8 +67,18 @@ class DatasetEntry:
     loader: str = ""
     requires: list = field(default_factory=list)
     # v1 _LANG.python bindings (read via _LANG namespace; written back in Item 4).
+    # Each binding may be a bare ref string or a parameterized
+    # ``{ ref, args, kwargs }`` table; the ref lives in the *_fetcher/*_loader
+    # field and any args (ordered list) / kwargs (dict) in the paired fields.
     lang_python_fetcher: str = ""
     lang_python_loader: str = ""
+    lang_python_fetcher_args: list = field(default_factory=list)
+    lang_python_fetcher_kwargs: dict = field(default_factory=dict)
+    lang_python_loader_args: list = field(default_factory=list)
+    lang_python_loader_kwargs: dict = field(default_factory=dict)
+    # Store selection: "data" (default), "cache", "repo", "mount", or "".
+    # Empty string has the same semantics as "data"; both are elided on write.
+    store: str = ""
     # Passthrough for fields this port does not model — other tools' / other
     # languages' extension keys (e.g. Julia's `julia` / `julia_modules`). Kept
     # verbatim so they round-trip instead of being dropped on write. Per the
@@ -148,6 +158,24 @@ def _is_empty(value) -> bool:
     return value is None or value == "" or value == [] or value == {} or value is False
 
 
+def _python_binding(ref: str, args, kwargs):
+    """Render a Python binding for ``[<ds>._LANG.python].fetcher/loader``.
+
+    A bare ref with no args/kwargs serializes as the plain ``ref`` string
+    (back-compat). When args (ordered) or kwargs (dict) are present, it
+    serializes as a ``{ ref, args, kwargs }`` table; kwargs keys are sorted on
+    write so the output is canonical.
+    """
+    if not args and not kwargs:
+        return ref
+    binding: dict = {"ref": ref}
+    if args:
+        binding["args"] = list(args)
+    if kwargs:
+        binding["kwargs"] = {k: kwargs[k] for k in sorted(kwargs)}
+    return binding
+
+
 def to_dict(entry: DatasetEntry) -> dict:
     output = {}
     for f in fields(entry):
@@ -159,13 +187,22 @@ def to_dict(entry: DatasetEntry) -> dict:
             continue
         # lang_python_* are serialized inside the regenerated [<ds>._LANG.python]
         # block below (not as flat keys).
-        if name in {"lang_python_fetcher", "lang_python_loader"}:
+        if name in {
+            "lang_python_fetcher",
+            "lang_python_loader",
+            "lang_python_fetcher_args",
+            "lang_python_fetcher_kwargs",
+            "lang_python_loader_args",
+            "lang_python_loader_kwargs",
+        }:
             continue
         if _is_empty(value):
             continue
         if name == "key" and value == build_dataset_key(entry):
             continue
         if name == "format" and value == guess_file_format(entry):
+            continue
+        if name == "store" and value in ("", "data"):
             continue
         output[name] = value
     # Re-emit preserved extension keys verbatim (cross-language passthrough).
@@ -182,9 +219,17 @@ def to_dict(entry: DatasetEntry) -> dict:
     lang_table: dict = {}
     python_block: dict = {}
     if entry.lang_python_fetcher:
-        python_block["fetcher"] = entry.lang_python_fetcher
+        python_block["fetcher"] = _python_binding(
+            entry.lang_python_fetcher,
+            entry.lang_python_fetcher_args,
+            entry.lang_python_fetcher_kwargs,
+        )
     if entry.lang_python_loader:
-        python_block["loader"] = entry.lang_python_loader
+        python_block["loader"] = _python_binding(
+            entry.lang_python_loader,
+            entry.lang_python_loader_args,
+            entry.lang_python_loader_kwargs,
+        )
     if python_block:
         lang_table["python"] = python_block
     foreign_lang = entry.extra.get("_LANG")
@@ -277,12 +322,36 @@ def init_dataset_entry(uri=None, uris=None, ref: str = "", downloads=None, **kwa
     if isinstance(lang_data, dict):
         python_lang = lang_data.get("python", {})
         if isinstance(python_lang, dict):
-            fetcher = python_lang.get("fetcher", "")
-            loader_ref = python_lang.get("loader", "")
-            if fetcher and "lang_python_fetcher" not in kwargs:
-                kwargs["lang_python_fetcher"] = str(fetcher)
-            if loader_ref and "lang_python_loader" not in kwargs:
-                kwargs["lang_python_loader"] = str(loader_ref)
+            # Each binding is either a bare ref string or a parameterized
+            # ``{ ref, args, kwargs }`` table; split it into the ref/args/kwargs
+            # fields (kwargs not provided by the caller take precedence).
+            for binding_key, ref_field, args_field, kwargs_field in (
+                (
+                    "fetcher",
+                    "lang_python_fetcher",
+                    "lang_python_fetcher_args",
+                    "lang_python_fetcher_kwargs",
+                ),
+                (
+                    "loader",
+                    "lang_python_loader",
+                    "lang_python_loader_args",
+                    "lang_python_loader_kwargs",
+                ),
+            ):
+                binding = python_lang.get(binding_key, "")
+                if isinstance(binding, dict):
+                    ref_val = binding.get("ref", "")
+                    args_val = binding.get("args", [])
+                    kwargs_val = binding.get("kwargs", {})
+                    if ref_val and ref_field not in kwargs:
+                        kwargs[ref_field] = str(ref_val)
+                    if args_val and args_field not in kwargs:
+                        kwargs[args_field] = list(args_val)
+                    if kwargs_val and kwargs_field not in kwargs:
+                        kwargs[kwargs_field] = dict(kwargs_val)
+                elif binding and ref_field not in kwargs:
+                    kwargs[ref_field] = str(binding)
         lang_foreign = {k: v for k, v in lang_data.items() if k != "python"}
 
     # Fields this port does not model — another tool's / language's extension
@@ -539,13 +608,19 @@ def get_dataset_path(
     datasets_folder: str = "",
     extract=None,
     project_root: str = "",
+    storage_config=None,
 ) -> str:
-    """Return the on-disk path for *entry* (Databases.jl:319-343).
+    """Return the on-disk *write* path for *entry* (Databases.jl:319-343).
 
     ``local_path``: absolute → returned verbatim; relative → joined to
     *project_root* when available; otherwise returned as-is.
     ``skip_download``: returns ``entry.uri`` directly (the user manages the
     file; the pipeline raises if that path is absent).
+
+    Otherwise the path is ``<root>/<key>`` where ``<root>`` is the entry's
+    store root, resolved via :func:`datamanifest.storage.store_root`. An
+    explicitly-provided *datasets_folder* overrides the ``data``-store root
+    (back-compat with callers that pass a fixed folder).
     """
     if entry.local_path != "":
         if os.path.isabs(entry.local_path):
@@ -561,8 +636,60 @@ def get_dataset_path(
     key = entry.key
     if extract:
         key = get_extract_path(key)
-    folder = datasets_folder if datasets_folder else DEFAULT_DATASETS_FOLDER_PATH
+    store = entry.store or "data"
+    if datasets_folder and store == "data":
+        folder = datasets_folder
+    else:
+        folder = storage.store_root(
+            store, project_root=project_root, storage_config=storage_config
+        )
     return os.path.join(folder, key)
+
+
+# Read-resolution search order: a present, complete entry in a higher-priority
+# store shadows the others (Theme A / spec-v1.1 portable storage model).
+_READ_STORE_ORDER = ("repo", "data", "cache")
+
+
+def resolve_existing_path(db: "Database", entry: "DatasetEntry", extract=None) -> str:
+    """Return the on-disk path to read *entry* from.
+
+    Searches the stores in :data:`_READ_STORE_ORDER` (``repo`` → ``data`` →
+    ``cache``) and returns the first ``<root>/<key>`` that exists. When none
+    exist, falls back to the *write* path for the entry's selected store (so a
+    subsequent fetch materializes there).
+    """
+    project_root = db.get_project_root()
+    if entry.local_path != "" or entry.skip_download:
+        return get_dataset_path(
+            entry,
+            db.datasets_folder,
+            extract=extract,
+            project_root=project_root,
+            storage_config=db.storage_config,
+        )
+    if extract is None:
+        extract = entry.extract
+    key = entry.key
+    if extract:
+        key = get_extract_path(key)
+    for store in _READ_STORE_ORDER:
+        if store == "data" and db.datasets_folder:
+            root = db.datasets_folder
+        else:
+            root = storage.store_root(
+                store, project_root=project_root, storage_config=db.storage_config
+            )
+        candidate = os.path.join(root, key)
+        if os.path.isfile(candidate) or os.path.isdir(candidate):
+            return candidate
+    return get_dataset_path(
+        entry,
+        db.datasets_folder,
+        extract=extract,
+        project_root=project_root,
+        storage_config=db.storage_config,
+    )
 
 
 # ----- Checksum, update, delete (Databases.jl:464-617) -----
@@ -578,6 +705,7 @@ def verify_checksum(
     dataset: "DatasetEntry",
     persist: bool = True,
     extract=None,
+    skip_if_complete: bool = False,
 ):
     """Verify or auto-fill the sha256 checksum for *dataset* (Databases.jl:472-502)."""
     if extract is not None and extract != dataset.extract:
@@ -587,12 +715,19 @@ def verify_checksum(
             extract,
         )
         return
-    local_path = get_dataset_path(dataset, db.datasets_folder)
+    local_path = get_dataset_path(
+        dataset,
+        db.datasets_folder,
+        project_root=db.get_project_root(),
+        storage_config=db.storage_config,
+    )
     if db.skip_checksum or dataset.skip_checksum:
         return True
     if not os.path.isfile(local_path) and not os.path.isdir(local_path):
         return True
     if os.path.isdir(local_path) and db.skip_checksum_folders:
+        return True
+    if skip_if_complete and dataset.sha256 != "" and os.path.exists(storage.marker_path(local_path)):
         return True
     checksum = sha256_path(local_path)
     if dataset.sha256 == "":
@@ -650,8 +785,18 @@ def update_entry(
         _maybe_persist_database(db, persist)
         return (newname, newentry)
     message = f"Possible duplicate found {oldname} =>\n{oldentry}"
-    existing_datapath = get_dataset_path(oldentry, db.datasets_folder)
-    new_datapath = get_dataset_path(newentry, db.datasets_folder)
+    existing_datapath = get_dataset_path(
+        oldentry,
+        db.datasets_folder,
+        project_root=db.get_project_root(),
+        storage_config=db.storage_config,
+    )
+    new_datapath = get_dataset_path(
+        newentry,
+        db.datasets_folder,
+        project_root=db.get_project_root(),
+        storage_config=db.storage_config,
+    )
     if existing_datapath != new_datapath and (
         os.path.isfile(existing_datapath) or os.path.isdir(existing_datapath)
     ):
@@ -687,9 +832,21 @@ def _remove_dataset_from_disk(db: "Database", entry: "DatasetEntry") -> None:
     """Delete the on-disk files for *entry* (Databases.jl:589-605)."""
     if entry.skip_download or entry.local_path != "":
         return
-    download_path = get_dataset_path(entry, db.datasets_folder, extract=False)
+    download_path = get_dataset_path(
+        entry,
+        db.datasets_folder,
+        extract=False,
+        project_root=db.get_project_root(),
+        storage_config=db.storage_config,
+    )
     if entry.extract:
-        local_path = get_dataset_path(entry, db.datasets_folder, extract=True)
+        local_path = get_dataset_path(
+            entry,
+            db.datasets_folder,
+            extract=True,
+            project_root=db.get_project_root(),
+            storage_config=db.storage_config,
+        )
         if os.path.isdir(local_path):
             import shutil
             shutil.rmtree(local_path, ignore_errors=True)
@@ -715,6 +872,15 @@ def delete_dataset(
         db.write(db.datasets_toml)
 
 
+def _sort_recursive(obj):
+    """Sort dict keys recursively by Unicode code point at every nesting level."""
+    if isinstance(obj, dict):
+        return {k: _sort_recursive(obj[k]) for k in sorted(obj)}
+    if isinstance(obj, list):
+        return [_sort_recursive(v) for v in obj]
+    return obj
+
+
 # ----- Database (Databases.jl:147-258, 553-825) -----
 class Database:
     """Registry of :class:`DatasetEntry` objects, with TOML persistence.
@@ -737,8 +903,10 @@ class Database:
         **kwargs,
     ):
         self.datasets = dict(datasets) if datasets is not None else {}
-        if datasets_folder == "":
-            datasets_folder = DEFAULT_DATASETS_FOLDER_PATH
+        # An explicit datasets_folder overrides the `data` store root; when left
+        # empty, the `data` store is resolved via the `storage` module
+        # (platformdirs roots). The legacy DEFAULT_DATASETS_FOLDER_PATH is no
+        # longer silently forced here.
         if datasets_toml == "" and persist:
             datasets_toml = get_default_toml()
         toml_path = (
@@ -757,6 +925,7 @@ class Database:
         # Database-level passthrough for unknown _* top-level tables (mirrors
         # per-dataset extra). schema_version comes from [_META].schema; None => v0.
         self.extra: dict = {}
+        self.storage_config: dict = {}
         self.schema_version = None
         if datasets_toml and os.path.isfile(datasets_toml):
             # Loading from the toml must never write it back — read commands
@@ -835,15 +1004,8 @@ class Database:
 
     def write(self, datasets_toml: str) -> None:
         data = self.to_dict()
-        # Sorted output for reproducible diffs: `_LOADERS` first, then dataset
-        # keys alphabetically (mirrors Julia's TOML.print(...; sorted=true)).
-        ordered: dict = {}
-        if "_LOADERS" in data:
-            ordered["_LOADERS"] = data["_LOADERS"]
-        for key in sorted(k for k in data if k != "_LOADERS"):
-            ordered[key] = data[key]
         with open(datasets_toml, "wb") as f:
-            tomli_w.dump(ordered, f)
+            tomli_w.dump(_sort_recursive(data), f)
 
     # ----- registry (Databases.jl:553-792) -----
     def register_dataset(
@@ -929,6 +1091,9 @@ class Database:
             if k.startswith("_") and k not in _known_structural:
                 self.extra[k] = dict(v) if isinstance(v, dict) else v
 
+        # Expose [_STORAGE] as a parsed read-only config dict (verbatim copy stays in extra).
+        self.storage_config = dict(self.extra.get("_STORAGE", {}))
+
         names = [k for k in datasets if not k.startswith("_")]
         for i, name in enumerate(names):
             info = dict(datasets[name])
@@ -993,6 +1158,15 @@ def migrate_v0_to_v1(db: "Database") -> None:
         if entry.loader and not entry.lang_python_loader:
             entry.lang_python_loader = entry.loader
             entry.loader = ""
+        if entry.shell:
+            lang = entry.extra.setdefault("_LANG", {})
+            shell_block = lang.setdefault("shell", {})
+            if not isinstance(shell_block, dict):
+                shell_block = {}
+                lang["shell"] = shell_block
+            if not shell_block.get("fetcher"):
+                shell_block["fetcher"] = entry.shell
+                entry.shell = ""
     if db.loaders and not db.lang_python_loaders:
         db.lang_python_loaders = dict(db.loaders)
         db.loaders = {}

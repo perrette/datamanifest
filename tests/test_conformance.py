@@ -28,10 +28,17 @@ else:
     import tomli as tomllib
 
 from datamanifest import default_loaders
-from datamanifest.database import Database, resolve_fetcher
+from datamanifest.database import Database, resolve_fetcher, _sort_recursive
 
 SELF_LANG = "python"
-SUPPORTED_CAPABILITIES = {"lang-read", "lang-write", "shell-fetch"}
+SUPPORTED_CAPABILITIES = {
+    "lang-read",
+    "lang-write",
+    "shell-fetch",
+    "storage",
+    "binding-args",
+    "byte-identity",
+}
 
 _HERE = Path(__file__).parent
 _PIN_FILE = _HERE / "conformance_pin.toml"
@@ -140,6 +147,20 @@ def _load_rung_ref(db, entry):
     return "error", None
 
 
+def _assert_keys_sorted(obj, path=""):
+    """Recursively assert every dict level has keys in Unicode code-point order."""
+    if isinstance(obj, dict):
+        keys = list(obj.keys())
+        assert keys == sorted(keys), (
+            f"keys not sorted at {path or '<root>'}: {keys}"
+        )
+        for k, v in obj.items():
+            _assert_keys_sorted(v, f"{path}.{k}" if path else str(k))
+    elif isinstance(obj, list):
+        for i, v in enumerate(obj):
+            _assert_keys_sorted(v, f"{path}[{i}]")
+
+
 @pytest.mark.parametrize("fixture_name", _fixture_names())
 def test_conformance(fixture_name, fixtures_dir):
     toml_path = fixtures_dir / f"{fixture_name}.toml"
@@ -186,13 +207,8 @@ def test_conformance(fixture_name, fixtures_dir):
 
     # --- Verbatim preservation (read → write round-trip) ---
     data = db.to_dict()
-    ordered: dict = {}
-    if "_LOADERS" in data:
-        ordered["_LOADERS"] = data["_LOADERS"]
-    for key in sorted(k for k in data if k != "_LOADERS"):
-        ordered[key] = data[key]
     buf = io.BytesIO()
-    tomli_w.dump(ordered, buf)
+    tomli_w.dump(_sort_recursive(data), buf)
     buf.seek(0)
     written = tomllib.load(buf)
 
@@ -238,3 +254,74 @@ def test_conformance(fixture_name, fixtures_dir):
             assert written[ds_name]["_LANG"][lang] == original[ds_name]["_LANG"][lang], (
                 f"{fixture_name}/{ds_name}: _LANG.{lang} not preserved verbatim"
             )
+
+    # --- Parameterized binding args/kwargs (Python lang only) ---
+    binding_args = expected.get("binding_args", {}).get(SELF_LANG, {})
+    for ds_name, bindings in binding_args.items():
+        entry = db.datasets[ds_name]
+        for kind, spec in bindings.items():
+            if kind == "fetcher":
+                act_args = entry.lang_python_fetcher_args
+                act_kwargs = entry.lang_python_fetcher_kwargs
+            elif kind == "loader":
+                act_args = entry.lang_python_loader_args
+                act_kwargs = entry.lang_python_loader_kwargs
+            else:
+                raise AssertionError(
+                    f"{fixture_name}/{ds_name}: unknown binding kind {kind!r}"
+                )
+            if "args" in spec:
+                assert act_args == spec["args"], (
+                    f"{fixture_name}/{ds_name} {kind} args: got {act_args!r}, "
+                    f"expected {spec['args']!r}"
+                )
+            if "kwargs" in spec:
+                assert act_kwargs == spec["kwargs"], (
+                    f"{fixture_name}/{ds_name} {kind} kwargs: got {act_kwargs!r}, "
+                    f"expected {spec['kwargs']!r}"
+                )
+
+    # --- Storage model (store selection + parsed [_STORAGE] roots) ---
+    storage = expected.get("storage")
+    if storage is not None:
+        default_store = storage["default_store"]
+        assert default_store == "data", (
+            f"{fixture_name}: default_store {default_store!r} != 'data'"
+        )
+        for ds_name, exp_store in storage["datasets"].items():
+            entry = db.datasets[ds_name]
+            eff_store = entry.store or default_store
+            assert eff_store == exp_store, (
+                f"{fixture_name}/{ds_name} store: got {eff_store!r}, "
+                f"expected {exp_store!r}"
+            )
+        roots = storage["roots"]
+        base = sorted(k for k in db.storage_config if not k.startswith("_"))
+        assert base == roots["base"], (
+            f"{fixture_name}: storage roots base {base} != {roots['base']}"
+        )
+        host_patterns = sorted(db.storage_config.get("_HOST", {}).keys())
+        assert host_patterns == roots["host_patterns"], (
+            f"{fixture_name}: host_patterns {host_patterns} != {roots['host_patterns']}"
+        )
+        profiles = sorted(db.storage_config.get("_PROFILE", {}).keys())
+        assert profiles == roots["profiles"], (
+            f"{fixture_name}: profiles {profiles} != {roots['profiles']}"
+        )
+
+    # --- Self-consistent byte-identity (serialize → parse → serialize stable) ---
+    # The canonical structure fed to the dumper is code-point-sorted at every
+    # nesting level (the Item 9 helper); serializing that, re-parsing, and
+    # re-serializing must reproduce identical bytes (a fixed point).
+    canonical = _sort_recursive(data)
+    _assert_keys_sorted(canonical)
+    buf1 = io.BytesIO()
+    tomli_w.dump(canonical, buf1)
+    bytes1 = buf1.getvalue()
+    reparsed = tomllib.load(io.BytesIO(bytes1))
+    buf2 = io.BytesIO()
+    tomli_w.dump(_sort_recursive(reparsed), buf2)
+    bytes2 = buf2.getvalue()
+    assert bytes1 == bytes2, (
+        f"{fixture_name}: serialize→parse→serialize is not byte-stable"
+    )
