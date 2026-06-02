@@ -280,6 +280,47 @@ def test_verify_checksum_skip(tmp_path):
     assert verify_checksum(db, entry, persist=False) is True
 
 
+def test_update_checksum_rewrites_stale(tmp_path):
+    from datamanifest.database import update_checksum
+    db, entry, _ = _make_db_with_file(tmp_path)
+    entry.sha256 = "stale_hash_value"
+    action = update_checksum(db, entry, persist=False)
+    assert action == "updated"
+    assert entry.sha256 == hashlib.sha256(b"test content").hexdigest()
+
+
+def test_update_checksum_fills_empty(tmp_path):
+    from datamanifest.database import update_checksum
+    db, entry, _ = _make_db_with_file(tmp_path)
+    assert entry.sha256 == ""
+    assert update_checksum(db, entry, persist=False) == "filled"
+    assert entry.sha256 == hashlib.sha256(b"test content").hexdigest()
+
+
+def test_update_checksum_unchanged(tmp_path):
+    from datamanifest.database import update_checksum
+    db, entry, _ = _make_db_with_file(tmp_path)
+    entry.sha256 = hashlib.sha256(b"test content").hexdigest()
+    assert update_checksum(db, entry, persist=False) == "unchanged"
+
+
+def test_update_checksum_dry_run_does_not_mutate(tmp_path):
+    from datamanifest.database import update_checksum
+    db, entry, _ = _make_db_with_file(tmp_path)
+    entry.sha256 = "stale_hash_value"
+    assert update_checksum(db, entry, persist=False, dry_run=True) == "updated"
+    assert entry.sha256 == "stale_hash_value"
+
+
+def test_update_checksum_missing_file(tmp_path):
+    from datamanifest.database import Database, init_dataset_entry, update_checksum
+    db = Database(datasets_folder=str(tmp_path), persist=False)
+    db.datasets_toml = ""
+    entry = init_dataset_entry(uri="https://h/absent.bin")
+    entry.key = "absent.bin"
+    assert update_checksum(db, entry, persist=False) == "missing"
+
+
 def test_delete_dataset_removes_entry(tmp_path):
     from datamanifest.database import Database, delete_dataset
     db = Database(datasets_folder=str(tmp_path), persist=False)

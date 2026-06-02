@@ -40,7 +40,7 @@ def test_version():
 def test_help_lists_all_subcommands():
     result = _run("--help")
     assert result.returncode == 0
-    for sub in ["list", "download", "path", "add", "remove", "show", "verify", "init", "where"]:
+    for sub in ["list", "download", "path", "add", "remove", "show", "verify", "update-checksums", "init", "where"]:
         assert sub in result.stdout, f"subcommand {sub!r} missing from --help output"
 
 
@@ -75,6 +75,26 @@ def test_where():
     lines = result.stdout.strip().splitlines()
     assert any(l.startswith("datasets_toml=") for l in lines)
     assert any(l.startswith("datasets_folder=") for l in lines)
+
+
+# ----- update-checksums -----
+
+def test_update_checksums_help():
+    result = _run("update-checksums", "--help")
+    assert result.returncode == 0
+    assert "--dry-run" in result.stdout
+
+
+def test_update_checksums_dry_run_does_not_write(tmp_path):
+    # A manifest whose only entry has no file on disk: a dry-run must report
+    # nothing to change and leave the manifest byte-for-byte untouched.
+    src = tmp_path / "datasets.toml"
+    src.write_text('[absent]\nuri = "https://h/absent.bin"\nsha256 = "stale"\n')
+    before = src.read_bytes()
+    env = _env_with_toml(src)
+    result = _run("update-checksums", "--dry-run", env=env)
+    assert result.returncode == 0, result.stderr
+    assert src.read_bytes() == before
 
 
 # ----- init -----
