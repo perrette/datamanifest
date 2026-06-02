@@ -1158,6 +1158,15 @@ def migrate_v0_to_v1(db: "Database") -> None:
         if entry.loader and not entry.lang_python_loader:
             entry.lang_python_loader = entry.loader
             entry.loader = ""
+        if entry.shell:
+            lang = entry.extra.setdefault("_LANG", {})
+            shell_block = lang.setdefault("shell", {})
+            if not isinstance(shell_block, dict):
+                shell_block = {}
+                lang["shell"] = shell_block
+            if not shell_block.get("fetcher"):
+                shell_block["fetcher"] = entry.shell
+                entry.shell = ""
     if db.loaders and not db.lang_python_loaders:
         db.lang_python_loaders = dict(db.loaders)
         db.loaders = {}
