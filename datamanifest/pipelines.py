@@ -16,6 +16,7 @@ with a ``tqdm`` progress bar), mirroring Julia's ``Downloads.download`` model
 sidecar file and resumed via an HTTP ``Range:`` header when re-run.
 """
 
+import contextlib
 import importlib
 import os
 import shlex
@@ -27,7 +28,7 @@ import sys
 import httpx
 from tqdm import tqdm
 
-from . import default_loaders
+from . import default_loaders, storage
 from .config import COMPRESSED_FORMATS, logger, project_root_from_paths
 from .database import (
     get_dataset_path,
@@ -395,7 +396,151 @@ def _resolve_scheme(dataset) -> str:
     return scheme
 
 
+def _rsync_into(host: str, src: str, download_path: str) -> None:
+    """rsync ``host:src`` into ``download_path``'s directory (preserving the
+    source basename, per Julia's ``rsync`` idiom) then move the landed entry to
+    *download_path*.
+
+    The basename-preserving form is kept so directory and file sources behave as
+    before; the final rename is what lets the result land at the staging path
+    chosen by :func:`materialize` (which differs from the source basename)."""
+    dest_dir = os.path.dirname(download_path).rstrip("/") + "/"
+    subprocess.run(["rsync", "-arvzL", f"{host}:{src}", dest_dir], check=True)
+    landed = os.path.join(
+        os.path.dirname(download_path), os.path.basename(src.rstrip("/"))
+    )
+    if landed != download_path:
+        _remove_path(download_path)
+        os.replace(landed, download_path)
+
+
+# ----- Safe materialization (atomic publish + completion marker + lock) -----
+
+def _pid_alive(pid: int) -> bool:
+    """True when *pid* names a live process (best effort)."""
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def _read_lock_pid(lock: str) -> int:
+    """The PID recorded in *lock*, or ``0`` when unreadable/malformed."""
+    try:
+        with open(lock) as f:
+            return int(f.read().strip() or "0")
+    except (OSError, ValueError):
+        return 0
+
+
+def _acquire_lock(lock: str) -> bool:
+    """Create *lock* as an exclusive pidfile, reclaiming it when its recorded
+    PID is dead.
+
+    Returns ``True`` when this process now owns the lock (and is therefore
+    responsible for removing it), ``False`` when a live process already holds it
+    — in which case the caller proceeds without exclusivity rather than
+    deadlocking, since the completion marker still guards against acting on a
+    partial publish.
+    """
+    while True:
+        try:
+            fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            pid = _read_lock_pid(lock)
+            if pid and not _pid_alive(pid):
+                with contextlib.suppress(OSError):
+                    os.remove(lock)
+                continue
+            return False
+        with os.fdopen(fd, "w") as f:
+            f.write(str(os.getpid()))
+        return True
+
+
+def _remove_path(path: str) -> None:
+    """Remove *path* whether a file, symlink, or directory (no error if absent)."""
+    if os.path.islink(path) or os.path.isfile(path):
+        with contextlib.suppress(FileNotFoundError):
+            os.remove(path)
+    elif os.path.isdir(path):
+        shutil.rmtree(path, ignore_errors=True)
+
+
+def materialize(target: str, write_fn) -> None:
+    """Atomically publish *target*, holding a pidfile lock for the duration.
+
+    ``write_fn(tmp)`` populates the staging path ``<target>.tmp`` (a file or a
+    directory). On success the staging path is atomically moved into place via
+    :func:`os.replace` and a completion marker is created
+    (``<target>/.complete`` for a directory, ``<target>.complete`` for a file).
+    A ``<target>.lock`` pidfile is held while writing and removed afterwards. A
+    killed or failed write leaves no completion marker and no partial final
+    entry — only a leftover ``.tmp``.
+    """
+    os.makedirs(os.path.dirname(target) or ".", exist_ok=True)
+    tmp = storage.tmp_path(target)
+    lock = storage.lock_path(target)
+    owned = _acquire_lock(lock)
+    try:
+        _remove_path(tmp)
+        write_fn(tmp)
+        _remove_path(target)
+        os.replace(tmp, target)
+        with open(storage.marker_path(target), "w"):
+            pass
+    finally:
+        if owned:
+            with contextlib.suppress(OSError):
+                os.remove(lock)
+
+
+def is_complete(target: str) -> bool:
+    """True when *target* exists and carries its completion marker.
+
+    Readers treat a missing marker as absent (an interrupted or partial publish
+    that must be re-fetched).
+    """
+    return os.path.exists(target) and os.path.exists(storage.marker_path(target))
+
+
 def _download_dataset(
+    dataset,
+    download_path: str,
+    project_root: str = "",
+    overwrite: bool = False,
+    required_paths_by_ref=None,
+    required_paths_ordered=None,
+    python_includes=None,
+) -> None:
+    """Safely materialize *dataset* at *download_path*.
+
+    The fetch itself (:func:`_fetch_into_path`) writes into a
+    ``<download_path>.tmp`` staging path, which :func:`materialize` then
+    atomically publishes and marks complete under a pidfile lock. A killed or
+    failed fetch therefore leaves no ``.complete`` marker and no partial final
+    entry.
+    """
+    materialize(
+        download_path,
+        lambda tmp: _fetch_into_path(
+            dataset,
+            tmp,
+            project_root=project_root,
+            overwrite=overwrite,
+            required_paths_by_ref=required_paths_by_ref,
+            required_paths_ordered=required_paths_ordered,
+            python_includes=python_includes,
+        ),
+    )
+
+
+def _fetch_into_path(
     dataset,
     download_path: str,
     project_root: str = "",
@@ -481,11 +626,7 @@ def _download_dataset(
 
     # SSH / rsync remote (PipeLines.jl:296-298)
     if scheme in ("ssh", "sshfs", "rsync"):
-        dest_dir = os.path.dirname(download_path).rstrip("/") + "/"
-        subprocess.run(
-            ["rsync", "-arvzL", f"{dataset.host}:{dataset.path}", dest_dir],
-            check=True,
-        )
+        _rsync_into(dataset.host, dataset.path, download_path)
         return
 
     # Local file:// (PipeLines.jl:299-302)
@@ -494,11 +635,7 @@ def _download_dataset(
         if src != download_path:
             remote_host = dataset.host or ""
             if remote_host and remote_host != socket.gethostname():
-                dest_dir = os.path.dirname(download_path).rstrip("/") + "/"
-                subprocess.run(
-                    ["rsync", "-arvzL", f"{remote_host}:{src}", dest_dir],
-                    check=True,
-                )
+                _rsync_into(remote_host, src, download_path)
             elif os.path.isdir(src):
                 if overwrite and os.path.isdir(download_path):
                     shutil.rmtree(download_path)

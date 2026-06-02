@@ -32,7 +32,31 @@ import socket
 
 import platformdirs
 
-__all__ = ["store_root"]
+__all__ = ["store_root", "tmp_path", "lock_path", "marker_path"]
+
+
+def tmp_path(target):
+    """Staging path for *target* (a sibling on the same filesystem, so the
+    eventual publish is an atomic rename)."""
+    return target + ".tmp"
+
+
+def lock_path(target):
+    """Pidfile-lock path guarding concurrent materialization of *target*."""
+    return target + ".lock"
+
+
+def marker_path(target):
+    """Completion-marker path for *target*.
+
+    A directory target carries its marker *inside* it (``<target>/.complete``)
+    so the marker travels with the published tree; a file target carries a
+    sibling marker (``<target>.complete``). A not-yet-existing target is treated
+    as a file.
+    """
+    if os.path.isdir(target):
+        return os.path.join(target, ".complete")
+    return target + ".complete"
 
 
 @contextlib.contextmanager
