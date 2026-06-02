@@ -30,9 +30,9 @@ except ModuleNotFoundError:  # Python 3.10
 
 import tomli_w
 
+from . import storage
 from .config import (
     COMPRESSED_FORMATS,
-    DEFAULT_DATASETS_FOLDER_PATH,
     HIDE_STRUCT_FIELDS,
     get_default_toml,
     get_extract_path,
@@ -544,13 +544,19 @@ def get_dataset_path(
     datasets_folder: str = "",
     extract=None,
     project_root: str = "",
+    storage_config=None,
 ) -> str:
-    """Return the on-disk path for *entry* (Databases.jl:319-343).
+    """Return the on-disk *write* path for *entry* (Databases.jl:319-343).
 
     ``local_path``: absolute → returned verbatim; relative → joined to
     *project_root* when available; otherwise returned as-is.
     ``skip_download``: returns ``entry.uri`` directly (the user manages the
     file; the pipeline raises if that path is absent).
+
+    Otherwise the path is ``<root>/<key>`` where ``<root>`` is the entry's
+    store root, resolved via :func:`datamanifest.storage.store_root`. An
+    explicitly-provided *datasets_folder* overrides the ``data``-store root
+    (back-compat with callers that pass a fixed folder).
     """
     if entry.local_path != "":
         if os.path.isabs(entry.local_path):
@@ -566,8 +572,60 @@ def get_dataset_path(
     key = entry.key
     if extract:
         key = get_extract_path(key)
-    folder = datasets_folder if datasets_folder else DEFAULT_DATASETS_FOLDER_PATH
+    store = entry.store or "data"
+    if datasets_folder and store == "data":
+        folder = datasets_folder
+    else:
+        folder = storage.store_root(
+            store, project_root=project_root, storage_config=storage_config
+        )
     return os.path.join(folder, key)
+
+
+# Read-resolution search order: a present, complete entry in a higher-priority
+# store shadows the others (Theme A / spec-v1.1 portable storage model).
+_READ_STORE_ORDER = ("repo", "data", "cache")
+
+
+def resolve_existing_path(db: "Database", entry: "DatasetEntry", extract=None) -> str:
+    """Return the on-disk path to read *entry* from.
+
+    Searches the stores in :data:`_READ_STORE_ORDER` (``repo`` → ``data`` →
+    ``cache``) and returns the first ``<root>/<key>`` that exists. When none
+    exist, falls back to the *write* path for the entry's selected store (so a
+    subsequent fetch materializes there).
+    """
+    project_root = db.get_project_root()
+    if entry.local_path != "" or entry.skip_download:
+        return get_dataset_path(
+            entry,
+            db.datasets_folder,
+            extract=extract,
+            project_root=project_root,
+            storage_config=db.storage_config,
+        )
+    if extract is None:
+        extract = entry.extract
+    key = entry.key
+    if extract:
+        key = get_extract_path(key)
+    for store in _READ_STORE_ORDER:
+        if store == "data" and db.datasets_folder:
+            root = db.datasets_folder
+        else:
+            root = storage.store_root(
+                store, project_root=project_root, storage_config=db.storage_config
+            )
+        candidate = os.path.join(root, key)
+        if os.path.isfile(candidate) or os.path.isdir(candidate):
+            return candidate
+    return get_dataset_path(
+        entry,
+        db.datasets_folder,
+        extract=extract,
+        project_root=project_root,
+        storage_config=db.storage_config,
+    )
 
 
 # ----- Checksum, update, delete (Databases.jl:464-617) -----
@@ -592,7 +650,12 @@ def verify_checksum(
             extract,
         )
         return
-    local_path = get_dataset_path(dataset, db.datasets_folder)
+    local_path = get_dataset_path(
+        dataset,
+        db.datasets_folder,
+        project_root=db.get_project_root(),
+        storage_config=db.storage_config,
+    )
     if db.skip_checksum or dataset.skip_checksum:
         return True
     if not os.path.isfile(local_path) and not os.path.isdir(local_path):
@@ -655,8 +718,18 @@ def update_entry(
         _maybe_persist_database(db, persist)
         return (newname, newentry)
     message = f"Possible duplicate found {oldname} =>\n{oldentry}"
-    existing_datapath = get_dataset_path(oldentry, db.datasets_folder)
-    new_datapath = get_dataset_path(newentry, db.datasets_folder)
+    existing_datapath = get_dataset_path(
+        oldentry,
+        db.datasets_folder,
+        project_root=db.get_project_root(),
+        storage_config=db.storage_config,
+    )
+    new_datapath = get_dataset_path(
+        newentry,
+        db.datasets_folder,
+        project_root=db.get_project_root(),
+        storage_config=db.storage_config,
+    )
     if existing_datapath != new_datapath and (
         os.path.isfile(existing_datapath) or os.path.isdir(existing_datapath)
     ):
@@ -692,9 +765,21 @@ def _remove_dataset_from_disk(db: "Database", entry: "DatasetEntry") -> None:
     """Delete the on-disk files for *entry* (Databases.jl:589-605)."""
     if entry.skip_download or entry.local_path != "":
         return
-    download_path = get_dataset_path(entry, db.datasets_folder, extract=False)
+    download_path = get_dataset_path(
+        entry,
+        db.datasets_folder,
+        extract=False,
+        project_root=db.get_project_root(),
+        storage_config=db.storage_config,
+    )
     if entry.extract:
-        local_path = get_dataset_path(entry, db.datasets_folder, extract=True)
+        local_path = get_dataset_path(
+            entry,
+            db.datasets_folder,
+            extract=True,
+            project_root=db.get_project_root(),
+            storage_config=db.storage_config,
+        )
         if os.path.isdir(local_path):
             import shutil
             shutil.rmtree(local_path, ignore_errors=True)
@@ -742,8 +827,10 @@ class Database:
         **kwargs,
     ):
         self.datasets = dict(datasets) if datasets is not None else {}
-        if datasets_folder == "":
-            datasets_folder = DEFAULT_DATASETS_FOLDER_PATH
+        # An explicit datasets_folder overrides the `data` store root; when left
+        # empty, the `data` store is resolved via the `storage` module
+        # (platformdirs roots). The legacy DEFAULT_DATASETS_FOLDER_PATH is no
+        # longer silently forced here.
         if datasets_toml == "" and persist:
             datasets_toml = get_default_toml()
         toml_path = (
