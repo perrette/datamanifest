@@ -175,6 +175,45 @@ def _cmd_where(args):
     print(f"datasets_folder={db.datasets_folder}")
 
 
+def _cmd_format(args):
+    """Rewrite a manifest in canonical form (the cross-tool byte-identity format).
+
+    Reads TOML from FILE (or stdin when omitted / ``-``) and emits canonical
+    TOML: every key sorted at every nesting level, via the same recursive sort +
+    ``tomli_w`` serialization as :meth:`Database.write`. Peer tools (e.g.
+    DataManifest.jl) pipe their output through ``datamanifest format`` to obtain
+    byte-identical files. Content is never changed, only re-serialized.
+    """
+    try:
+        import tomllib
+    except ModuleNotFoundError:  # Python 3.10
+        import tomli as tomllib
+    import tomli_w
+
+    from .database import _sort_recursive
+
+    if args.file in (None, "-"):
+        data = tomllib.load(sys.stdin.buffer)
+    else:
+        path = os.path.abspath(args.file)
+        if not os.path.isfile(path):
+            print(f"Error: {path} not found.", file=sys.stderr)
+            sys.exit(1)
+        with open(path, "rb") as f:
+            data = tomllib.load(f)
+
+    out = tomli_w.dumps(_sort_recursive(data))
+
+    if args.in_place:
+        if args.file in (None, "-"):
+            print("Error: --in-place requires a FILE.", file=sys.stderr)
+            sys.exit(1)
+        with open(os.path.abspath(args.file), "w") as f:
+            f.write(out)
+    else:
+        sys.stdout.write(out)
+
+
 def _cmd_migrate(args):
     from .database import Database, migrate_v0_to_v1
 
@@ -305,6 +344,21 @@ def main():
     )
     p_migrate.add_argument("file", metavar="FILE", help="Path to datasets.toml to migrate")
     p_migrate.set_defaults(func=_cmd_migrate)
+
+    # format
+    p_format = subparsers.add_parser(
+        "format",
+        help="Rewrite a manifest in canonical form (cross-tool byte-identical)",
+    )
+    p_format.add_argument(
+        "file", metavar="FILE", nargs="?", default="-",
+        help="Manifest TOML file (default: stdin)",
+    )
+    p_format.add_argument(
+        "-i", "--in-place", action="store_true",
+        help="Rewrite FILE in place instead of writing to stdout",
+    )
+    p_format.set_defaults(func=_cmd_format)
 
     args = parser.parse_args()
     try:
