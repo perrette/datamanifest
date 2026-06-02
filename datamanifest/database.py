@@ -19,6 +19,7 @@ so a cross-language manifest survives a read/write round-trip intact.
 """
 
 import os
+import socket
 import sys
 from dataclasses import dataclass, field, fields
 from urllib.parse import parse_qs, urlparse
@@ -612,23 +613,38 @@ def get_dataset_path(
 ) -> str:
     """Return the on-disk *write* path for *entry* (Databases.jl:319-343).
 
-    ``local_path``: absolute → returned verbatim; relative → joined to
-    *project_root* when available; otherwise returned as-is.
+    ``local_path`` is a **path expression** (spec-v2): ``$folder`` / ``${folder}``
+    interpolate a folder variable (or environment variable) and ``~`` expands to
+    home before the abs/relative decision — absolute → returned verbatim;
+    relative → joined to *project_root* when available; otherwise returned as-is.
     ``skip_download``: returns ``entry.uri`` directly (the user manages the
     file; the pipeline raises if that path is absent).
 
     Otherwise the path is ``<root>/<key>`` where ``<root>`` is the entry's
-    store root, resolved via :func:`datamanifest.storage.store_root`. An
-    explicitly-provided *datasets_folder* overrides the ``data``-store root
+    store **selector** (``$folder[/subpath]``), resolved via
+    :func:`datamanifest.storage.resolve_selector`. An empty ``store`` uses the
+    project default selector (:func:`datamanifest.storage.project_default`). An
+    explicitly-provided *datasets_folder* overrides the default ``$data`` root
     (back-compat with callers that pass a fixed folder).
     """
     if entry.local_path != "":
-        if os.path.isabs(entry.local_path):
-            return entry.local_path
+        host = socket.gethostname()
+        profile = os.environ.get("DATAMANIFEST_PROFILE", "")
+        local_path = storage._interpolate(
+            entry.local_path,
+            project_root=project_root,
+            storage_config=storage_config or {},
+            env=os.environ,
+            host=host,
+            profile=profile,
+            resolving=(),
+        )
+        if os.path.isabs(local_path):
+            return local_path
         elif project_root != "":
-            return os.path.join(project_root, entry.local_path)
+            return os.path.join(project_root, local_path)
         else:
-            return entry.local_path
+            return local_path
     if entry.skip_download:
         return entry.uri
     if extract is None:
@@ -636,12 +652,12 @@ def get_dataset_path(
     key = entry.key
     if extract:
         key = get_extract_path(key)
-    store = entry.store or "data"
-    if datasets_folder and store == "data":
+    selector = entry.store or storage.project_default(storage_config)
+    if datasets_folder and selector == "$data":
         folder = datasets_folder
     else:
-        folder = storage.store_root(
-            store, project_root=project_root, storage_config=storage_config
+        folder = storage.resolve_selector(
+            selector, project_root=project_root, storage_config=storage_config
         )
     return os.path.join(folder, key)
 
