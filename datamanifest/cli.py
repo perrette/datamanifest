@@ -175,6 +175,20 @@ def _cmd_where(args):
     print(f"datasets_folder={db.datasets_folder}")
 
 
+def _cmd_migrate(args):
+    from .database import Database, migrate_v0_to_v1
+
+    toml_path = os.path.abspath(args.file)
+    if not os.path.isfile(toml_path):
+        print(f"Error: {toml_path} not found.", file=sys.stderr)
+        sys.exit(1)
+
+    db = Database(datasets_toml=toml_path, persist=False)
+    migrate_v0_to_v1(db)
+    db.write(toml_path)
+    print(f"Migrated: {toml_path}")
+
+
 # ----- argument parser -----
 
 def main():
@@ -283,6 +297,14 @@ def main():
         "where", help="Print active datasets_toml and datasets_folder paths"
     )
     p_where.set_defaults(func=_cmd_where)
+
+    # migrate
+    p_migrate = subparsers.add_parser(
+        "migrate",
+        help="Migrate a v0 manifest to v1 _LANG form (in-place)",
+    )
+    p_migrate.add_argument("file", metavar="FILE", help="Path to datasets.toml to migrate")
+    p_migrate.set_defaults(func=_cmd_migrate)
 
     args = parser.parse_args()
     try:

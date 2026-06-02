@@ -67,6 +67,7 @@ datamanifest COMMAND [OPTIONS]
 | `verify [NAME ...]` | Re-check sha256 checksums; exits nonzero on any mismatch |
 | `init [--folder PATH] [--force]` | Create a fresh `datasets.toml` in the current directory |
 | `where` | Print active `datasets_toml` and `datasets_folder` paths |
+| `migrate FILE` | Rewrite a v0 manifest to schema v1 (`_LANG` form) in-place |
 
 Examples:
 
@@ -105,17 +106,85 @@ datamanifest where
 | Named + default loaders (csv, parquet, nc, json, yaml, toml, zip, tar) | yes |
 | TOML manifest round-trip (read `tomllib`, write `tomli_w`) | yes |
 | Project-root auto-discovery (`pyproject.toml` walk, env vars) | yes |
-| CLI (`datamanifest list/download/path/add/remove/show/verify/init/where`) | yes |
+| CLI (`datamanifest list/download/path/add/remove/show/verify/init/where/migrate`) | yes |
+| Schema v1 `_LANG` namespace (read + write) | yes |
+| Fetch ladder: own Python fetcher → shell template → URI | yes |
+| Load ladder: own Python loader → manifest default → built-in | yes |
+| Lossless round-trip of foreign `_LANG.*` subtrees | yes |
+| v0 → v1 migration (`datamanifest migrate`) | yes |
+
+## Schema v1 — `_LANG` namespace
+
+Schema v1 separates language-specific bindings into a dedicated `_LANG` namespace so that a single manifest can serve multiple language implementations without conflicts.
+
+```toml
+[_META]
+schema = 1
+
+[mydata._LANG.python]
+fetcher = "mypkg.fetch:download_mydata"   # entry-point ref; resolved via importlib
+loader  = "mypkg.load:load_mydata"
+
+[_LANG.python.loaders]
+csv = "mypkg.loaders:load_csv"            # per-format default for this manifest
+
+[mydata._LANG.julia]
+fetcher = "MyPkg.fetch_mydata"            # preserved verbatim; Python never touches it
+```
+
+**Fetch ladder** (per dataset, in order):
+1. Own `_LANG.python.fetcher` entry-point
+2. Own `_LANG.shell.fetcher` template
+3. Plain `uri` download
+4. Error — no source available
+
+**Load ladder** (per dataset, in order):
+1. Own `_LANG.python.loader` entry-point
+2. Manifest `[_LANG.python.loaders][format]` default
+3. Built-in format default (csv, parquet, nc, …)
+4. Error
+
+Delegation to peer CLIs is **not yet implemented** — the ladder stops at built-ins.
+
+Foreign `_LANG.<other>` subtrees (e.g. `_LANG.julia`) are preserved verbatim on every read→write cycle; Python never modifies them. Unknown structural tables (any `_*` key that Python does not recognise) are similarly passed through.
+
+### v0 → v1 migration
+
+```bash
+datamanifest migrate datasets.toml
+```
+
+Rewrites a v0 flat manifest in-place: moves per-dataset `python=`/`callable=`/`loader=` into `[<ds>._LANG.python]`, moves `[_LOADERS]` into `[_LANG.python.loaders]`, and adds `[_META] schema = 1`. Foreign keys are left verbatim. Reading a v0 file without migrating still works (legacy forms are accepted silently), but a one-time deprecation warning is logged.
 
 ## Python adaptations
 
-The Python port uses the same `datasets.toml` format as `DataManifest.jl`. Two fields differ:
+The Python port uses the same manifest format as `DataManifest.jl`. Schema v1 is the preferred form; schema v0 (flat fields) is still accepted for backwards compatibility.
 
-- **`python=`** replaces `julia=`: an entry-point reference (`"pkg.mod:func"`) resolved via `importlib`. The callable receives keyword arguments `(download_path, project_root, entry, uri, key, version, doi, format, branch, requires_paths)`. No inline code execution (`exec`/`eval`) anywhere.
-- **`callable=`** is an alias for `python=` accepted on read and normalized to `python=` on write. Intended for single-language projects that want a language-agnostic key.
-- **`python_includes=`** is a list of directory paths prepended to `sys.path` during loader resolution (replaces `julia_modules`).
+**v0 / legacy fields** (still accepted on read):
+
+- **`python=`** (or **`callable=`**) — entry-point reference (`"pkg.mod:func"`) resolved via `importlib`. The callable receives keyword arguments `(download_path, project_root, entry, uri, key, version, doi, format, branch, requires_paths)`. No inline code execution (`exec`/`eval`) anywhere.
+- **`loader=`** — format→ref mapping for the dataset's loader.
+- **`python_includes=`** — list of directory paths prepended to `sys.path` during ref resolution.
+- **`[_LOADERS]`** — manifest-wide format→ref loader defaults.
+
+In schema v1 all of the above move into `_LANG.python` / `_LANG.python.loaders`. The `datamanifest migrate` command performs the conversion.
 
 A single `datasets.toml` can be consumed by both tools: each reads the common fields and ignores the other's extension keys. The shared schema is documented at [perrette/datamanifest.toml](https://github.com/perrette/datamanifest.toml).
+
+## Conformance
+
+This release targets **spec-v1.0** of the shared [datamanifest.toml schema](https://github.com/perrette/datamanifest.toml).
+
+Implemented capabilities:
+
+| Capability | Status |
+|---|---|
+| `lang-read` — parse `_LANG` namespace on read | yes |
+| `lang-write` — regenerate `_LANG.python`, preserve foreign `_LANG.*` verbatim | yes |
+| `shell-fetch` — `_LANG.shell.fetcher` template in the fetch ladder | yes |
+| `delegation` — peer-CLI runtime (delegate fetch/load to another tool) | not yet |
+
+The conformance test suite (`tests/test_conformance.py`) downloads the pinned spec-v1.0 fixture tarball, verifies every file against a recorded per-file SHA-256 hash (`tests/conformance_pin.toml`), and runs only the fixtures whose `capabilities` are a subset of the above set, skipping the rest with a reason.
 
 ## Related projects
 

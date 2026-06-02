@@ -29,7 +29,14 @@ from tqdm import tqdm
 
 from . import default_loaders
 from .config import COMPRESSED_FORMATS, logger, project_root_from_paths
-from .database import get_dataset_path, parse_uri_metadata, search_dataset, verify_checksum
+from .database import (
+    get_dataset_path,
+    parse_uri_metadata,
+    resolve_fetcher,
+    resolve_loader_ref,
+    search_dataset,
+    verify_checksum,
+)
 
 _CHUNK_SIZE = 65536
 
@@ -228,14 +235,17 @@ def _run_python_hook(
     project_root: str = "",
     required_paths_ordered=None,
     python_includes=None,
+    ref: str = "",
 ):
-    """Run ``entry.python`` as a download-phase hook (replaces Julia's ``_run_julia``).
+    """Run the in-process Python fetcher as a download-phase hook (replaces Julia's
+    ``_run_julia``).
 
-    The resolved callable is invoked with the same keyword names the shell
-    template exposes, so a single project can use either mechanism
-    (``PipeLines.jl:83-114``).
+    *ref* is the resolved entry-point reference (own ``_LANG.python.fetcher`` or
+    legacy ``python=``); it defaults to ``dataset.python`` when not supplied. The
+    resolved callable is invoked with the same keyword names the shell template
+    exposes, so a single project can use either mechanism (``PipeLines.jl:83-114``).
     """
-    fn = _resolve_entry_point(dataset.python, python_includes)
+    fn = _resolve_entry_point(ref or dataset.python, python_includes)
     fn(
         download_path=download_path,
         project_root=project_root,
@@ -408,24 +418,29 @@ def _download_dataset(
             _download_uri(uri, file_path)
         return
 
+    # Effective fetch binding via the v1 ladder (design §6): own in-process
+    # Python fetcher → shell template → plain uri. Delegation is deferred.
+    kind, value = resolve_fetcher(dataset)
+
     # Python hook: run the resolved entry-point callable instead of a URI
     # download (replaces Julia's _run_julia, PipeLines.jl:251-257).
-    if dataset.python != "":
+    if kind == "python":
         _run_python_hook(
             dataset,
             download_path,
             project_root,
             required_paths_ordered=required_paths_ordered,
             python_includes=python_includes,
+            ref=value,
         )
         return
 
     # Shell hook: run the expanded template instead of a URI download
     # (PipeLines.jl:259-270). No shell=True — the command is tokenized with
     # shlex and run directly, mirroring Julia's ``Cmd(split(...))``.
-    if dataset.shell != "":
+    if kind == "shell":
         cmd_expanded = expand_shell_template(
-            dataset.shell,
+            value,
             dataset,
             download_path,
             project_root,
@@ -435,6 +450,15 @@ def _download_dataset(
         subprocess.run(shlex.split(cmd_expanded), cwd=project_root or None, check=True)
         return
 
+    if kind is None:
+        # No own fetcher, no shell fetcher, no uri — the ladder bottoms out.
+        raise ValueError(
+            f"No fetcher available for dataset {dataset.key!r}: it declares no "
+            "in-process fetcher (_LANG.python.fetcher / python=), no shell "
+            "fetcher (_LANG.shell.fetcher / shell=), and no uri to download."
+        )
+
+    # kind == "uri": plain URI download — dispatch on the resolved scheme.
     scheme = _resolve_scheme(dataset)
 
     # Git clone: git://, ssh+git://, or https://*.git (PipeLines.jl:285-294)
@@ -622,9 +646,12 @@ def default_loader(db, format: str):
 def load_dataset(db, dataset, loader=None, **kwargs):
     """Download *dataset* then load it, returning the loaded value.
 
-    Port of ``PipeLines.jl:462-491``. Resolution order for the loader:
-    explicit *loader* arg → ``entry.loader`` → named loader in ``db.loaders``
-    matching ``entry.format`` → built-in default loader for ``entry.format``.
+    Port of ``PipeLines.jl:462-491``, extended with the v1 load ladder
+    (design §6). Resolution order for the loader: explicit *loader* arg → own
+    loader (``_LANG.python.loader`` / legacy ``entry.loader``) → manifest
+    ``[_LANG.python.loaders][format]`` → named loader in ``db.loaders`` matching
+    ``entry.format`` → built-in default loader for ``entry.format``. Loaders are
+    always resolved in-process; they never delegate to a subprocess.
     For an extracted archive (``entry.extract`` and ``entry.format`` in
     :data:`COMPRESSED_FORMATS`) the path is a directory, so the empty format is
     passed to :func:`default_loader` rather than the archive format.
@@ -652,8 +679,12 @@ def load_dataset(db, dataset, loader=None, **kwargs):
                     )
         return loader(path)
 
-    if entry.loader != "":
-        fn = _get_loader_function(db, entry.loader)
+    # v1 load ladder (design §6): own loader (own _LANG.python.loader / legacy
+    # entry.loader) → manifest [_LANG.python.loaders][format]. A resolved ref is
+    # always run in-process — loaders never delegate.
+    loader_ref = resolve_loader_ref(db, entry)
+    if loader_ref != "":
+        fn = _get_loader_function(db, loader_ref)
         return fn(path)
 
     # For an extracted archive the resolved path is a directory and there is no
@@ -662,6 +693,7 @@ def load_dataset(db, dataset, loader=None, **kwargs):
     if entry.extract and entry.format in COMPRESSED_FORMATS:
         return path
 
+    # Built-in / named _LOADERS default for the format (last ladder rung).
     return default_loader(db, entry.format)(path)
 
 

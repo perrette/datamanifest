@@ -19,6 +19,7 @@ so a cross-language manifest survives a read/write round-trip intact.
 """
 
 import os
+import sys
 from dataclasses import dataclass, field, fields
 from urllib.parse import parse_qs, urlparse
 
@@ -65,6 +66,9 @@ class DatasetEntry:
     python: str = ""
     loader: str = ""
     requires: list = field(default_factory=list)
+    # v1 _LANG.python bindings (read via _LANG namespace; written back in Item 4).
+    lang_python_fetcher: str = ""
+    lang_python_loader: str = ""
     # Passthrough for fields this port does not model — other tools' / other
     # languages' extension keys (e.g. Julia's `julia` / `julia_modules`). Kept
     # verbatim so they round-trip instead of being dropped on write. Per the
@@ -153,6 +157,10 @@ def to_dict(entry: DatasetEntry) -> dict:
         value = getattr(entry, name)
         if name in HIDE_STRUCT_FIELDS:
             continue
+        # lang_python_* are serialized inside the regenerated [<ds>._LANG.python]
+        # block below (not as flat keys).
+        if name in {"lang_python_fetcher", "lang_python_loader"}:
+            continue
         if _is_empty(value):
             continue
         if name == "key" and value == build_dataset_key(entry):
@@ -162,8 +170,29 @@ def to_dict(entry: DatasetEntry) -> dict:
         output[name] = value
     # Re-emit preserved extension keys verbatim (cross-language passthrough).
     # Appended last so any table-valued extra serializes after scalar fields.
+    # `_LANG` is handled specially below: its foreign subtrees are spliced in
+    # alongside this tool's regenerated `python` block.
     for k, v in entry.extra.items():
+        if k == "_LANG":
+            continue
         output.setdefault(k, v)
+    # Regenerate this tool's own [<ds>._LANG.python] block (when we own a
+    # fetcher/loader for it) and splice every foreign [<ds>._LANG.<other>]
+    # subtree back verbatim from `extra`, for a lossless multi-language round-trip.
+    lang_table: dict = {}
+    python_block: dict = {}
+    if entry.lang_python_fetcher:
+        python_block["fetcher"] = entry.lang_python_fetcher
+    if entry.lang_python_loader:
+        python_block["loader"] = entry.lang_python_loader
+    if python_block:
+        lang_table["python"] = python_block
+    foreign_lang = entry.extra.get("_LANG")
+    if isinstance(foreign_lang, dict):
+        for k, v in foreign_lang.items():
+            lang_table.setdefault(k, v)
+    if lang_table:
+        output["_LANG"] = lang_table
     return output
 
 
@@ -241,6 +270,21 @@ def init_dataset_entry(uri=None, uris=None, ref: str = "", downloads=None, **kwa
     else:
         uris = [str(u) for u in uris]
 
+    # Parse _LANG namespace (v1 schema): extract Python bindings into named fields;
+    # keep every foreign _LANG.<other> subtree in extra for verbatim round-trip.
+    lang_data = kwargs.pop("_LANG", None)
+    lang_foreign = {}
+    if isinstance(lang_data, dict):
+        python_lang = lang_data.get("python", {})
+        if isinstance(python_lang, dict):
+            fetcher = python_lang.get("fetcher", "")
+            loader_ref = python_lang.get("loader", "")
+            if fetcher and "lang_python_fetcher" not in kwargs:
+                kwargs["lang_python_fetcher"] = str(fetcher)
+            if loader_ref and "lang_python_loader" not in kwargs:
+                kwargs["lang_python_loader"] = str(loader_ref)
+        lang_foreign = {k: v for k, v in lang_data.items() if k != "python"}
+
     # Fields this port does not model — another tool's / language's extension
     # keys (e.g. Julia's `julia` / `julia_modules`) — are preserved verbatim in
     # `extra` rather than dropped, so they survive a read/write round-trip and a
@@ -248,6 +292,8 @@ def init_dataset_entry(uri=None, uris=None, ref: str = "", downloads=None, **kwa
     # public schema key, hence excluded from `known`.)
     known = {f.name for f in fields(DatasetEntry)} - {"extra"}
     extra = {k: kwargs.pop(k) for k in list(kwargs) if k not in known}
+    if lang_foreign:
+        extra["_LANG"] = lang_foreign
 
     entry = DatasetEntry(uri=uri, uris=list(uris), extra=extra, **kwargs)
 
@@ -304,6 +350,69 @@ def init_dataset_entry(uri=None, uris=None, ref: str = "", downloads=None, **kwa
     if entry.requires:
         entry.requires = [str(r) for r in entry.requires]
     return entry
+
+
+# ----- v1 resolution ladders (design §6) -----
+def lang_shell_fetcher(entry: DatasetEntry) -> str:
+    """Return the dataset's ``[<ds>._LANG.shell].fetcher`` template, or ``""``.
+
+    The ``shell`` execution context is foreign to this (Python) tool, so its
+    subtree is kept verbatim in ``entry.extra["_LANG"]`` (Item 2). This reads the
+    fetcher command template back out so the fetch ladder can use it as a rung.
+    """
+    lang = entry.extra.get("_LANG")
+    if isinstance(lang, dict):
+        shell = lang.get("shell")
+        if isinstance(shell, dict):
+            fetcher = shell.get("fetcher", "")
+            if isinstance(fetcher, str):
+                return fetcher
+    return ""
+
+
+def resolve_fetcher(entry: DatasetEntry):
+    """Resolve *entry*'s effective fetch binding via the v1 fetch ladder (design §6).
+
+    Returns a ``(kind, value)`` pair:
+
+    - ``("python", ref)`` — in-process entry-point hook: own
+      ``[<ds>._LANG.python].fetcher`` (v1) or legacy ``python=``.
+    - ``("shell", template)`` — shell command template: own
+      ``[<ds>._LANG.shell].fetcher`` (v1) or legacy ``shell=``.
+    - ``("uri", None)`` — plain URI download (``uri`` / ``uris``).
+    - ``(None, None)`` — nothing to fetch with; the caller raises.
+
+    The peer-tool *delegation* rung (design §6, between shell and uri) is
+    intentionally NOT implemented in this roadmap (§D), so it is skipped.
+    """
+    python_ref = entry.lang_python_fetcher or entry.python
+    if python_ref:
+        return ("python", python_ref)
+    shell_template = lang_shell_fetcher(entry) or entry.shell
+    if shell_template:
+        return ("shell", shell_template)
+    if entry.uri or entry.uris:
+        return ("uri", None)
+    return (None, None)
+
+
+def resolve_loader_ref(db, entry: DatasetEntry) -> str:
+    """Resolve *entry*'s effective Python loader entry-point ref (design §6 load ladder).
+
+    Ladder: own ``[<ds>._LANG.python].loader`` (v1) or legacy ``loader=`` →
+    manifest ``[_LANG.python.loaders][format]``. Returns ``""`` when neither
+    applies, so the caller falls through to a named ``_LOADERS`` loader and then
+    the built-in format default. Loaders never delegate (design §6).
+    """
+    own = entry.lang_python_loader or entry.loader
+    if own:
+        return own
+    fmt = (entry.format or "").strip().lower()
+    if fmt:
+        for name, ref in db.lang_python_loaders.items():
+            if str(name).strip().lower() == fmt:
+                return ref
+    return ""
 
 
 def is_a_git_repo(entry: DatasetEntry) -> bool:
@@ -643,6 +752,12 @@ class Database:
         self.loaders: dict = {}
         self.loaders_python_includes: list = []
         self.loader_cache: dict = {}
+        # v1 _LANG.python.loaders: format→ref map from [_LANG.python.loaders].
+        self.lang_python_loaders: dict = {}
+        # Database-level passthrough for unknown _* top-level tables (mirrors
+        # per-dataset extra). schema_version comes from [_META].schema; None => v0.
+        self.extra: dict = {}
+        self.schema_version = None
         if datasets_toml and os.path.isfile(datasets_toml):
             # Loading from the toml must never write it back — read commands
             # (`list`, `where`, ...) would otherwise silently rewrite the user's
@@ -659,6 +774,9 @@ class Database:
             and self.datasets_toml == other.datasets_toml
             and self.loaders == other.loaders
             and self.loaders_python_includes == other.loaders_python_includes
+            and self.lang_python_loaders == other.lang_python_loaders
+            and self.extra == other.extra
+            and self.schema_version == other.schema_version
         )
 
     __hash__ = None
@@ -691,6 +809,26 @@ class Database:
         result: dict = {}
         if loaders_table:
             result["_LOADERS"] = loaders_table
+        if self.schema_version is not None:
+            result["_META"] = {"schema": self.schema_version}
+        # Re-emit unknown _* tables verbatim (database-level passthrough).
+        # `_LANG` is handled specially below so the regenerated python block can
+        # be merged with the foreign subtrees.
+        for k, v in self.extra.items():
+            if k == "_LANG":
+                continue
+            result[k] = v
+        # Regenerate the top-level [_LANG.python] block (our own loaders map) and
+        # splice every foreign top-level [_LANG.<other>] subtree back verbatim.
+        lang_table: dict = {}
+        if self.lang_python_loaders:
+            lang_table["python"] = {"loaders": dict(self.lang_python_loaders)}
+        foreign_lang = self.extra.get("_LANG")
+        if isinstance(foreign_lang, dict):
+            for k, v in foreign_lang.items():
+                lang_table.setdefault(k, v)
+        if lang_table:
+            result["_LANG"] = lang_table
         for key, entry in self.datasets.items():
             result[key] = to_dict(entry)
         return result
@@ -747,8 +885,11 @@ class Database:
                 raise ValueError(f"Only toml file type supported. Got: {ext}")
             return self.register_datasets_toml(datasets, persist=persist, **kwargs)
 
+        _legacy: set = set()
+
         loaders_section = datasets.get("_LOADERS", datasets.get("_loaders"))
         if isinstance(loaders_section, dict):
+            _legacy.add("_LOADERS")
             includes = loaders_section.get(
                 "python_includes", loaders_section.get("julia_includes", [])
             )
@@ -764,15 +905,54 @@ class Database:
                     continue
                 self.loaders[str(k)] = v if isinstance(v, str) else repr(v)
 
-        names = [k for k in datasets if k not in ("_LOADERS", "_loaders")]
+        meta_section = datasets.get("_META")
+        if isinstance(meta_section, dict):
+            schema_val = meta_section.get("schema")
+            if schema_val is not None:
+                self.schema_version = schema_val
+
+        # Parse [_LANG.python.loaders]; keep foreign _LANG.<other> in db-level extra.
+        lang_top = datasets.get("_LANG")
+        if isinstance(lang_top, dict):
+            python_top = lang_top.get("python", {})
+            if isinstance(python_top, dict):
+                loaders_map = python_top.get("loaders", {})
+                if isinstance(loaders_map, dict):
+                    self.lang_python_loaders = dict(loaders_map)
+            foreign_lang = {k: v for k, v in lang_top.items() if k != "python"}
+            if foreign_lang:
+                self.extra["_LANG"] = foreign_lang
+
+        # Capture unknown _* top-level tables into db-level extra (mirrors per-dataset extra).
+        _known_structural = {"_LOADERS", "_loaders", "_META", "_LANG"}
+        for k, v in datasets.items():
+            if k.startswith("_") and k not in _known_structural:
+                self.extra[k] = dict(v) if isinstance(v, dict) else v
+
+        names = [k for k in datasets if not k.startswith("_")]
         for i, name in enumerate(names):
             info = dict(datasets[name])
+            for _leg in ("python", "callable", "shell", "loader"):
+                if info.get(_leg):
+                    _legacy.add(_leg)
             persist_on_last_iteration = persist and i == len(names) - 1
             self.register_dataset(
                 name=name, persist=persist_on_last_iteration, **{**info, **kwargs}
             )
 
+        if _legacy:
+            logger.warning(
+                "Legacy v0 fields detected (%s). "
+                "Run `datamanifest migrate <file>` to upgrade to v1.",
+                ", ".join(sorted(_legacy)),
+            )
+
     def register_datasets_toml(self, datasets_toml, persist: bool = True, **kwargs):
+        # Prepend the manifest's directory to sys.path so refs like "module:func"
+        # resolve against modules sitting next to the manifest file.
+        project_root = os.path.dirname(os.path.abspath(datasets_toml))
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
         with open(datasets_toml, "rb") as f:
             config = tomllib.load(f)
         self.register_datasets(config, persist=persist, **kwargs)
@@ -795,6 +975,28 @@ class Database:
         self.loader_cache.clear()
         if persist and self.datasets_toml != "":
             self.write(self.datasets_toml)
+
+
+# ----- v0 → v1 migration -----
+def migrate_v0_to_v1(db: "Database") -> None:
+    """Migrate *db* from v0 flat bindings to v1 _LANG form (in-place).
+
+    Moves each dataset's ``python=`` to ``[<ds>._LANG.python].fetcher`` and
+    ``loader=`` to ``[<ds>._LANG.python].loader``.  Moves the ``[_LOADERS]``
+    format→ref map to ``[_LANG.python.loaders]``.  Sets ``_META.schema = 1``.
+    ``shell=`` and all foreign keys are left verbatim.
+    """
+    for _name, entry in db.datasets.items():
+        if entry.python and not entry.lang_python_fetcher:
+            entry.lang_python_fetcher = entry.python
+            entry.python = ""
+        if entry.loader and not entry.lang_python_loader:
+            entry.lang_python_loader = entry.loader
+            entry.loader = ""
+    if db.loaders and not db.lang_python_loaders:
+        db.lang_python_loaders = dict(db.loaders)
+        db.loaders = {}
+    db.schema_version = 1
 
 
 # ----- default database (process-wide singleton) -----
