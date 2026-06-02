@@ -157,7 +157,8 @@ def to_dict(entry: DatasetEntry) -> dict:
         value = getattr(entry, name)
         if name in HIDE_STRUCT_FIELDS:
             continue
-        # lang_python_* are serialized as [<ds>._LANG.python] in Item 4, not as flat keys.
+        # lang_python_* are serialized inside the regenerated [<ds>._LANG.python]
+        # block below (not as flat keys).
         if name in {"lang_python_fetcher", "lang_python_loader"}:
             continue
         if _is_empty(value):
@@ -169,8 +170,29 @@ def to_dict(entry: DatasetEntry) -> dict:
         output[name] = value
     # Re-emit preserved extension keys verbatim (cross-language passthrough).
     # Appended last so any table-valued extra serializes after scalar fields.
+    # `_LANG` is handled specially below: its foreign subtrees are spliced in
+    # alongside this tool's regenerated `python` block.
     for k, v in entry.extra.items():
+        if k == "_LANG":
+            continue
         output.setdefault(k, v)
+    # Regenerate this tool's own [<ds>._LANG.python] block (when we own a
+    # fetcher/loader for it) and splice every foreign [<ds>._LANG.<other>]
+    # subtree back verbatim from `extra`, for a lossless multi-language round-trip.
+    lang_table: dict = {}
+    python_block: dict = {}
+    if entry.lang_python_fetcher:
+        python_block["fetcher"] = entry.lang_python_fetcher
+    if entry.lang_python_loader:
+        python_block["loader"] = entry.lang_python_loader
+    if python_block:
+        lang_table["python"] = python_block
+    foreign_lang = entry.extra.get("_LANG")
+    if isinstance(foreign_lang, dict):
+        for k, v in foreign_lang.items():
+            lang_table.setdefault(k, v)
+    if lang_table:
+        output["_LANG"] = lang_table
     return output
 
 
@@ -790,8 +812,23 @@ class Database:
         if self.schema_version is not None:
             result["_META"] = {"schema": self.schema_version}
         # Re-emit unknown _* tables verbatim (database-level passthrough).
+        # `_LANG` is handled specially below so the regenerated python block can
+        # be merged with the foreign subtrees.
         for k, v in self.extra.items():
+            if k == "_LANG":
+                continue
             result[k] = v
+        # Regenerate the top-level [_LANG.python] block (our own loaders map) and
+        # splice every foreign top-level [_LANG.<other>] subtree back verbatim.
+        lang_table: dict = {}
+        if self.lang_python_loaders:
+            lang_table["python"] = {"loaders": dict(self.lang_python_loaders)}
+        foreign_lang = self.extra.get("_LANG")
+        if isinstance(foreign_lang, dict):
+            for k, v in foreign_lang.items():
+                lang_table.setdefault(k, v)
+        if lang_table:
+            result["_LANG"] = lang_table
         for key, entry in self.datasets.items():
             result[key] = to_dict(entry)
         return result
