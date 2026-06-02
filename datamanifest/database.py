@@ -67,8 +67,15 @@ class DatasetEntry:
     loader: str = ""
     requires: list = field(default_factory=list)
     # v1 _LANG.python bindings (read via _LANG namespace; written back in Item 4).
+    # Each binding may be a bare ref string or a parameterized
+    # ``{ ref, args, kwargs }`` table; the ref lives in the *_fetcher/*_loader
+    # field and any args (ordered list) / kwargs (dict) in the paired fields.
     lang_python_fetcher: str = ""
     lang_python_loader: str = ""
+    lang_python_fetcher_args: list = field(default_factory=list)
+    lang_python_fetcher_kwargs: dict = field(default_factory=dict)
+    lang_python_loader_args: list = field(default_factory=list)
+    lang_python_loader_kwargs: dict = field(default_factory=dict)
     # Store selection: "data" (default), "cache", "repo", "mount", or "".
     # Empty string has the same semantics as "data"; both are elided on write.
     store: str = ""
@@ -151,6 +158,24 @@ def _is_empty(value) -> bool:
     return value is None or value == "" or value == [] or value == {} or value is False
 
 
+def _python_binding(ref: str, args, kwargs):
+    """Render a Python binding for ``[<ds>._LANG.python].fetcher/loader``.
+
+    A bare ref with no args/kwargs serializes as the plain ``ref`` string
+    (back-compat). When args (ordered) or kwargs (dict) are present, it
+    serializes as a ``{ ref, args, kwargs }`` table; kwargs keys are sorted on
+    write so the output is canonical.
+    """
+    if not args and not kwargs:
+        return ref
+    binding: dict = {"ref": ref}
+    if args:
+        binding["args"] = list(args)
+    if kwargs:
+        binding["kwargs"] = {k: kwargs[k] for k in sorted(kwargs)}
+    return binding
+
+
 def to_dict(entry: DatasetEntry) -> dict:
     output = {}
     for f in fields(entry):
@@ -162,7 +187,14 @@ def to_dict(entry: DatasetEntry) -> dict:
             continue
         # lang_python_* are serialized inside the regenerated [<ds>._LANG.python]
         # block below (not as flat keys).
-        if name in {"lang_python_fetcher", "lang_python_loader"}:
+        if name in {
+            "lang_python_fetcher",
+            "lang_python_loader",
+            "lang_python_fetcher_args",
+            "lang_python_fetcher_kwargs",
+            "lang_python_loader_args",
+            "lang_python_loader_kwargs",
+        }:
             continue
         if _is_empty(value):
             continue
@@ -187,9 +219,17 @@ def to_dict(entry: DatasetEntry) -> dict:
     lang_table: dict = {}
     python_block: dict = {}
     if entry.lang_python_fetcher:
-        python_block["fetcher"] = entry.lang_python_fetcher
+        python_block["fetcher"] = _python_binding(
+            entry.lang_python_fetcher,
+            entry.lang_python_fetcher_args,
+            entry.lang_python_fetcher_kwargs,
+        )
     if entry.lang_python_loader:
-        python_block["loader"] = entry.lang_python_loader
+        python_block["loader"] = _python_binding(
+            entry.lang_python_loader,
+            entry.lang_python_loader_args,
+            entry.lang_python_loader_kwargs,
+        )
     if python_block:
         lang_table["python"] = python_block
     foreign_lang = entry.extra.get("_LANG")
@@ -282,12 +322,36 @@ def init_dataset_entry(uri=None, uris=None, ref: str = "", downloads=None, **kwa
     if isinstance(lang_data, dict):
         python_lang = lang_data.get("python", {})
         if isinstance(python_lang, dict):
-            fetcher = python_lang.get("fetcher", "")
-            loader_ref = python_lang.get("loader", "")
-            if fetcher and "lang_python_fetcher" not in kwargs:
-                kwargs["lang_python_fetcher"] = str(fetcher)
-            if loader_ref and "lang_python_loader" not in kwargs:
-                kwargs["lang_python_loader"] = str(loader_ref)
+            # Each binding is either a bare ref string or a parameterized
+            # ``{ ref, args, kwargs }`` table; split it into the ref/args/kwargs
+            # fields (kwargs not provided by the caller take precedence).
+            for binding_key, ref_field, args_field, kwargs_field in (
+                (
+                    "fetcher",
+                    "lang_python_fetcher",
+                    "lang_python_fetcher_args",
+                    "lang_python_fetcher_kwargs",
+                ),
+                (
+                    "loader",
+                    "lang_python_loader",
+                    "lang_python_loader_args",
+                    "lang_python_loader_kwargs",
+                ),
+            ):
+                binding = python_lang.get(binding_key, "")
+                if isinstance(binding, dict):
+                    ref_val = binding.get("ref", "")
+                    args_val = binding.get("args", [])
+                    kwargs_val = binding.get("kwargs", {})
+                    if ref_val and ref_field not in kwargs:
+                        kwargs[ref_field] = str(ref_val)
+                    if args_val and args_field not in kwargs:
+                        kwargs[args_field] = list(args_val)
+                    if kwargs_val and kwargs_field not in kwargs:
+                        kwargs[kwargs_field] = dict(kwargs_val)
+                elif binding and ref_field not in kwargs:
+                    kwargs[ref_field] = str(binding)
         lang_foreign = {k: v for k, v in lang_data.items() if k != "python"}
 
     # Fields this port does not model — another tool's / language's extension
