@@ -1084,6 +1084,30 @@ def test_default_db_get_dataset_path(tmp_path):
         _db_module._default_db = None
 
 
+def test_find_default_toml_discovery(tmp_path):
+    """A datasets toml is discovered by walking up, even without pyproject.toml."""
+    from datamanifest.config import _find_default_toml
+
+    # Capital-D Datasets.toml (e.g. a Julia project) found from a subdir.
+    (tmp_path / "Datasets.toml").write_text("[datasets]\n")
+    sub = tmp_path / "sub" / "deeper"
+    sub.mkdir(parents=True)
+    assert _find_default_toml(str(sub)) == str(tmp_path / "Datasets.toml")
+
+    # A pyproject.toml anchors the default path even if the toml is absent yet.
+    proj = tmp_path / "py"
+    proj.mkdir()
+    (proj / "pyproject.toml").write_text("[project]\nname = 'x'\n")
+    assert _find_default_toml(str(proj)) == str(proj / "datasets.toml")
+
+
+def test_find_default_toml_none(tmp_path):
+    """Returns empty string when neither a toml nor pyproject.toml exists."""
+    from datamanifest.config import _find_default_toml
+
+    assert _find_default_toml(str(tmp_path)) == ""
+
+
 def test_default_db_missing_toml():
     """Default-DB functions raise RuntimeError when no datasets.toml is found."""
     import datamanifest

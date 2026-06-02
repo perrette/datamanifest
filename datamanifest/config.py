@@ -62,11 +62,26 @@ def project_root_from_paths(datasets_toml_path: str, current_project_path=None) 
     return ""
 
 
-def _find_project_root(start: str) -> str:
+TOML_FILENAMES = ["datasets.toml", "Datasets.toml", "datamanifest.toml"]
+
+
+def _find_default_toml(start: str) -> str:
+    """Walk up from *start* looking for a datasets toml file.
+
+    A directory containing any of :data:`TOML_FILENAMES` is treated as a
+    project root and its toml file is returned. As a fallback, a directory
+    containing ``pyproject.toml`` is also treated as a project root, in which
+    case the default (lowercase ``datasets.toml``) path is returned even if
+    the file does not exist yet — this lets a fresh project initialise one.
+    """
     current = Path(start).resolve()
     while True:
-        if (current / "pyproject.toml").exists():
-            return str(current)
+        for name in TOML_FILENAMES:
+            candidate = current / name
+            if candidate.is_file():
+                return str(candidate)
+        if (current / "pyproject.toml").is_file():
+            return str(current / TOML_FILENAMES[0])
         parent = current.parent
         if parent == current:
             break
@@ -86,20 +101,12 @@ def get_default_toml() -> str:
                 )
             return val
 
-    root = _find_project_root(os.getcwd())
-    if root:
-        candidates = [
-            os.path.join(root, "datasets.toml"),
-            os.path.join(root, "Datasets.toml"),
-            os.path.join(root, "datamanifest.toml"),
-        ]
-        for candidate in candidates:
-            if os.path.isfile(candidate):
-                return candidate
-        return candidates[0]
-    else:
-        logger.warning(
-            "No pyproject.toml found in parent directories. "
-            "Cannot infer default datasets_toml path. In-memory database will be used."
-        )
-        return ""
+    toml = _find_default_toml(os.getcwd())
+    if toml:
+        return toml
+
+    logger.warning(
+        "No datasets.toml or pyproject.toml found in parent directories. "
+        "Cannot infer default datasets_toml path. In-memory database will be used."
+    )
+    return ""
