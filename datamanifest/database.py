@@ -19,6 +19,7 @@ so a cross-language manifest survives a read/write round-trip intact.
 """
 
 import os
+import sys
 from dataclasses import dataclass, field, fields
 from urllib.parse import parse_qs, urlparse
 
@@ -65,6 +66,9 @@ class DatasetEntry:
     python: str = ""
     loader: str = ""
     requires: list = field(default_factory=list)
+    # v1 _LANG.python bindings (read via _LANG namespace; written back in Item 4).
+    lang_python_fetcher: str = ""
+    lang_python_loader: str = ""
     # Passthrough for fields this port does not model — other tools' / other
     # languages' extension keys (e.g. Julia's `julia` / `julia_modules`). Kept
     # verbatim so they round-trip instead of being dropped on write. Per the
@@ -152,6 +156,9 @@ def to_dict(entry: DatasetEntry) -> dict:
             continue
         value = getattr(entry, name)
         if name in HIDE_STRUCT_FIELDS:
+            continue
+        # lang_python_* are serialized as [<ds>._LANG.python] in Item 4, not as flat keys.
+        if name in {"lang_python_fetcher", "lang_python_loader"}:
             continue
         if _is_empty(value):
             continue
@@ -241,6 +248,21 @@ def init_dataset_entry(uri=None, uris=None, ref: str = "", downloads=None, **kwa
     else:
         uris = [str(u) for u in uris]
 
+    # Parse _LANG namespace (v1 schema): extract Python bindings into named fields;
+    # keep every foreign _LANG.<other> subtree in extra for verbatim round-trip.
+    lang_data = kwargs.pop("_LANG", None)
+    lang_foreign = {}
+    if isinstance(lang_data, dict):
+        python_lang = lang_data.get("python", {})
+        if isinstance(python_lang, dict):
+            fetcher = python_lang.get("fetcher", "")
+            loader_ref = python_lang.get("loader", "")
+            if fetcher and "lang_python_fetcher" not in kwargs:
+                kwargs["lang_python_fetcher"] = str(fetcher)
+            if loader_ref and "lang_python_loader" not in kwargs:
+                kwargs["lang_python_loader"] = str(loader_ref)
+        lang_foreign = {k: v for k, v in lang_data.items() if k != "python"}
+
     # Fields this port does not model — another tool's / language's extension
     # keys (e.g. Julia's `julia` / `julia_modules`) — are preserved verbatim in
     # `extra` rather than dropped, so they survive a read/write round-trip and a
@@ -248,6 +270,8 @@ def init_dataset_entry(uri=None, uris=None, ref: str = "", downloads=None, **kwa
     # public schema key, hence excluded from `known`.)
     known = {f.name for f in fields(DatasetEntry)} - {"extra"}
     extra = {k: kwargs.pop(k) for k in list(kwargs) if k not in known}
+    if lang_foreign:
+        extra["_LANG"] = lang_foreign
 
     entry = DatasetEntry(uri=uri, uris=list(uris), extra=extra, **kwargs)
 
@@ -643,6 +667,8 @@ class Database:
         self.loaders: dict = {}
         self.loaders_python_includes: list = []
         self.loader_cache: dict = {}
+        # v1 _LANG.python.loaders: format→ref map from [_LANG.python.loaders].
+        self.lang_python_loaders: dict = {}
         # Database-level passthrough for unknown _* top-level tables (mirrors
         # per-dataset extra). schema_version comes from [_META].schema; None => v0.
         self.extra: dict = {}
@@ -663,6 +689,7 @@ class Database:
             and self.datasets_toml == other.datasets_toml
             and self.loaders == other.loaders
             and self.loaders_python_includes == other.loaders_python_includes
+            and self.lang_python_loaders == other.lang_python_loaders
             and self.extra == other.extra
             and self.schema_version == other.schema_version
         )
@@ -781,8 +808,20 @@ class Database:
             if schema_val is not None:
                 self.schema_version = schema_val
 
+        # Parse [_LANG.python.loaders]; keep foreign _LANG.<other> in db-level extra.
+        lang_top = datasets.get("_LANG")
+        if isinstance(lang_top, dict):
+            python_top = lang_top.get("python", {})
+            if isinstance(python_top, dict):
+                loaders_map = python_top.get("loaders", {})
+                if isinstance(loaders_map, dict):
+                    self.lang_python_loaders = dict(loaders_map)
+            foreign_lang = {k: v for k, v in lang_top.items() if k != "python"}
+            if foreign_lang:
+                self.extra["_LANG"] = foreign_lang
+
         # Capture unknown _* top-level tables into db-level extra (mirrors per-dataset extra).
-        _known_structural = {"_LOADERS", "_loaders", "_META"}
+        _known_structural = {"_LOADERS", "_loaders", "_META", "_LANG"}
         for k, v in datasets.items():
             if k.startswith("_") and k not in _known_structural:
                 self.extra[k] = dict(v) if isinstance(v, dict) else v
@@ -796,6 +835,11 @@ class Database:
             )
 
     def register_datasets_toml(self, datasets_toml, persist: bool = True, **kwargs):
+        # Prepend the manifest's directory to sys.path so refs like "module:func"
+        # resolve against modules sitting next to the manifest file.
+        project_root = os.path.dirname(os.path.abspath(datasets_toml))
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
         with open(datasets_toml, "rb") as f:
             config = tomllib.load(f)
         self.register_datasets(config, persist=persist, **kwargs)
