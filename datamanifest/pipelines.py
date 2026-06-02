@@ -703,7 +703,7 @@ def download_dataset(db, dataset, extract=None, overwrite: bool = False):
 
     if not overwrite and (os.path.isfile(local_path) or os.path.isdir(local_path)):
         logger.info("Dataset already exists at: %s", local_path)
-        verify_checksum(db, dataset, extract=extract)
+        verify_checksum(db, dataset, extract=extract, skip_if_complete=True)
         return local_path
 
     if overwrite or not (os.path.isfile(download_path) or os.path.isdir(download_path)):

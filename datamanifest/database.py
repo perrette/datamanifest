@@ -641,6 +641,7 @@ def verify_checksum(
     dataset: "DatasetEntry",
     persist: bool = True,
     extract=None,
+    skip_if_complete: bool = False,
 ):
     """Verify or auto-fill the sha256 checksum for *dataset* (Databases.jl:472-502)."""
     if extract is not None and extract != dataset.extract:
@@ -661,6 +662,8 @@ def verify_checksum(
     if not os.path.isfile(local_path) and not os.path.isdir(local_path):
         return True
     if os.path.isdir(local_path) and db.skip_checksum_folders:
+        return True
+    if skip_if_complete and dataset.sha256 != "" and os.path.exists(storage.marker_path(local_path)):
         return True
     checksum = sha256_path(local_path)
     if dataset.sha256 == "":
