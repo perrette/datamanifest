@@ -3,7 +3,7 @@ requires = ["setuptools>=61", "setuptools_scm[toml]>=6.2", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "datamanifest"
+name = "datamanifestpy"
 dynamic = ["version"]
 description = "Python port of DataManifest.jl — declare and manage data dependencies for scientific projects"
 authors = [
