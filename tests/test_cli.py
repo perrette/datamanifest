@@ -95,3 +95,31 @@ def test_init_force_overwrites(tmp_path):
     _run("init", "--folder", str(tmp_path))
     result = _run("init", "--folder", str(tmp_path), "--force")
     assert result.returncode == 0
+
+
+# ----- format (canonical / cross-tool byte-identity serializer) -----
+
+def test_format_sorts_canonically_and_is_idempotent(tmp_path):
+    src = tmp_path / "m.toml"
+    # deliberately unsorted: keys within [zeta] reversed, table after _META
+    src.write_text("[zeta]\nb = 2\na = 1\n\n[_META]\nschema = 1\n")
+    r1 = _run("format", str(src))
+    assert r1.returncode == 0, r1.stderr
+    out = r1.stdout
+    # `_` (0x5F) sorts before `z` (0x7A): [_META] precedes [zeta]
+    assert out.index("[_META]") < out.index("[zeta]")
+    # within [zeta], a before b
+    assert out.index("a = 1") < out.index("b = 2")
+    # idempotent: formatting the canonical output again yields identical bytes
+    r2 = subprocess.run([_BIN, "format", "-"], input=out, capture_output=True, text=True)
+    assert r2.returncode == 0
+    assert r2.stdout == out
+
+
+def test_format_in_place(tmp_path):
+    src = tmp_path / "m.toml"
+    src.write_text("[b]\nx = 1\n\n[a]\ny = 2\n")
+    result = _run("format", "--in-place", str(src))
+    assert result.returncode == 0
+    text = src.read_text()
+    assert text.index("[a]") < text.index("[b]")
