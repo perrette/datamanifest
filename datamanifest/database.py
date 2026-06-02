@@ -1290,6 +1290,24 @@ def migrate_v0_to_v1(db: "Database") -> None:
     db.schema_version = 1
 
 
+# ----- v1 → v2 migration -----
+def migrate_v1_to_v2(db: "Database") -> None:
+    """Migrate *db* from v1 bare-store names to v2 $-selector form (in-place).
+
+    Each dataset's ``store`` field is rewritten: bare names like ``"cache"``
+    become ``"$cache"``; ``"data"`` and ``""`` (both meaning the default data
+    store) are normalised to ``""`` (the elided default).  ``[_STORAGE]``
+    folder-variable definitions (bare keys like ``scratch = "/path"``) are
+    left untouched — only the per-dataset ``store`` selector is migrated.
+    """
+    for _name, entry in db.datasets.items():
+        s = entry.store
+        if not s or s == "data":
+            entry.store = ""
+        elif not s.startswith("$"):
+            entry.store = "$" + s
+
+
 # ----- default database (process-wide singleton) -----
 _default_db: "Database | None" = None
 
