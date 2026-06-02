@@ -146,6 +146,35 @@ def _cmd_verify(args):
         sys.exit(1)
 
 
+def _cmd_update_checksums(args):
+    db = _get_db()
+    from .database import search_dataset, update_checksum
+
+    if args.name:
+        entries = [search_dataset(db, n) for n in args.name]
+    else:
+        entries = list(db.datasets.items())
+
+    changed = []
+    for name, entry in entries:
+        action = update_checksum(db, entry, persist=False, dry_run=args.dry_run)
+        if action in ("updated", "filled"):
+            changed.append(name)
+            verb = "would update" if args.dry_run else "updated"
+            print(f"{verb}: {name}")
+        elif action == "missing" and args.name:
+            # Only nag about missing files when the user named specific datasets;
+            # a bulk run silently skips whatever isn't on disk.
+            print(f"missing: {name}", file=sys.stderr)
+
+    if changed and not args.dry_run:
+        db.write(db.datasets_toml)
+
+    if not changed:
+        msg = "No checksums would change." if args.dry_run else "No checksums changed."
+        print(msg)
+
+
 def _cmd_init(args):
     folder = os.path.abspath(args.folder) if args.folder else os.getcwd()
     toml_path = os.path.join(folder, "datasets.toml")
@@ -313,6 +342,24 @@ def main():
         help="Dataset name(s) to verify (default: all present datasets)",
     )
     p_verify.set_defaults(func=_cmd_verify)
+
+    # update-checksums
+    p_update = subparsers.add_parser(
+        "update-checksums",
+        help="Recompute stored sha256 checksums from the files on disk",
+    )
+    p_update.add_argument(
+        "name",
+        nargs="*",
+        metavar="NAME",
+        help="Dataset name(s) to update (default: all present datasets)",
+    )
+    p_update.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show which checksums would change without writing the manifest",
+    )
+    p_update.set_defaults(func=_cmd_update_checksums)
 
     # init
     p_init = subparsers.add_parser(

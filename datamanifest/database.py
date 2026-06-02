@@ -776,6 +776,50 @@ def verify_checksum(
     return True
 
 
+def update_checksum(
+    db: "Database",
+    dataset: "DatasetEntry",
+    persist: bool = True,
+    extract=None,
+    dry_run: bool = False,
+) -> str:
+    """Recompute the sha256 from the on-disk file and overwrite the stored value.
+
+    Unlike :func:`verify_checksum`, which raises on mismatch and only auto-fills
+    an *empty* checksum, this unconditionally re-hashes whatever is on disk and
+    replaces ``dataset.sha256``. It is the engine behind ``datamanifest
+    update-checksums``.
+
+    The file is located with :func:`resolve_existing_path`, so a dataset present
+    in any read store (repo/data/cache or the legacy read-only location) is
+    re-hashed in place. Returns one of:
+
+    - ``"filled"``    — checksum was empty, now set
+    - ``"updated"``   — checksum differed from disk, now replaced
+    - ``"unchanged"`` — stored checksum already matches disk
+    - ``"missing"``   — nothing on disk to hash
+    - ``"skipped"``   — checksums disabled for this entry/database/folder
+
+    With ``dry_run=True`` the dataset is not mutated and nothing is persisted;
+    the returned action still reflects what *would* happen.
+    """
+    if db.skip_checksum or dataset.skip_checksum:
+        return "skipped"
+    local_path = resolve_existing_path(db, dataset, extract=extract)
+    if not os.path.isfile(local_path) and not os.path.isdir(local_path):
+        return "missing"
+    if os.path.isdir(local_path) and db.skip_checksum_folders:
+        return "skipped"
+    checksum = sha256_path(local_path)
+    old = dataset.sha256
+    if old == checksum:
+        return "unchanged"
+    if not dry_run:
+        dataset.sha256 = checksum
+        _maybe_persist_database(db, persist)
+    return "filled" if old == "" else "updated"
+
+
 def update_entry(
     db: "Database",
     oldname: str,

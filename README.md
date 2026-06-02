@@ -94,6 +94,10 @@ python analysis.py --data "$(datamanifest path file)"
 # Verify all checksums before a paper submission
 datamanifest verify
 
+# Recompute stored checksums from what's on disk (e.g. after regenerating data)
+datamanifest update-checksums --dry-run   # preview which would change
+datamanifest update-checksums             # write the new checksums
+
 # Where is the active manifest?
 datamanifest where
 ```
@@ -116,7 +120,7 @@ datamanifest where
 | Named + default loaders (csv, parquet, nc, json, yaml, toml, zip, tar) | yes |
 | TOML manifest round-trip (read `tomllib`, write `tomli_w`) | yes |
 | Project-root auto-discovery (`pyproject.toml` walk, env vars) | yes |
-| CLI (`datamanifest list/download/path/add/remove/show/verify/init/where/migrate`) | yes |
+| CLI (`datamanifest list/download/path/add/remove/show/verify/update-checksums/init/where/migrate`) | yes |
 | Schema v1 `_LANG` namespace (read + write) | yes |
 | Fetch ladder: own Python fetcher → shell template → URI | yes |
 | Load ladder: own Python loader → manifest default → built-in | yes |
