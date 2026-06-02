@@ -1,147 +1,106 @@
-# The `datamanifest.toml` schema
+# `datamanifest` — Python implementation notes
 
-`datamanifest` (Python) and [`DataManifest.jl`](https://github.com/awi-esc/DataManifest.jl)
-(Julia) read and write the *same* TOML manifest. Because the common fields are identical and
-each tool ignores the other's extension keys, a single `datasets.toml` can be consumed by
-either implementation. The normative spec lives in its own repository so neither
-implementation owns it.
+This page documents how the **Python** `datamanifest` package behaves. The
+`datamanifest.toml` *format* it reads and writes is not defined here: the
+normative, language-independent spec lives in its own repository so neither
+implementation owns it, and [`DataManifest.jl`](https://github.com/awi-esc/DataManifest.jl)
+(Julia) reads and writes the same files.
 
-The current schema version is **v1**, which introduces the `_LANG` namespace for
-language-specific bindings. Schema v0 (flat `python=`, `[_LOADERS]`, etc.) is still
-accepted on read for backwards compatibility.
+## Conformance
 
-See: https://github.com/perrette/datamanifest.toml/blob/main/SCHEMA.md
+This package conforms to **schema v1** (`_META.schema = 1`) against spec tag
+**`spec-v1.1`**. The two version axes are independent: `_META.schema` is the
+data-model version (bumped only on breaking structural change), and the spec tag
+tracks prose/fixture evolution. Pinning the tag here is what lets this package and
+`DataManifest.jl` move at their own pace while sharing one normative format.
 
-## Schema v1 structure
+**Pinned spec:** https://github.com/perrette/datamanifest.toml/blob/spec-v1.1/SCHEMA.md
 
-A v1 manifest uses `_`-prefixed top-level tables for structural metadata. Only tables
-without a leading `_` are datasets.
+The whole *contract* two implementations must agree on — top-level layout, common
+fields, `_LANG` bindings and `$var` substitution, the fetch/load ladders, the
+storage model (default roots, `DATAMANIFEST_<STORE>_DIR` env vars, `repo→data→cache`
+read order, `.complete` markers), and canonical byte-identity ordering — is
+normative *in the spec*, not restated here. When this page and the spec disagree,
+the spec wins.
 
-```toml
-[_META]
-schema = 1                          # schema version; absent → v0
+The spec is capability-based: a tool declares which named capabilities it supports
+and runs only the fixtures tagged for them. This package's status:
 
-[_LANG.python.loaders]              # manifest-wide format→loader defaults (Python)
-csv = "mypkg.loaders:load_csv"
+| Capability | Status | Notes |
+|---|---|---|
+| `lang-read` | ✅ | Parses `[<ds>._LANG.python]` / `[_LANG.python.loaders]`; applies the load ladder. |
+| `lang-write` | ✅ | Regenerates `_LANG.python`, preserves foreign `_LANG.*` and unknown `_*` tables verbatim (lossless round-trip). |
+| `shell-fetch` | ✅ | Executes the `[<ds>._LANG.shell].fetcher` command template (`expand_shell_template`). |
+| `storage` | ✅ | Honors `store` + `[_STORAGE]`; `platformdirs` roots, env-var/`_HOST`/`_PROFILE` precedence, `repo→data→cache` read order, atomic publish + `.complete` markers. |
+| `byte-identity` | ✅ | Canonical lexicographic key ordering; this package is the **normative reference** (`_sort_recursive`). |
+| `binding-args` | ✅ | Executes the `{ ref, args, kwargs }` table form with `$var` substitution (`_substitute_vars`). |
+| `delegation` | ❌ | Peer-CLI delegation (fetch-ladder rung 3) is not implemented; the ladder skips straight to `uri` download. No `datamanifest fetch` subcommand yet. |
+| `mount` | ◐ | The `mount` store value is parsed and preserved verbatim, but not activated (the spec leaves its mechanics unspecified in v1.1, so this is intentional). |
 
-[_LANG.julia.loaders]               # Julia's equivalent; Python preserves this verbatim
-csv = "MyPkg.load_csv"
+### What differs / is added on top
 
-[mydata]                            # dataset entry (no leading _)
-uri     = "https://example.com/mydata.csv"
-sha256  = "abc123..."
-format  = "csv"
+Behavior in this package beyond — or looser than — the normative spec:
 
-[mydata._LANG.python]               # Python-specific bindings for this dataset
-fetcher = "mypkg.fetch:fetch_mydata"
-loader  = "mypkg.load:load_mydata"
+- **v0 read compatibility.** A file with no `[_META]` is read leniently as schema v0
+  (flat `python=`, `[_LOADERS]`, …). The spec marks these forms deprecated; this
+  package keeps reading them. See [v0 → v1](#v0--v1-read-compatibility-and-migration).
+- **`datamanifest migrate`** — opt-in v0→v1 rewrite for Python bindings. Explicitly
+  **non-normative** in the spec (migration is each tool's own concern).
+- **`datamanifest update-checksums`** — recompute stored `sha256` from disk. A local
+  convenience, not part of the spec's CLI surface.
+- **Legacy read-only location probe.** When a dataset isn't in any configured store,
+  this package also probes the pre-v1.1 default `~/.cache/Datasets` (read-only, never
+  written, one-time warning). A back-compat affordance on top of the spec's read
+  resolution, suppressed once `DATAMANIFEST_DATA_DIR` is set.
+- **Built-in loader set.** The spec only requires "the tool's built-in default loader
+  for `<format>`"; the concrete Python format→library map is
+  [documented below](#built-in-default-loaders).
 
-[mydata._LANG.julia]                # Julia's bindings; Python passes through verbatim
-fetcher = "MyPkg.fetch_mydata"
-```
+## Python-specific behavior
 
-## Storage model (`store` + `[_STORAGE]`)
+### Reference resolution (`importlib`)
 
-Each dataset entry has an optional `store` field (default: `"data"`). The available
-stores are `data`, `cache`, and `repo`; `mount` is parsed and preserved but not yet
-activated.
+A `module:function` binding (e.g. `mypkg.fetch:fetch_mydata`) is resolved with
+`importlib` — never executed as inline code. The manifest's directory (the project
+root) is placed on `sys.path` so a local module alongside `datasets.toml` is
+importable without installation. The v0 `python_includes=` field is therefore
+obsolete and ignored.
 
-> **Behavior change from earlier releases.** Prior releases stored datasets under
-> `$XDG_CACHE_HOME/Datasets`. As of spec-v1.1, the default `data` store resolves
-> to `platformdirs.user_data_dir("datamanifest")/Datasets` and `cache` to
-> `platformdirs.user_cache_dir("datamanifest")/Datasets`.
+### Built-in default loaders
 
-The optional `[_STORAGE]` table overrides the root directories per store, host, or
-profile:
+When a dataset's `format` has no per-dataset `loader` and no
+`[_LANG.python.loaders]` entry, Python falls back to a built-in loader. The
+format → implementation map (in `datamanifest/default_loaders.py`):
 
-```toml
-[_STORAGE]
-data  = "~/data/Datasets"
-cache = "~/.cache/Datasets"
-repo  = "datasets"               # relative → resolved against <project_root>
+| `format` | Loader | Dependency |
+|---|---|---|
+| `csv` | `pandas.read_csv(comment="#")` | pandas |
+| `parquet` | `pandas.read_parquet` | pandas |
+| `nc` | `xarray.open_dataset` | xarray + netcdf4 |
+| `dimstack` | `xarray.open_dataset` (no Python `DimStack` type; `xarray.Dataset` is the equivalent) | xarray + netcdf4 |
+| `json` | `json.load` | stdlib |
+| `toml` | `tomllib.load` | stdlib (`tomli` on 3.10) |
+| `yaml` / `yml` | `yaml.safe_load` | pyyaml |
+| `md` / `txt` | `open().read()` | stdlib |
+| `zip` / `tar` / `tar.gz` | archive extraction loaders | stdlib |
 
-[_STORAGE._HOST."login*.hpc.edu"]
-data  = "/scratch/$USER/Datasets"
+Each third-party dependency is imported lazily, so the package installs without
+pandas/xarray/pyyaml and only errors (with an install hint) when such a loader is
+actually invoked.
 
-[_STORAGE._PROFILE.cluster]
-data  = "/work/proj/Datasets"
-```
+### Canonical serialization
 
-`~` and `$VAR` are expanded in all path values. `[_STORAGE]` is preserved verbatim
-in every round-trip; Python never strips it.
+This Python implementation is the **normative reference** for canonical key
+ordering: `Database.write()` sorts every dict key by Unicode code point at every
+nesting level (top-level tables, within-entry fields, and inside inline `{ }`
+tables) via `_sort_recursive()` in `datamanifest.database`, with no
+`_META`/`_LOADERS`-first special case. Output is byte-identical to Julia's
+`TOML.print(sorted=true)`. The same helper backs `datamanifest format`, which
+peer tools pipe their output through to obtain byte-identical files.
 
-**Per-store precedence** (highest to lowest):
+### v0 → v1 read compatibility and migration
 
-1. `DATAMANIFEST_<STORE>_DIR` environment variable.
-2. `[_STORAGE._PROFILE.<name>].<store>` — activated by `DATAMANIFEST_PROFILE`.
-3. First matching `[_STORAGE._HOST.<glob>].<store>`.
-4. `[_STORAGE].<store>` base value.
-5. `platformdirs` default (`data`/`cache`) or `<project_root>/datasets` (`repo`).
-
-**Read resolution** searches the stores in the order `repo → data → cache`; the
-first root where `<root>/<key>` exists with a `.complete` marker wins. Falls back
-to the write path for that entry's `store` if none exist.
-
-## Parameterized bindings (`{ ref, args, kwargs }`)
-
-Python `fetcher` and `loader` values may be a `{ ref, args, kwargs }` table instead
-of a bare string, allowing the same entry-point to serve multiple datasets:
-
-```toml
-[esm_5x5._LANG.python.loader]
-ref    = "mypkg.load:esm"
-kwargs = { grid = "5x5" }
-
-[esm_10x10._LANG.python.loader]
-ref    = "mypkg.load:esm"
-kwargs = { grid = "10x10" }
-```
-
-String values inside `args` and `kwargs` are substituted before the call.
-Available `$var` names: `$download_path` (fetcher path), `$path` (loader path),
-plus `$key`, `$version`, `$doi`, `$format`, `$branch`, `$uri`, `$project_root`.
-
-A bare-string binding keeps the original convention (`ref(download_path=…, …)`)
-and is unchanged.
-
-## Resolution ladders
-
-### Fetch ladder (per dataset)
-
-1. Own `[<ds>._LANG.python].fetcher` entry-point (resolved via `importlib`; bare string or `{ ref, args, kwargs }` table)
-2. Own `[<ds>._LANG.shell].fetcher` shell template
-3. Plain `uri` HTTP/git/rsync/local download
-4. Error — no source configured
-
-Delegation to a peer CLI is **not yet implemented**.
-
-### Load ladder (per dataset)
-
-1. Own `[<ds>._LANG.python].loader` entry-point (bare string or `{ ref, args, kwargs }` table)
-2. Manifest `[_LANG.python.loaders][format]` default for this manifest
-3. Built-in format default (csv, parquet, nc, json, yaml, toml, zip, tar)
-4. Error
-
-### Foreign-language passthrough
-
-Python reads and writes every `_LANG.<other>` subtree (e.g. `_LANG.julia`) verbatim —
-it never parses, validates, or modifies them. The same applies to any unknown `_*`
-top-level table. This guarantees lossless round-trips of multi-language manifests.
-
-## Canonical key ordering / byte-identity
-
-This Python implementation is the **normative reference** for canonical key ordering.
-All dict keys are sorted by Unicode code point at every nesting level (top-level
-tables, within-entry fields, and keys inside inline `{ }` tables) before writing —
-with no `_META`/`_LOADERS`-first special case. Output is therefore byte-identical to
-Julia's `TOML.print(sorted=true)`.
-
-The helper `_sort_recursive(obj)` in `datamanifest.database` performs this sort
-and is used by both `Database.write()` and the conformance round-trip test.
-
-## v0 compatibility
-
-Legacy flat fields are still accepted on read:
+Legacy flat fields are accepted on read and mapped to their v1 equivalents:
 
 | v0 field | v1 equivalent |
 |---|---|
@@ -151,15 +110,22 @@ Legacy flat fields are still accepted on read:
 | `[_LOADERS]` format→ref map | `[_LANG.python.loaders]` |
 | `python_includes=` | — (project root auto-added to `sys.path`) |
 
-Use `datamanifest migrate <file>` to rewrite a v0 manifest to v1 in-place (Python
-bindings and flat `shell=` fields; foreign keys are left verbatim).
+`datamanifest migrate <file>` rewrites a v0 manifest to v1 in-place (Python
+bindings and flat `shell=` fields; foreign `_LANG.*` keys are left verbatim).
+Migration is a Python-only convenience — the Julia tool reads v0 but does not
+rewrite it.
+
+### CLI
+
+The package ships a `datamanifest` CLI (`list`, `download`, `path`, `add`,
+`remove`, `show`, `verify`, `update-checksums`, `init`, `where`, `migrate`,
+`format`). See the [README](../README.md) or `datamanifest <command> --help`.
 
 ## Cross-reference
 
 | Concern | Julia — `DataManifest.jl` | Python — `datamanifest` | Schema spec |
 |---|---|---|---|
 | Implementation | [awi-esc/DataManifest.jl](https://github.com/awi-esc/DataManifest.jl) | [perrette/datamanifest](https://github.com/perrette/datamanifest) | — |
-| Schema version | v1 | v1 (v0 accepted on read) | [SCHEMA.md](https://github.com/perrette/datamanifest.toml/blob/main/SCHEMA.md) |
-| Language bindings | `[_LANG.julia]` subtrees | `[_LANG.python]` subtrees | [Extensions](https://github.com/perrette/datamanifest.toml/blob/main/SCHEMA.md#extensions) |
-| Code hook style | `julia=` (inline code) | `python=` / `callable=` (entry-point ref, no inline exec) | [Extensions](https://github.com/perrette/datamanifest.toml/blob/main/SCHEMA.md#extensions) |
-| Common fields | `Databases.jl` `DatasetEntry` | `database.py` `DatasetEntry` | [Common fields](https://github.com/perrette/datamanifest.toml/blob/main/SCHEMA.md#common-fields) |
+| Schema version | v1 | v1 (v0 accepted on read) | [SCHEMA.md @ spec-v1.1](https://github.com/perrette/datamanifest.toml/blob/spec-v1.1/SCHEMA.md) |
+| Language bindings | `[_LANG.julia]` subtrees | `[_LANG.python]` subtrees | [§ Language bindings](https://github.com/perrette/datamanifest.toml/blob/spec-v1.1/SCHEMA.md) |
+| Common fields | `Databases.jl` `DatasetEntry` | `database.py` `DatasetEntry` | [§ Common fields](https://github.com/perrette/datamanifest.toml/blob/spec-v1.1/SCHEMA.md) |
