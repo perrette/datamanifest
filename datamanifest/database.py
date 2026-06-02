@@ -7,9 +7,15 @@ module currently provides only ``DatasetEntry`` and the free helper functions.
 Julia adaptations (see roadmap §C):
 - ``julia`` (inline code) becomes ``python`` (an entry-point reference
   ``"pkg.mod:func"`` resolved via importlib; no inline code execution).
-- ``julia_modules`` is dropped (no execution context to preimport into).
+- ``julia_modules`` has no Python execution context to preimport into, so it is
+  not interpreted here.
 - ``callable`` is accepted on read as an alias and normalized into ``python``
   at ``init_dataset_entry`` time; it is never stored as a field nor serialized.
+
+Per the datamanifest.toml spec, unknown per-dataset keys (another tool's or
+language's extension keys, e.g. ``julia`` / ``julia_modules``) are not errors:
+they are preserved verbatim in ``DatasetEntry.extra`` and re-emitted on write,
+so a cross-language manifest survives a read/write round-trip intact.
 """
 
 import os
@@ -59,6 +65,11 @@ class DatasetEntry:
     python: str = ""
     loader: str = ""
     requires: list = field(default_factory=list)
+    # Passthrough for fields this port does not model — other tools' / other
+    # languages' extension keys (e.g. Julia's `julia` / `julia_modules`). Kept
+    # verbatim so they round-trip instead of being dropped on write. Per the
+    # datamanifest.toml spec, readers must ignore unknown fields, not error.
+    extra: dict = field(default_factory=dict)
 
     def __eq__(self, other):
         # Mirror Julia's Base.:(==) for DatasetEntry: compare every field
@@ -137,6 +148,8 @@ def to_dict(entry: DatasetEntry) -> dict:
     output = {}
     for f in fields(entry):
         name = f.name
+        if name == "extra":
+            continue
         value = getattr(entry, name)
         if name in HIDE_STRUCT_FIELDS:
             continue
@@ -147,6 +160,10 @@ def to_dict(entry: DatasetEntry) -> dict:
         if name == "format" and value == guess_file_format(entry):
             continue
         output[name] = value
+    # Re-emit preserved extension keys verbatim (cross-language passthrough).
+    # Appended last so any table-valued extra serializes after scalar fields.
+    for k, v in entry.extra.items():
+        output.setdefault(k, v)
     return output
 
 
@@ -224,7 +241,15 @@ def init_dataset_entry(uri=None, uris=None, ref: str = "", downloads=None, **kwa
     else:
         uris = [str(u) for u in uris]
 
-    entry = DatasetEntry(uri=uri, uris=list(uris), **kwargs)
+    # Fields this port does not model — another tool's / language's extension
+    # keys (e.g. Julia's `julia` / `julia_modules`) — are preserved verbatim in
+    # `extra` rather than dropped, so they survive a read/write round-trip and a
+    # cross-language manifest is not silently mangled. (`extra` itself is not a
+    # public schema key, hence excluded from `known`.)
+    known = {f.name for f in fields(DatasetEntry)} - {"extra"}
+    extra = {k: kwargs.pop(k) for k in list(kwargs) if k not in known}
+
+    entry = DatasetEntry(uri=uri, uris=list(uris), extra=extra, **kwargs)
 
     # Multiple-URI entry: key derived from common host + path prefix if not given.
     if entry.uris:
@@ -619,7 +644,10 @@ class Database:
         self.loaders_python_includes: list = []
         self.loader_cache: dict = {}
         if datasets_toml and os.path.isfile(datasets_toml):
-            self.register_datasets(datasets_toml, **kwargs)
+            # Loading from the toml must never write it back — read commands
+            # (`list`, `where`, ...) would otherwise silently rewrite the user's
+            # file (reordered, and stripped of any unsupported fields).
+            self.register_datasets(datasets_toml, persist=False, **kwargs)
 
     # ----- equality (Databases.jl:174-179, julia_modules dropped) -----
     def __eq__(self, other):
@@ -712,12 +740,12 @@ class Database:
             self.write(self.datasets_toml)
         return (name, entry)
 
-    def register_datasets(self, datasets, **kwargs):
+    def register_datasets(self, datasets, persist: bool = True, **kwargs):
         if isinstance(datasets, str):
             ext = os.path.splitext(datasets)[1]
             if ext != ".toml":
                 raise ValueError(f"Only toml file type supported. Got: {ext}")
-            return self.register_datasets_toml(datasets, **kwargs)
+            return self.register_datasets_toml(datasets, persist=persist, **kwargs)
 
         loaders_section = datasets.get("_LOADERS", datasets.get("_loaders"))
         if isinstance(loaders_section, dict):
@@ -739,15 +767,15 @@ class Database:
         names = [k for k in datasets if k not in ("_LOADERS", "_loaders")]
         for i, name in enumerate(names):
             info = dict(datasets[name])
-            persist_on_last_iteration = i == len(names) - 1
+            persist_on_last_iteration = persist and i == len(names) - 1
             self.register_dataset(
                 name=name, persist=persist_on_last_iteration, **{**info, **kwargs}
             )
 
-    def register_datasets_toml(self, datasets_toml, **kwargs):
+    def register_datasets_toml(self, datasets_toml, persist: bool = True, **kwargs):
         with open(datasets_toml, "rb") as f:
             config = tomllib.load(f)
-        self.register_datasets(config, **kwargs)
+        self.register_datasets(config, persist=persist, **kwargs)
 
     # ----- loader registry (Databases.jl:734-749) -----
     def register_loaders(self, loaders=None, python_includes=None, persist: bool = True):

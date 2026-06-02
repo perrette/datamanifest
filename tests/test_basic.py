@@ -142,6 +142,45 @@ def test_database_round_trip(tmp_path):
     assert db == db2
 
 
+def test_extension_keys_preserved(tmp_path):
+    """Unknown (other-language) per-dataset keys round-trip verbatim."""
+    from datamanifest.database import Database
+
+    src = tmp_path / "Datasets.toml"
+    src.write_text(
+        "[foo]\n"
+        'uri = "https://example.com/data/foo.csv"\n'
+        'sha256 = "abc123"\n'
+        'julia = "x -> load(x)"\n'
+        'julia_modules = ["CSV", "DataFrames"]\n'
+    )
+    db = Database(datasets_toml=str(src), persist=False)
+    entry = db.datasets["foo"]
+    assert entry.extra == {"julia": "x -> load(x)", "julia_modules": ["CSV", "DataFrames"]}
+
+    out = tmp_path / "out.toml"
+    db.write(str(out))
+    db2 = Database(datasets_toml=str(out), persist=False)
+    assert db2.datasets["foo"].extra == entry.extra
+
+
+def test_read_does_not_rewrite_file(tmp_path):
+    """Constructing a Database from a toml must not write the file back."""
+    from datamanifest.database import Database
+
+    src = tmp_path / "Datasets.toml"
+    original = (
+        "[foo]\n"
+        'uri = "https://example.com/data/foo.csv"\n'
+        'sha256 = "abc123"\n'
+        'julia = "x -> load(x)"\n'
+    )
+    src.write_text(original)
+    before = src.read_bytes()
+    Database(datasets_toml=str(src))  # persist defaults to True
+    assert src.read_bytes() == before
+
+
 def test_database_loaders_first(tmp_path):
     from datamanifest.database import Database
 
