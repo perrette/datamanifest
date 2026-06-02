@@ -77,8 +77,9 @@ class DatasetEntry:
     lang_python_fetcher_kwargs: dict = field(default_factory=dict)
     lang_python_loader_args: list = field(default_factory=list)
     lang_python_loader_kwargs: dict = field(default_factory=dict)
-    # Store selection: "data" (default), "cache", "repo", "mount", or "".
-    # Empty string has the same semantics as "data"; both are elided on write.
+    # Store selection: "$data" (default), "$cache", "$repo", or any "$folder"
+    # selector defined in [_STORAGE]. Empty string selects the project default
+    # and is elided on write.
     store: str = ""
     # Passthrough for fields this port does not model — other tools' / other
     # languages' extension keys (e.g. Julia's `julia` / `julia_modules`). Kept
@@ -203,7 +204,7 @@ def to_dict(entry: DatasetEntry) -> dict:
             continue
         if name == "format" and value == guess_file_format(entry):
             continue
-        if name == "store" and value in ("", "data"):
+        if name == "store" and value == "":
             continue
         output[name] = value
     # Re-emit preserved extension keys verbatim (cross-language passthrough).

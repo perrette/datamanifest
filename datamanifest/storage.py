@@ -310,26 +310,6 @@ def folder_root(name, *, project_root="", storage_config=None, env=os.environ,
     return expanded
 
 
-# Storage selectors named with a bare (non-``$``) name already warned about, so
-# the transition-shim deprecation notice fires only once per name per process.
-_BARE_SELECTORS_WARNED = set()
-
-
-def _warn_bare_selector_once(selector):
-    """One-time deprecation notice that a bare ``store`` selector was resolved
-    as if it were ``$<selector>``. Strict rejection lands in a later migration
-    step; until then this keeps old manifests working."""
-    if selector in _BARE_SELECTORS_WARNED:
-        return
-    _BARE_SELECTORS_WARNED.add(selector)
-    _logger.warning(
-        "Storage selector %r is bare (no '$'); resolving it as '$%s'. Bare "
-        "selectors are deprecated under spec-v2 and will be rejected — run "
-        "`datamanifest migrate` to rewrite it to '$%s'.",
-        selector, selector, selector,
-    )
-
-
 def project_default(storage_config=None):
     """Return the project-wide default storage selector.
 
@@ -354,11 +334,6 @@ def resolve_selector(selector, *, project_root="", storage_config=None,
     ``${folder}``) names a folder variable resolved via :func:`folder_root`, and
     any trailing ``/subpath`` is appended beneath the folder's root.
 
-    As a **transition shim**, a bare (non-``$``) selector ``name`` is resolved as
-    if it were ``$name`` and logs a one-time deprecation warning. Strict
-    rejection of bare selectors lands in a later migration step; until then this
-    keeps spec-v1.1 manifests resolving.
-
     Parameters mirror :func:`folder_root`.
     """
     if not selector:
@@ -367,8 +342,11 @@ def resolve_selector(selector, *, project_root="", storage_config=None,
     if selector.startswith("$"):
         body = selector[1:]
     else:
-        _warn_bare_selector_once(selector)
-        body = selector
+        raise ValueError(
+            f"Storage selector {selector!r} is bare (no '$'). "
+            "Bare selectors are not valid under spec-v2 — run "
+            "`datamanifest migrate` to rewrite it to '$%s'." % selector
+        )
 
     name, _, subpath = body.partition("/")
     if name.startswith("{") and name.endswith("}"):
