@@ -28,7 +28,7 @@ else:
     import tomli as tomllib
 
 from datamanifest import default_loaders
-from datamanifest.database import Database, resolve_fetcher
+from datamanifest.database import Database, resolve_fetcher, _sort_recursive
 
 SELF_LANG = "python"
 SUPPORTED_CAPABILITIES = {"lang-read", "lang-write", "shell-fetch"}
@@ -186,13 +186,8 @@ def test_conformance(fixture_name, fixtures_dir):
 
     # --- Verbatim preservation (read → write round-trip) ---
     data = db.to_dict()
-    ordered: dict = {}
-    if "_LOADERS" in data:
-        ordered["_LOADERS"] = data["_LOADERS"]
-    for key in sorted(k for k in data if k != "_LOADERS"):
-        ordered[key] = data[key]
     buf = io.BytesIO()
-    tomli_w.dump(ordered, buf)
+    tomli_w.dump(_sort_recursive(data), buf)
     buf.seek(0)
     written = tomllib.load(buf)
 

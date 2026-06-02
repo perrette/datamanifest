@@ -872,6 +872,15 @@ def delete_dataset(
         db.write(db.datasets_toml)
 
 
+def _sort_recursive(obj):
+    """Sort dict keys recursively by Unicode code point at every nesting level."""
+    if isinstance(obj, dict):
+        return {k: _sort_recursive(obj[k]) for k in sorted(obj)}
+    if isinstance(obj, list):
+        return [_sort_recursive(v) for v in obj]
+    return obj
+
+
 # ----- Database (Databases.jl:147-258, 553-825) -----
 class Database:
     """Registry of :class:`DatasetEntry` objects, with TOML persistence.
@@ -995,15 +1004,8 @@ class Database:
 
     def write(self, datasets_toml: str) -> None:
         data = self.to_dict()
-        # Sorted output for reproducible diffs: `_LOADERS` first, then dataset
-        # keys alphabetically (mirrors Julia's TOML.print(...; sorted=true)).
-        ordered: dict = {}
-        if "_LOADERS" in data:
-            ordered["_LOADERS"] = data["_LOADERS"]
-        for key in sorted(k for k in data if k != "_LOADERS"):
-            ordered[key] = data[key]
         with open(datasets_toml, "wb") as f:
-            tomli_w.dump(ordered, f)
+            tomli_w.dump(_sort_recursive(data), f)
 
     # ----- registry (Databases.jl:553-792) -----
     def register_dataset(
