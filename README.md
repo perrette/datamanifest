@@ -1,5 +1,7 @@
 # datamanifest
 
+[![pypi](https://img.shields.io/pypi/v/datamanifestpy)](https://pypi.org/project/datamanifestpy)
+![python](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2Fperrette%2Fdatamanifest%2Frefs%2Fheads%2Fmain%2Fpyproject.toml)
 [![CI](https://github.com/perrette/datamanifest/actions/workflows/ci.yaml/badge.svg)](https://github.com/perrette/datamanifest/actions/workflows/ci.yaml)
 
 Keep track of datasets used in a scientific project.
@@ -9,17 +11,17 @@ Keep track of datasets used in a scientific project.
 ## Installation
 
 ```bash
-pip install datamanifest
+pip install datamanifestpy
 ```
 
 With optional loader backends:
 
 ```bash
-pip install "datamanifest[csv]"       # pandas CSV
-pip install "datamanifest[parquet]"   # pandas + pyarrow
-pip install "datamanifest[nc]"        # xarray + netcdf4
-pip install "datamanifest[yaml]"      # pyyaml
-pip install "datamanifest[all]"       # all of the above
+pip install "datamanifestpy[csv]"       # pandas CSV
+pip install "datamanifestpy[parquet]"   # pandas + pyarrow
+pip install "datamanifestpy[nc]"        # xarray + netcdf4
+pip install "datamanifestpy[yaml]"      # pyyaml
+pip install "datamanifestpy[all]"       # all of the above
 ```
 
 ## API quickstart
