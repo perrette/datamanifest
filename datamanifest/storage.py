@@ -32,7 +32,24 @@ import socket
 
 import platformdirs
 
-__all__ = ["store_root", "tmp_path", "lock_path", "marker_path"]
+__all__ = ["store_root", "legacy_data_root", "tmp_path", "lock_path", "marker_path"]
+
+
+def legacy_data_root(env=os.environ):
+    """The pre-v1.1 default datasets folder — ``$XDG_CACHE_HOME/Datasets``
+    (default ``~/.cache/Datasets``).
+
+    This is a **read-only** back-compat probe location: spec-v1.1 moved the
+    default ``data`` store to ``platformdirs.user_data_dir`` (under a
+    ``datamanifest/`` namespace), orphaning datasets downloaded by older
+    versions here. Read resolution probes it last so old downloads still
+    resolve; new writes never land here. Returns the absolute path.
+    """
+    with _patched_environ(env):
+        xdg = os.environ.get("XDG_CACHE_HOME") or os.path.join(
+            os.path.expanduser("~"), ".cache"
+        )
+    return os.path.join(xdg, "Datasets")
 
 
 def tmp_path(target):
