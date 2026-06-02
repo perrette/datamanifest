@@ -112,6 +112,61 @@ datamanifest where
 | Load ladder: own Python loader → manifest default → built-in | yes |
 | Lossless round-trip of foreign `_LANG.*` subtrees | yes |
 | v0 → v1 migration (`datamanifest migrate`) | yes |
+| Portable storage model (`store` field + `[_STORAGE]` + platformdirs roots) | yes |
+| Parameterized bindings (`{ ref, args, kwargs }` + `$var` substitution) | yes |
+| Safe concurrent materialization (`.tmp` → atomic publish → `.complete` marker) | yes |
+| Verify-once integrity (checksum only at fetch; `.complete` entry skips re-hash) | yes |
+| Recursive canonical key ordering / byte-identity (normative reference) | yes |
+
+## Storage model (spec-v1.1)
+
+> **Behavior change from earlier releases.** Prior releases stored all datasets
+> under `$XDG_CACHE_HOME/Datasets` (typically `~/.cache/Datasets`).
+> As of spec-v1.1, the default `data` store resolves to
+> `platformdirs.user_data_dir("datamanifest")/Datasets` (typically
+> `~/.local/share/datamanifest/Datasets` on Linux), and the `cache` store to
+> `platformdirs.user_cache_dir("datamanifest")/Datasets`.
+> If you have existing datasets at the old location, move them or pass an explicit
+> `datasets_folder` to `Database`.
+
+Each dataset entry carries an optional `store` field (default: `data`).
+A `[_STORAGE]` table in the manifest lets you override the root directories per
+store, per host (glob), or per profile:
+
+```toml
+[_STORAGE]
+data  = "~/data/Datasets"
+cache = "~/.cache/Datasets"
+repo  = "datasets"                       # relative → <project_root>/datasets
+
+[_STORAGE._HOST."login*.hpc.edu"]
+data  = "/scratch/$USER/Datasets"        # $VAR and ~ are expanded
+
+[_STORAGE._PROFILE.cluster]
+data  = "/work/proj/Datasets"            # activated by DATAMANIFEST_PROFILE=cluster
+
+[bigsim]                                 # default store = "data" (persistent)
+uri   = "https://example.com/bigsim.nc"
+
+[scratch_run]
+store = "cache"                          # disposable, re-fetchable
+uri   = "https://example.com/scratch.nc"
+
+[derived_table]
+store = "repo"                           # lives under <project_root>/datasets
+format = "csv"
+```
+
+**Per-store precedence** (highest first):
+1. `DATAMANIFEST_<STORE>_DIR` environment variable.
+2. `[_STORAGE._PROFILE.<name>].<store>` — when `DATAMANIFEST_PROFILE` is set.
+3. First `[_STORAGE._HOST.<glob>].<store>` where the glob matches the hostname.
+4. `[_STORAGE].<store>` base value.
+5. `platformdirs` default (`data`/`cache`) or `<project_root>/datasets` (`repo`).
+
+**Read resolution** searches `repo → data → cache` and returns the first root
+where `<root>/<key>` exists and has been successfully materialized (`.complete`
+marker present). Falls back to the write path (selected store) when not found.
 
 ## Schema v1 — `_LANG` namespace
 
@@ -146,6 +201,29 @@ fetcher = "MyPkg.fetch_mydata"            # preserved verbatim; Python never tou
 
 Delegation to peer CLIs is **not yet implemented** — the ladder stops at built-ins.
 
+### Parameterized bindings (spec-v1.1)
+
+Python `fetcher`/`loader` values may be a `{ ref, args, kwargs }` table instead
+of a plain string, allowing the same entry-point to be reused across datasets
+that differ only in arguments:
+
+```toml
+[esm_5x5._LANG.python.loader]
+ref    = "mypkg.load:esm"
+kwargs = { grid = "5x5" }
+
+[esm_10x10._LANG.python.loader]
+ref    = "mypkg.load:esm"
+kwargs = { grid = "10x10" }
+```
+
+String values in `args` and `kwargs` undergo `$var` substitution before the
+call. Available variables: `$download_path` (fetcher), `$path` (loader),
+`$key`, `$version`, `$doi`, `$format`, `$branch`, `$uri`, `$project_root`.
+
+A bare string `fetcher`/`loader` keeps the conventional keyword-argument call
+and requires no capability upgrade.
+
 Foreign `_LANG.<other>` subtrees (e.g. `_LANG.julia`) are preserved verbatim on every read→write cycle; Python never modifies them. Unknown structural tables (any `_*` key that Python does not recognise) are similarly passed through.
 
 ### v0 → v1 migration
@@ -173,7 +251,7 @@ A single `datasets.toml` can be consumed by both tools: each reads the common fi
 
 ## Conformance
 
-This release targets **spec-v1.0** of the shared [datamanifest.toml schema](https://github.com/perrette/datamanifest.toml).
+This release targets **spec-v1.1** of the shared [datamanifest.toml schema](https://github.com/perrette/datamanifest.toml).
 
 Implemented capabilities:
 
@@ -182,9 +260,12 @@ Implemented capabilities:
 | `lang-read` — parse `_LANG` namespace on read | yes |
 | `lang-write` — regenerate `_LANG.python`, preserve foreign `_LANG.*` verbatim | yes |
 | `shell-fetch` — `_LANG.shell.fetcher` template in the fetch ladder | yes |
+| `storage` — `store` field, `[_STORAGE]` block, platformdirs roots, read-order resolution | yes |
+| `binding-args` — `{ ref, args, kwargs }` table form with `$var` substitution | yes |
+| `byte-identity` — recursive canonical key ordering (normative reference) | yes |
 | `delegation` — peer-CLI runtime (delegate fetch/load to another tool) | not yet |
 
-The conformance test suite (`tests/test_conformance.py`) downloads the pinned spec-v1.0 fixture tarball, verifies every file against a recorded per-file SHA-256 hash (`tests/conformance_pin.toml`), and runs only the fixtures whose `capabilities` are a subset of the above set, skipping the rest with a reason.
+The conformance test suite (`tests/test_conformance.py`) downloads the pinned spec-v1.1 fixture tarball, verifies every file against a recorded per-file SHA-256 hash (`tests/conformance_pin.toml`), and runs only the fixtures whose `capabilities` are a subset of the above set, skipping the rest with a reason.
 
 ## Related projects
 
