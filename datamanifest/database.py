@@ -885,8 +885,11 @@ class Database:
                 raise ValueError(f"Only toml file type supported. Got: {ext}")
             return self.register_datasets_toml(datasets, persist=persist, **kwargs)
 
+        _legacy: set = set()
+
         loaders_section = datasets.get("_LOADERS", datasets.get("_loaders"))
         if isinstance(loaders_section, dict):
+            _legacy.add("_LOADERS")
             includes = loaders_section.get(
                 "python_includes", loaders_section.get("julia_includes", [])
             )
@@ -929,9 +932,19 @@ class Database:
         names = [k for k in datasets if not k.startswith("_")]
         for i, name in enumerate(names):
             info = dict(datasets[name])
+            for _leg in ("python", "callable", "shell", "loader"):
+                if info.get(_leg):
+                    _legacy.add(_leg)
             persist_on_last_iteration = persist and i == len(names) - 1
             self.register_dataset(
                 name=name, persist=persist_on_last_iteration, **{**info, **kwargs}
+            )
+
+        if _legacy:
+            logger.warning(
+                "Legacy v0 fields detected (%s). "
+                "Run `datamanifest migrate <file>` to upgrade to v1.",
+                ", ".join(sorted(_legacy)),
             )
 
     def register_datasets_toml(self, datasets_toml, persist: bool = True, **kwargs):
@@ -962,6 +975,28 @@ class Database:
         self.loader_cache.clear()
         if persist and self.datasets_toml != "":
             self.write(self.datasets_toml)
+
+
+# ----- v0 → v1 migration -----
+def migrate_v0_to_v1(db: "Database") -> None:
+    """Migrate *db* from v0 flat bindings to v1 _LANG form (in-place).
+
+    Moves each dataset's ``python=`` to ``[<ds>._LANG.python].fetcher`` and
+    ``loader=`` to ``[<ds>._LANG.python].loader``.  Moves the ``[_LOADERS]``
+    format→ref map to ``[_LANG.python.loaders]``.  Sets ``_META.schema = 1``.
+    ``shell=`` and all foreign keys are left verbatim.
+    """
+    for _name, entry in db.datasets.items():
+        if entry.python and not entry.lang_python_fetcher:
+            entry.lang_python_fetcher = entry.python
+            entry.python = ""
+        if entry.loader and not entry.lang_python_loader:
+            entry.lang_python_loader = entry.loader
+            entry.loader = ""
+    if db.loaders and not db.lang_python_loaders:
+        db.lang_python_loaders = dict(db.loaders)
+        db.loaders = {}
+    db.schema_version = 1
 
 
 # ----- default database (process-wide singleton) -----
