@@ -69,6 +69,9 @@ class DatasetEntry:
     # v1 _LANG.python bindings (read via _LANG namespace; written back in Item 4).
     lang_python_fetcher: str = ""
     lang_python_loader: str = ""
+    # Store selection: "data" (default), "cache", "repo", "mount", or "".
+    # Empty string has the same semantics as "data"; both are elided on write.
+    store: str = ""
     # Passthrough for fields this port does not model — other tools' / other
     # languages' extension keys (e.g. Julia's `julia` / `julia_modules`). Kept
     # verbatim so they round-trip instead of being dropped on write. Per the
@@ -166,6 +169,8 @@ def to_dict(entry: DatasetEntry) -> dict:
         if name == "key" and value == build_dataset_key(entry):
             continue
         if name == "format" and value == guess_file_format(entry):
+            continue
+        if name == "store" and value in ("", "data"):
             continue
         output[name] = value
     # Re-emit preserved extension keys verbatim (cross-language passthrough).
