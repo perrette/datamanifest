@@ -330,6 +330,69 @@ def init_dataset_entry(uri=None, uris=None, ref: str = "", downloads=None, **kwa
     return entry
 
 
+# ----- v1 resolution ladders (design §6) -----
+def lang_shell_fetcher(entry: DatasetEntry) -> str:
+    """Return the dataset's ``[<ds>._LANG.shell].fetcher`` template, or ``""``.
+
+    The ``shell`` execution context is foreign to this (Python) tool, so its
+    subtree is kept verbatim in ``entry.extra["_LANG"]`` (Item 2). This reads the
+    fetcher command template back out so the fetch ladder can use it as a rung.
+    """
+    lang = entry.extra.get("_LANG")
+    if isinstance(lang, dict):
+        shell = lang.get("shell")
+        if isinstance(shell, dict):
+            fetcher = shell.get("fetcher", "")
+            if isinstance(fetcher, str):
+                return fetcher
+    return ""
+
+
+def resolve_fetcher(entry: DatasetEntry):
+    """Resolve *entry*'s effective fetch binding via the v1 fetch ladder (design §6).
+
+    Returns a ``(kind, value)`` pair:
+
+    - ``("python", ref)`` — in-process entry-point hook: own
+      ``[<ds>._LANG.python].fetcher`` (v1) or legacy ``python=``.
+    - ``("shell", template)`` — shell command template: own
+      ``[<ds>._LANG.shell].fetcher`` (v1) or legacy ``shell=``.
+    - ``("uri", None)`` — plain URI download (``uri`` / ``uris``).
+    - ``(None, None)`` — nothing to fetch with; the caller raises.
+
+    The peer-tool *delegation* rung (design §6, between shell and uri) is
+    intentionally NOT implemented in this roadmap (§D), so it is skipped.
+    """
+    python_ref = entry.lang_python_fetcher or entry.python
+    if python_ref:
+        return ("python", python_ref)
+    shell_template = lang_shell_fetcher(entry) or entry.shell
+    if shell_template:
+        return ("shell", shell_template)
+    if entry.uri or entry.uris:
+        return ("uri", None)
+    return (None, None)
+
+
+def resolve_loader_ref(db, entry: DatasetEntry) -> str:
+    """Resolve *entry*'s effective Python loader entry-point ref (design §6 load ladder).
+
+    Ladder: own ``[<ds>._LANG.python].loader`` (v1) or legacy ``loader=`` →
+    manifest ``[_LANG.python.loaders][format]``. Returns ``""`` when neither
+    applies, so the caller falls through to a named ``_LOADERS`` loader and then
+    the built-in format default. Loaders never delegate (design §6).
+    """
+    own = entry.lang_python_loader or entry.loader
+    if own:
+        return own
+    fmt = (entry.format or "").strip().lower()
+    if fmt:
+        for name, ref in db.lang_python_loaders.items():
+            if str(name).strip().lower() == fmt:
+                return ref
+    return ""
+
+
 def is_a_git_repo(entry: DatasetEntry) -> bool:
     segments = entry.path.strip("/").split("/")
     if len(segments) < 2 or not segments[0] or not segments[1]:
