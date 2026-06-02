@@ -762,6 +762,7 @@ class Database:
         # Database-level passthrough for unknown _* top-level tables (mirrors
         # per-dataset extra). schema_version comes from [_META].schema; None => v0.
         self.extra: dict = {}
+        self.storage_config: dict = {}
         self.schema_version = None
         if datasets_toml and os.path.isfile(datasets_toml):
             # Loading from the toml must never write it back — read commands
@@ -933,6 +934,9 @@ class Database:
         for k, v in datasets.items():
             if k.startswith("_") and k not in _known_structural:
                 self.extra[k] = dict(v) if isinstance(v, dict) else v
+
+        # Expose [_STORAGE] as a parsed read-only config dict (verbatim copy stays in extra).
+        self.storage_config = dict(self.extra.get("_STORAGE", {}))
 
         names = [k for k in datasets if not k.startswith("_")]
         for i, name in enumerate(names):
