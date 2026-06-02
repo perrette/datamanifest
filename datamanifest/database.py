@@ -643,6 +643,10 @@ class Database:
         self.loaders: dict = {}
         self.loaders_python_includes: list = []
         self.loader_cache: dict = {}
+        # Database-level passthrough for unknown _* top-level tables (mirrors
+        # per-dataset extra). schema_version comes from [_META].schema; None => v0.
+        self.extra: dict = {}
+        self.schema_version = None
         if datasets_toml and os.path.isfile(datasets_toml):
             # Loading from the toml must never write it back — read commands
             # (`list`, `where`, ...) would otherwise silently rewrite the user's
@@ -659,6 +663,8 @@ class Database:
             and self.datasets_toml == other.datasets_toml
             and self.loaders == other.loaders
             and self.loaders_python_includes == other.loaders_python_includes
+            and self.extra == other.extra
+            and self.schema_version == other.schema_version
         )
 
     __hash__ = None
@@ -691,6 +697,11 @@ class Database:
         result: dict = {}
         if loaders_table:
             result["_LOADERS"] = loaders_table
+        if self.schema_version is not None:
+            result["_META"] = {"schema": self.schema_version}
+        # Re-emit unknown _* tables verbatim (database-level passthrough).
+        for k, v in self.extra.items():
+            result[k] = v
         for key, entry in self.datasets.items():
             result[key] = to_dict(entry)
         return result
@@ -764,7 +775,19 @@ class Database:
                     continue
                 self.loaders[str(k)] = v if isinstance(v, str) else repr(v)
 
-        names = [k for k in datasets if k not in ("_LOADERS", "_loaders")]
+        meta_section = datasets.get("_META")
+        if isinstance(meta_section, dict):
+            schema_val = meta_section.get("schema")
+            if schema_val is not None:
+                self.schema_version = schema_val
+
+        # Capture unknown _* top-level tables into db-level extra (mirrors per-dataset extra).
+        _known_structural = {"_LOADERS", "_loaders", "_META"}
+        for k, v in datasets.items():
+            if k.startswith("_") and k not in _known_structural:
+                self.extra[k] = dict(v) if isinstance(v, dict) else v
+
+        names = [k for k in datasets if not k.startswith("_")]
         for i, name in enumerate(names):
             info = dict(datasets[name])
             persist_on_last_iteration = persist and i == len(names) - 1
