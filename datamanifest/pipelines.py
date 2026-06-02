@@ -142,6 +142,50 @@ def expand_shell_template(
     return result
 
 
+def _binding_variables(entry, *, download_path=None, path=None, project_root=""):
+    """Build the ``$var`` substitution set for a parameterized binding.
+
+    Mirrors :func:`expand_shell_template`'s common variables. Fetchers expose
+    ``$download_path``; loaders expose ``$path``; both share ``$project_root``,
+    ``$uri``, ``$key``, ``$version``, ``$doi``, ``$format`` and ``$branch``.
+    """
+    variables = {
+        "project_root": project_root,
+        "uri": entry.uri,
+        "key": entry.key,
+        "version": entry.version,
+        "doi": entry.doi,
+        "format": entry.format,
+        "branch": entry.branch,
+    }
+    if download_path is not None:
+        variables["download_path"] = download_path
+    if path is not None:
+        variables["path"] = path
+    return variables
+
+
+def _substitute_vars(value, variables):
+    """Recursively substitute ``$name`` placeholders in the string parts of *value*.
+
+    Used for the parameterized ``{ ref, args, kwargs }`` binding form: every
+    string element (scalar, or nested inside a list / dict) has each ``$name``
+    from *variables* replaced; non-string scalars pass through unchanged; dict
+    keys are kept verbatim. Longer names are substituted first so a shorter name
+    can never partially clobber a longer one.
+    """
+    if isinstance(value, str):
+        result = value
+        for name in sorted(variables, key=len, reverse=True):
+            result = result.replace(f"${name}", variables[name])
+        return result
+    if isinstance(value, list):
+        return [_substitute_vars(v, variables) for v in value]
+    if isinstance(value, dict):
+        return {k: _substitute_vars(v, variables) for k, v in value.items()}
+    return value
+
+
 # ----- Loader registry + entry-point resolution (PipeLines.jl:111-198) -----
 #
 # Julia resolves loader strings either as a module path (`A.B.func`) via runtime
@@ -237,16 +281,32 @@ def _run_python_hook(
     required_paths_ordered=None,
     python_includes=None,
     ref: str = "",
+    args=None,
+    kwargs=None,
 ):
     """Run the in-process Python fetcher as a download-phase hook (replaces Julia's
     ``_run_julia``).
 
     *ref* is the resolved entry-point reference (own ``_LANG.python.fetcher`` or
-    legacy ``python=``); it defaults to ``dataset.python`` when not supplied. The
-    resolved callable is invoked with the same keyword names the shell template
-    exposes, so a single project can use either mechanism (``PipeLines.jl:83-114``).
+    legacy ``python=``); it defaults to ``dataset.python`` when not supplied.
+
+    When the binding carries *args* / *kwargs* (the parameterized
+    ``{ ref, args, kwargs }`` table form), ``$var`` placeholders in their string
+    values are substituted and the callable is invoked as
+    ``ref(*args, **kwargs)``. A bare-string binding (no args/kwargs) keeps the
+    conventional call: the callable is invoked with the same keyword names the
+    shell template exposes, so a single project can use either mechanism
+    (``PipeLines.jl:83-114``).
     """
     fn = _resolve_entry_point(ref or dataset.python, python_includes)
+    if args or kwargs:
+        variables = _binding_variables(
+            dataset, download_path=download_path, project_root=project_root
+        )
+        call_args = _substitute_vars(list(args or []), variables)
+        call_kwargs = _substitute_vars(dict(kwargs or {}), variables)
+        fn(*call_args, **call_kwargs)
+        return
     fn(
         download_path=download_path,
         project_root=project_root,
@@ -577,6 +637,8 @@ def _fetch_into_path(
             required_paths_ordered=required_paths_ordered,
             python_includes=python_includes,
             ref=value,
+            args=dataset.lang_python_fetcher_args,
+            kwargs=dataset.lang_python_fetcher_kwargs,
         )
         return
 
@@ -822,6 +884,13 @@ def load_dataset(db, dataset, loader=None, **kwargs):
     loader_ref = resolve_loader_ref(db, entry)
     if loader_ref != "":
         fn = _get_loader_function(db, loader_ref)
+        if entry.lang_python_loader_args or entry.lang_python_loader_kwargs:
+            variables = _binding_variables(
+                entry, path=path, project_root=db.get_project_root()
+            )
+            call_args = _substitute_vars(list(entry.lang_python_loader_args), variables)
+            call_kwargs = _substitute_vars(dict(entry.lang_python_loader_kwargs), variables)
+            return fn(*call_args, **call_kwargs)
         return fn(path)
 
     # For an extracted archive the resolved path is a directory and there is no
