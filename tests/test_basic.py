@@ -1169,3 +1169,25 @@ def test_default_db_missing_toml():
             if v is not None:
                 os.environ[k] = v
         _db_module._default_db = None
+
+
+def test_legacy_read_probe(tmp_path, monkeypatch):
+    """A dataset present only in the legacy ~/.cache/Datasets resolves there
+    (read-only), and an explicit DATAMANIFEST_DATA_DIR disables the probe."""
+    from datamanifest.database import Database, resolve_existing_path
+
+    legacy = tmp_path / "cache" / "Datasets"
+    (legacy / "host").mkdir(parents=True)
+    (legacy / "host" / "f.txt").write_text("x")
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))  # empty new store
+    monkeypatch.delenv("DATAMANIFEST_DATA_DIR", raising=False)
+
+    db = Database(persist=False)
+    db.register_dataset("", name="d", key="host/f.txt", skip_checksum=True, persist=False)
+
+    assert resolve_existing_path(db, db.datasets["d"]) == str(legacy / "host" / "f.txt")
+
+    # Explicit data-dir choice points elsewhere and skips the legacy probe.
+    monkeypatch.setenv("DATAMANIFEST_DATA_DIR", str(tmp_path / "data"))
+    assert resolve_existing_path(db, db.datasets["d"]) != str(legacy / "host" / "f.txt")

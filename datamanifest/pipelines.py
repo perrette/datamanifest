@@ -33,6 +33,7 @@ from .config import COMPRESSED_FORMATS, logger, project_root_from_paths
 from .database import (
     get_dataset_path,
     parse_uri_metadata,
+    resolve_existing_path,
     resolve_fetcher,
     resolve_loader_ref,
     search_dataset,
@@ -763,10 +764,15 @@ def download_dataset(db, dataset, extract=None, overwrite: bool = False):
         dataset, db.datasets_folder, extract=False, project_root=project_root
     )
 
-    if not overwrite and (os.path.isfile(local_path) or os.path.isdir(local_path)):
-        logger.info("Dataset already exists at: %s", local_path)
-        verify_checksum(db, dataset, extract=extract, skip_if_complete=True)
-        return local_path
+    # Read-resolution: reuse an existing copy in any store — including the legacy
+    # read-only location (~/.cache/Datasets) — rather than re-downloading to the
+    # new write path. New fetches still land in `download_path`/`local_path`.
+    if not overwrite:
+        existing = resolve_existing_path(db, dataset, extract=extract)
+        if os.path.isfile(existing) or os.path.isdir(existing):
+            logger.info("Dataset already exists at: %s", existing)
+            verify_checksum(db, dataset, extract=extract, skip_if_complete=True)
+            return existing
 
     if overwrite or not (os.path.isfile(download_path) or os.path.isdir(download_path)):
         logger.info("Downloading dataset: %s to %s", dataset.uri, download_path)

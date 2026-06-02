@@ -30,15 +30,13 @@ def _get_db():
 
 def _cmd_list(args):
     db = _get_db()
-    from .database import get_dataset_path
+    from .database import resolve_existing_path
 
     present = []
     missing = []
     for name, entry in db.datasets.items():
         try:
-            path = get_dataset_path(
-                entry, db.datasets_folder, project_root=db.get_project_root()
-            )
+            path = resolve_existing_path(db, entry)
         except Exception:
             missing.append(name)
             continue
@@ -78,12 +76,10 @@ def _cmd_download(args):
 
 def _cmd_path(args):
     db = _get_db()
-    from .database import get_dataset_path, search_dataset
+    from .database import resolve_existing_path, search_dataset
 
     _name, entry = search_dataset(db, args.name)
-    path = get_dataset_path(
-        entry, db.datasets_folder, project_root=db.get_project_root()
-    )
+    path = resolve_existing_path(db, entry)
     print(path)
 
 
