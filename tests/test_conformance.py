@@ -28,7 +28,12 @@ else:
     import tomli as tomllib
 
 from datamanifest import default_loaders
-from datamanifest.database import Database, resolve_fetcher, _sort_recursive
+from datamanifest.database import (
+    Database,
+    resolve_fetcher,
+    resolve_loader_rungs,
+    _sort_recursive,
+)
 
 SELF_LANG = "python"
 SUPPORTED_CAPABILITIES = {
@@ -129,15 +134,24 @@ def _fetch_rung_ref(entry):
 
 
 def _load_rung_ref(db, entry):
-    """Walk the v1 load ladder and return (rung, ref) per the spec's expected JSON schema."""
-    own = entry.lang_python_loader or entry.loader
-    if own:
-        return "per-dataset", own
+    """Walk the v1 load ladder and return (rung, ref) per the spec's expected JSON schema.
+
+    Rung 1 (own per-dataset loader: explicit _LANG.python.loader or bare loader)
+    and rung 2 (manifest format default: [_LANG.python.loaders] or [_LOADERS])
+    are both expressed by resolve_loader_rungs; the first own-language rung is a
+    "per-dataset" loader and a format-default rung is "manifest-format-default".
+    Rung 3 is the built-in default loader for the format.
+    """
+    rungs = resolve_loader_rungs(db, entry)
     fmt = (entry.format or "").strip().lower()
-    if fmt:
-        for name, ref in db.lang_python_loaders.items():
-            if str(name).strip().lower() == fmt:
-                return "manifest-format-default", ref
+    if rungs:
+        ref = rungs[0][0]
+        # The first rung is a per-dataset loader when the dataset declares its
+        # own (explicit _LANG.python.loader or bare loader); otherwise it is a
+        # manifest format default ([_LANG.python.loaders] / [_LOADERS]).
+        if entry.lang_python_loader or entry.loader:
+            return "per-dataset", ref
+        return "manifest-format-default", ref
     if fmt:
         try:
             default_loaders.default_loader(fmt)
