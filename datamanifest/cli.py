@@ -240,7 +240,7 @@ def _cmd_format(args):
 
 
 def _cmd_migrate(args):
-    from .database import Database, migrate_v0_to_v1
+    from .database import Database, migrate_v0_to_v1, migrate_v1_to_v2
 
     toml_path = os.path.abspath(args.file)
     if not os.path.isfile(toml_path):
@@ -249,6 +249,7 @@ def _cmd_migrate(args):
 
     db = Database(datasets_toml=toml_path, persist=False)
     migrate_v0_to_v1(db)
+    migrate_v1_to_v2(db)
     db.write(toml_path)
     print(f"Migrated: {toml_path}")
 

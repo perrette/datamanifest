@@ -77,7 +77,7 @@ datamanifest COMMAND [OPTIONS]
 | `verify [NAME ...]` | Re-check sha256 checksums; exits nonzero on any mismatch |
 | `init [--folder PATH] [--force]` | Create a fresh `datasets.toml` in the current directory |
 | `where` | Print active `datasets_toml` and `datasets_folder` paths |
-| `migrate FILE` | Rewrite a v0 manifest to schema v1 (`_LANG` form) in-place |
+| `migrate FILE` | Rewrite a manifest to the current schema in-place (v0→v1 `_LANG` form; v1.1→v2 bare-store `"x"` → `"$x"`) |
 
 Examples:
 
@@ -126,61 +126,77 @@ datamanifest where
 | Load ladder: own Python loader → manifest default → built-in | yes |
 | Lossless round-trip of foreign `_LANG.*` subtrees | yes |
 | v0 → v1 migration (`datamanifest migrate`) | yes |
-| Portable storage model (`store` field + `[_STORAGE]` + platformdirs roots) | yes |
+| Portable storage model (spec-v2: `$`-selectors, folder variables, `[_STORAGE]` + platformdirs roots) | yes |
 | Parameterized bindings (`{ ref, args, kwargs }` + `$var` substitution) | yes |
 | Safe concurrent materialization (`.tmp` → atomic publish → `.complete` marker) | yes |
 | Verify-once integrity (checksum only at fetch; `.complete` entry skips re-hash) | yes |
 | Recursive canonical key ordering / byte-identity (normative reference) | yes |
 
-## Storage model (spec-v1.1)
+## Storage model (spec-v2)
 
 > **Behavior change from earlier releases.** Prior releases stored all datasets
 > under `$XDG_CACHE_HOME/Datasets` (typically `~/.cache/Datasets`).
-> As of spec-v1.1, the default `data` store resolves to
+> As of spec-v1.1, the default `$data` store resolves to
 > `platformdirs.user_data_dir("datamanifest")/Datasets` (typically
-> `~/.local/share/datamanifest/Datasets` on Linux), and the `cache` store to
+> `~/.local/share/datamanifest/Datasets` on Linux), and the `$cache` store to
 > `platformdirs.user_cache_dir("datamanifest")/Datasets`.
 > If you have existing datasets at the old location, move them or pass an explicit
 > `datasets_folder` to `Database`.
 
-Each dataset entry carries an optional `store` field (default: `data`).
-A `[_STORAGE]` table in the manifest lets you override the root directories per
-store, per host (glob), or per profile:
+Each dataset entry carries an optional `store` field — a **`$`-selector**
+(`$folder` or `$folder/subpath`) referencing a named **folder variable**. The
+built-in folder variables are `$data`, `$cache`, and `$repo`. User-defined folders
+are declared in `[_STORAGE]`.
+
+A `[_STORAGE]` table lets you define folder variables, set a project-wide default
+selector, and override roots per host (glob) or per profile:
 
 ```toml
 [_STORAGE]
-data  = "~/data/Datasets"
-cache = "~/.cache/Datasets"
-repo  = "datasets"                       # relative → <project_root>/datasets
+default = "$data"                        # project-wide default store selector
+data    = "~/data/Datasets"             # override built-in $data root
+cache   = "~/.cache/Datasets"           # override built-in $cache root
+repo    = "datasets"                    # relative → <project_root>/datasets
+scratch = "/tmp/$USER/scratch"          # user-defined folder variable
 
 [_STORAGE._HOST."login*.hpc.edu"]
-data  = "/scratch/$USER/Datasets"        # $VAR and ~ are expanded
+data    = "/scratch/$USER/Datasets"     # path expressions: $folder/$ENV/~ expand
 
 [_STORAGE._PROFILE.cluster]
-data  = "/work/proj/Datasets"            # activated by DATAMANIFEST_PROFILE=cluster
+data    = "/work/proj/Datasets"         # activated by DATAMANIFEST_PROFILE=cluster
 
-[bigsim]                                 # default store = "data" (persistent)
+[bigsim]                                # default selector ($data) — store omitted
 uri   = "https://example.com/bigsim.nc"
 
 [scratch_run]
-store = "cache"                          # disposable, re-fetchable
+store = "$cache"                        # disposable, re-fetchable
 uri   = "https://example.com/scratch.nc"
 
 [derived_table]
-store = "repo"                           # lives under <project_root>/datasets
+store = "$repo"                         # lives under <project_root>/datasets
 format = "csv"
+
+[hpc_output]
+store = "$scratch/results"             # user-defined folder + subpath
+format = "nc"
 ```
 
-**Per-store precedence** (highest first):
-1. `DATAMANIFEST_<STORE>_DIR` environment variable.
-2. `[_STORAGE._PROFILE.<name>].<store>` — when `DATAMANIFEST_PROFILE` is set.
-3. First `[_STORAGE._HOST.<glob>].<store>` where the glob matches the hostname.
-4. `[_STORAGE].<store>` base value.
+**Per-folder-variable precedence** (highest first):
+1. `DATAMANIFEST_<FOLDER>_DIR` environment variable (e.g. `DATAMANIFEST_DATA_DIR`).
+2. `[_STORAGE._PROFILE.<name>].<folder>` — when `DATAMANIFEST_PROFILE` is set.
+3. First `[_STORAGE._HOST.<glob>].<folder>` where the glob matches the hostname.
+4. `[_STORAGE].<folder>` base value.
 5. `platformdirs` default (`data`/`cache`) or `<project_root>/datasets` (`repo`).
+   User-defined folders with no definition on any rung are an error.
 
-**Read resolution** searches `repo → data → cache` and returns the first root
-where `<root>/<key>` exists and has been successfully materialized (`.complete`
-marker present). Falls back to the write path (selected store) when not found.
+**Read resolution** probes the entry's own selector folder first, then searches
+`$repo → $data → $cache` (built-in probe order) and returns the first root where
+`<root>/<key>` exists and has been successfully materialized (`.complete` marker
+present). Falls back to the write path (selected store) when not found.
+
+**v1.1 → v2 migration:** If you have existing manifests with bare `store = "cache"`
+entries, run `datamanifest migrate datasets.toml` to rewrite them to `store = "$cache"`
+(and similar for other stores). The `$data` default is elided on write.
 
 ## Schema v1 — `_LANG` namespace
 
@@ -240,13 +256,18 @@ and requires no capability upgrade.
 
 Foreign `_LANG.<other>` subtrees (e.g. `_LANG.julia`) are preserved verbatim on every read→write cycle; Python never modifies them. Unknown structural tables (any `_*` key that Python does not recognise) are similarly passed through.
 
-### v0 → v1 migration
+### Migration
 
 ```bash
 datamanifest migrate datasets.toml
 ```
 
-Rewrites a v0 flat manifest in-place: moves per-dataset `python=`/`callable=`/`loader=` into `[<ds>._LANG.python]`, moves `[_LOADERS]` into `[_LANG.python.loaders]`, and adds `[_META] schema = 1`. Foreign keys are left verbatim. Reading a v0 file without migrating still works (legacy forms are accepted silently), but a one-time deprecation warning is logged.
+Rewrites a manifest in-place through all outstanding migration steps:
+
+- **v0 → v1:** moves per-dataset `python=`/`callable=`/`loader=` into `[<ds>._LANG.python]`, moves `[_LOADERS]` into `[_LANG.python.loaders]`, and adds `[_META] schema = 1`. Foreign keys are left verbatim.
+- **v1.1 → v2 (storage):** rewrites bare `store = "x"` entries to `store = "$x"` (`"data"`/`""` are elided, leaving the project default). `[_STORAGE]` folder *definitions* (bare keys like `data = "…"`) are left untouched.
+
+Reading a v0 or v1.1 file without migrating still works for most operations, but a v1.1 manifest with bare `store` values will error on resolution (per spec-v2). A one-time deprecation warning is logged for v0 forms.
 
 ## Python adaptations
 
@@ -265,7 +286,7 @@ A single `datasets.toml` can be consumed by both tools: each reads the common fi
 
 ## Conformance
 
-This release targets **spec-v1.1** of the shared [datamanifest.toml schema](https://github.com/perrette/datamanifest.toml).
+This release targets **spec-v2** of the shared [datamanifest.toml schema](https://github.com/perrette/datamanifest.toml).
 
 Implemented capabilities:
 
@@ -274,12 +295,12 @@ Implemented capabilities:
 | `lang-read` — parse `_LANG` namespace on read | yes |
 | `lang-write` — regenerate `_LANG.python`, preserve foreign `_LANG.*` verbatim | yes |
 | `shell-fetch` — `_LANG.shell.fetcher` template in the fetch ladder | yes |
-| `storage` — `store` field, `[_STORAGE]` block, platformdirs roots, read-order resolution | yes |
+| `storage` — `$`-selectors, folder variables (`$data`/`$cache`/`$repo` + user-defined), `[_STORAGE].default`, path-expression interpolation, platformdirs roots, read-order resolution | yes |
 | `binding-args` — `{ ref, args, kwargs }` table form with `$var` substitution | yes |
 | `byte-identity` — recursive canonical key ordering (normative reference) | yes |
 | `delegation` — peer-CLI runtime (delegate fetch/load to another tool) | not yet |
 
-The conformance test suite (`tests/test_conformance.py`) downloads the pinned spec-v1.1 fixture tarball, verifies every file against a recorded per-file SHA-256 hash (`tests/conformance_pin.toml`), and runs only the fixtures whose `capabilities` are a subset of the above set, skipping the rest with a reason.
+The conformance test suite (`tests/test_conformance.py`) downloads the pinned spec fixture tarball, verifies every file against a recorded per-file SHA-256 hash (`tests/conformance_pin.toml`), and runs only the fixtures whose `capabilities` are a subset of the above set, skipping the rest with a reason. Re-pinning the fixture suite to the `spec-v2` tag is a manual post-merge step (requires network access).
 
 ## Related projects
 
