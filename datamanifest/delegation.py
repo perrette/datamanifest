@@ -27,6 +27,7 @@ try:
 except ModuleNotFoundError:  # Python 3.10
     import tomli as tomllib
 
+from .config import logger
 from .database import resolve_existing_path
 
 # DataManifest.jl package identity (src/Project.toml). The uuid lets the env
@@ -154,27 +155,43 @@ def delegate_fetch(db, entry, name, *, project_root, runner=None):
     through to the ``uri`` rung.
     """
     project_dir = julia_project(project_root, env=os.environ)
-    if project_dir is None:
-        return None
-    if not julia_available(os.environ):
+    if project_dir is None or not julia_available(os.environ):
+        logger.warning(
+            "Dataset %r has a Julia fetcher but no usable Julia environment was "
+            "found (need `julia` on PATH and a Project.toml that depends on "
+            "DataManifest); skipping cross-language fetch and falling back to the "
+            "standard download.", name,
+        )
         return None
 
     datasets_toml = os.path.abspath(db.datasets_toml) if db.datasets_toml else ""
     if not datasets_toml:
-        return None
+        return None  # no manifest path to hand the peer; nothing to delegate
 
     argv = _julia_argv(project_dir, datasets_toml, name)
     run = _get_runner(runner)
     try:
         result = run(argv, env=os.environ)
-    except Exception:  # noqa: BLE001 - any runner/toolchain failure is a normal probe miss
+    except Exception as exc:  # noqa: BLE001 - toolchain failure → fall back
+        logger.warning(
+            "Julia cross-language fetch for %r could not be launched (%s); "
+            "falling back to the standard download.", name, exc,
+        )
         return None
 
     returncode = getattr(result, "returncode", result)
     if returncode != 0:
+        logger.warning(
+            "Julia cross-language fetch for %r exited %s; falling back to the "
+            "standard download.", name, returncode,
+        )
         return None
 
     path = resolve_existing_path(db, entry)
     if os.path.isfile(path) or os.path.isdir(path):
         return path
+    logger.warning(
+        "Julia cross-language fetch for %r produced no output on disk; falling "
+        "back to the standard download.", name,
+    )
     return None

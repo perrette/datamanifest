@@ -701,9 +701,8 @@ def download_dataset(db, dataset, extract=None, overwrite: bool = False):
     # (resolve_fetcher returns no python/shell binding), delegation is enabled
     # for the entry, and a foreign-language fetcher binding is present. The
     # foreign runtime (Julia's DataManifest) materializes the dataset into the
-    # shared store; Python then reads it from disk. On any failure or a missing
-    # toolchain the ladder advances to rung 4 (uri) — probe failure is normal,
-    # so it falls through silently.
+    # shared store; Python then reads it from disk. On a missing Julia toolchain
+    # or any failure it logs a warning and advances to rung 4 (uri).
     if (
         not dataset.uris
         and resolve_fetcher(dataset)[0] not in ("python", "shell")
