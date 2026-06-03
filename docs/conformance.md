@@ -31,7 +31,7 @@ This release targets **spec-v3** of the shared format.
 | `cache-produce` | ✅ | `@cached` produce-or-load: parameter-hash keying, optional recipe `version`, `config.toml`/`metadata.toml` sidecars, `cached/` content prefix + project scope. |
 | `inspect` | ✅ | The `cached.toml` index and the `datamanifest list` maintenance surface (filter + `--delete`/`--move`, dry-run by default; never an automatic collector). |
 | `sync` | ✅ | Cross-machine `push`/`pull` over rsync+ssh, addressed by machine-independent id (`name`/`alias`/`doi`, or `cachetype[/version]/hash`); remote root resolved best-effort from the remote env (`source ~/.bashrc`) then `[_STORAGE._HOST]`/default; writes no manifest; idempotent. |
-| `delegation` | ⬜ not yet | Run a fetcher defined in another language (peer-CLI / cross-language fetch). |
+| `delegation` | ✅ | Cross-language fetch (rung 3): runs a foreign-language fetcher by invoking the local Julia `DataManifest` env (`julia --project=… -e 'using DataManifest; download_dataset(Database("…"), "…")'`) when present, materializing into the shared store; falls through to `uri` otherwise. Fetched-only; on by default and probe-gated; the `delegate` field / `--delegate` / `--no-delegate` toggles it. |
 
 ## Conformance tests
 
