@@ -68,6 +68,10 @@ def test_key_table_drops_underscore_prefixed():
 def cache_root(tmp_path, monkeypatch):
     root = tmp_path / "cache"
     monkeypatch.setenv("DATAMANIFEST_CACHE_DIR", str(root))
+    # Isolate Phase-2 side effects of a produce: the depot usage log and the
+    # cwd-fallback cached.toml a bare @cached (no project_root) registers into.
+    monkeypatch.setenv("DATAMANIFEST_USAGE_LOG", str(tmp_path / "usage.toml"))
+    monkeypatch.chdir(tmp_path)
     return root
 
 

@@ -990,13 +990,11 @@ def delete_dataset(
         db.write(db.datasets_toml)
 
 
-def _sort_recursive(obj):
-    """Sort dict keys recursively by Unicode code point at every nesting level."""
-    if isinstance(obj, dict):
-        return {k: _sort_recursive(obj[k]) for k in sorted(obj)}
-    if isinstance(obj, list):
-        return [_sort_recursive(v) for v in obj]
-    return obj
+# Canonical key ordering now lives in the Layer 0 substrate
+# (``datamanifest.store.serialize``) so the cache layer can share the one
+# normative byte ordering without importing ``database``. Re-imported here under
+# the historical private name so existing callers (and ``cli.py``) keep working.
+from .store import sort_recursive as _sort_recursive  # noqa: E402
 
 
 # ----- Database (Databases.jl:147-258, 553-825) -----
