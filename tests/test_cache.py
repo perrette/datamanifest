@@ -228,6 +228,88 @@ def test_cached_produce_lands_under_cached_project_scope(cache_root, scope_base)
     assert scope_base.parent.parent == cache_root
 
 
+# ----- default format: pickle ------------------------------------------------
+
+def test_cached_default_format_is_pickle(cache_root, scope_base):
+    """A format-less @cached self-saves with pickle, so any picklable value
+    (here a bare int — the original failing case) round-trips."""
+    calls = {"n": 0}
+
+    @cached(cachetype="memory")
+    def produce(*, name):
+        calls["n"] += 1
+        return {"n": 42, "items": [1, 2, 3], "label": name}
+
+    first = produce(name="x")
+    assert first == {"n": 42, "items": [1, 2, 3], "label": "x"}
+    assert calls["n"] == 1
+
+    h = param_hash({"name": "x"})
+    artifact_dir = scope_base / "memory" / h
+    # The serialized value is a pickle next to the sidecars.
+    assert (artifact_dir / "data.pickle").exists()
+    config = read_config(str(artifact_dir))
+    assert config["_META"]["cachetype"] == "memory"
+
+    # Second call hits the cache and unpickles the value (body not re-run).
+    second = produce(name="x")
+    assert second == first
+    assert calls["n"] == 1
+
+
+def test_cached_bare_value_round_trips(cache_root, scope_base):
+    @cached(cachetype="memory")
+    def produce():
+        return 42
+
+    assert produce() == 42
+    assert produce() == 42  # reload via pickle
+
+
+# ----- spec-v3 scope field ---------------------------------------------------
+
+def test_cached_registers_scope_field(cache_root, scope_base):
+    """The cached.toml entry records the project scope under the ``scope`` key
+    (not the former ``project``)."""
+    from datamanifest.cache import CachedIndex
+    from datamanifest.store.locations import project_id
+
+    @cached(cachetype="t", format="txt")
+    def produce(*, name):
+        return name
+
+    produce(name="v")
+    index = CachedIndex.read(os.path.join(os.getcwd(), "cached.toml"))
+    entry = index.entries["produce"]
+    assert "project" not in entry
+    assert entry["scope"] == project_id("")
+
+
+def test_cached_discovers_project_root_for_scope(cache_root, tmp_path, monkeypatch):
+    """When no project_root is passed, it is discovered by walking up for a
+    pyproject.toml, so the scope resolves to ``[project].name`` instead of a
+    path hash."""
+    from datamanifest.cache import CachedIndex
+
+    proj = tmp_path / "proj"
+    sub = proj / "deep" / "nested"
+    sub.mkdir(parents=True)
+    (proj / "pyproject.toml").write_text('[project]\nname = "myproj"\n')
+    monkeypatch.chdir(sub)
+
+    @cached(cachetype="t", format="txt")
+    def produce(*, name):
+        return name
+
+    produce(name="v")
+    h = param_hash({"name": "v"})
+    # Scope segment in the on-disk path is the discovered project name.
+    assert (cache_root / "cached" / "myproj" / "t" / h / "data.txt").exists()
+    # cached.toml lands at the discovered project root and records scope=myproj.
+    index = CachedIndex.read(str(proj / "cached.toml"))
+    assert index.entries["produce"]["scope"] == "myproj"
+
+
 # ----- spec-v3 recipe version ------------------------------------------------
 
 def test_cached_version_adds_path_segment_not_in_hash(cache_root, scope_base):

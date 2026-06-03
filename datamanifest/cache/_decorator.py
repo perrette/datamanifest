@@ -43,6 +43,11 @@ DATA_NAME_STEM = "data"
 # The default folder a produced artifact materializes into (spec: store="$cache").
 DEFAULT_STORE = "$cache"
 
+# The default serialization format when none is given. Pickle is Python's
+# general-purpose self-saver: any picklable return value round-trips without the
+# caller having to pick a format. Explicit formats (txt, json, nc, …) win.
+DEFAULT_FORMAT = "pickle"
+
 
 def _data_name(basename: str, format: str) -> str:
     """The filename of the serialized value inside an artifact directory.
@@ -76,6 +81,12 @@ def _default_writer(format: str):
             with open(path, "w") as fh:
                 fh.write(value)
         return _w
+    if f in ("pickle", "pkl"):
+        def _w(path, value):
+            import pickle
+            with open(path, "wb") as fh:
+                pickle.dump(value, fh)
+        return _w
     if f == "json":
         def _w(path, value):
             with open(path, "w") as fh:
@@ -106,7 +117,7 @@ def _default_writer(format: str):
         return _w
     raise ValueError(
         f'No default writer for format "{format}". @cached can materialize '
-        "txt, md, json, toml, yaml, csv, parquet, nc."
+        "txt, md, json, toml, yaml, csv, parquet, nc, pickle."
     )
 
 
@@ -169,6 +180,24 @@ def _artifact_dir(*, cache_dir, store, cachetype, version, hash_,
     )
 
 
+def _resolve_project_root(project_root) -> str:
+    """Resolve the project root used for scope / artifact-path / index placement.
+
+    An explicit *project_root* is honored verbatim. Otherwise it is discovered
+    the way the rest of the tool resolves a default manifest: walk up from the
+    current directory for a ``datasets.toml`` / ``Datasets.toml`` /
+    ``datamanifest.toml`` (or a ``pyproject.toml``-bearing root) and use that
+    directory (:func:`datamanifest.config._find_default_toml`). This makes the
+    scope resolve to the project's ``pyproject.toml`` ``[project].name`` — a
+    stable, human-readable id — instead of a path hash of whatever directory the
+    call happened to run from. Falls back to ``""`` when nothing is found.
+    """
+    if project_root:
+        return project_root
+    from ..config import _find_default_toml, project_root_from_paths
+    return project_root_from_paths(_find_default_toml(os.getcwd()))
+
+
 def _locate_cached_toml(cached_toml, project_root) -> str:
     """Resolve the ``cached.toml`` path a produced artifact is registered in.
 
@@ -192,7 +221,7 @@ def _locate_cached_toml(cached_toml, project_root) -> str:
 
 
 def _register_produced(
-    cached_toml_path, name, *, cachetype, hash_, ref, format, project="",
+    cached_toml_path, name, *, cachetype, hash_, ref, format, scope="",
     version="",
 ) -> str:
     """Register a freshly-produced artifact into its ``cached.toml`` and record
@@ -200,7 +229,7 @@ def _register_produced(
 
     Reads any existing index (so a register adds/updates one entry without
     dropping the rest), registers the portable key (plus the spec-v3
-    *project* scope and recipe *version* when set), writes canonically, and
+    *scope* and recipe *version* when set), writes canonically, and
     stamps the usage log so GC can discover this root.
     """
     index = CachedIndex.read_or_empty(cached_toml_path)
@@ -211,7 +240,7 @@ def _register_produced(
         ref=ref,
         format=format or "",
         store=DEFAULT_STORE,
-        project=project,
+        scope=scope,
         version=version,
     )
     written = index.write(cached_toml_path)
@@ -288,11 +317,13 @@ def cached(
 
     On a **produce** (miss), the artifact is registered into the resolved
     ``cached.toml`` (``cachetype`` / ``hash`` / ``ref`` = ``module:qualname`` /
-    ``format`` / ``store="$cache"`` / the ``project`` scope / the ``version``
+    ``format`` / ``store="$cache"`` / the ``scope`` / the ``version``
     when set), that index is recorded in the depot usage log, and
     ``metadata.toml``'s ``[origin].cached_toml`` back-pointer names it.
     A cache **hit** re-registers nothing and re-stamps nothing.
     """
+
+    fmt = format if format is not None else DEFAULT_FORMAT
 
     def decorator(fn):
         @functools.wraps(fn)
@@ -306,34 +337,35 @@ def cached(
 
             key_table = _key_table_for_call(key, kwargs)
             hash_ = param_hash(key_table)
+            root = _resolve_project_root(project_root)
             artifact_dir = _artifact_dir(
                 cache_dir=cache_dir, store=store, cachetype=cachetype,
-                version=version, hash_=hash_, project_root=project_root,
+                version=version, hash_=hash_, project_root=root,
                 storage_config=storage_config,
             )
-            data_path = os.path.join(artifact_dir, _data_name(basename, format))
+            data_path = os.path.join(artifact_dir, _data_name(basename, fmt))
 
             if (
                 cached
                 and materialize.is_complete(artifact_dir)
                 and config_is_valid(artifact_dir)
             ):
-                return _load_value(data_path, format)
+                return _load_value(data_path, fmt)
 
             result = fn(**kwargs)
-            write_value = _default_writer(format)
-            data_filename = _data_name(basename, format)
+            write_value = _default_writer(fmt)
+            data_filename = _data_name(basename, fmt)
 
             # Register the produced artifact in the project's cached.toml (the
             # liveness root for GC) and record that index in the depot usage log.
             ref = f"{fn.__module__}:{fn.__qualname__}"
             reg_name = name or fn.__name__
-            project = locations.project_id(project_root)
-            index_path = _locate_cached_toml(cached_toml, project_root)
+            scope = locations.project_id(root)
+            index_path = _locate_cached_toml(cached_toml, root)
             written_index = _register_produced(
                 index_path, reg_name,
-                cachetype=cachetype, hash_=hash_, ref=ref, format=format,
-                project=project, version=version,
+                cachetype=cachetype, hash_=hash_, ref=ref, format=fmt,
+                scope=scope, version=version,
             )
 
             def write_fn(tmp: str) -> None:
@@ -342,7 +374,7 @@ def cached(
                 write_config(tmp, cachetype, hash_, key_table, version=version)
                 # [origin].cached_toml back-pointer (audit only) → the index.
                 write_metadata(
-                    tmp, project_root=project_root,
+                    tmp, project_root=root,
                     origin={"cached_toml": written_index},
                 )
 

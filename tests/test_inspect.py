@@ -132,7 +132,7 @@ def test_cached_produce_registers_and_back_points(cache_root, usage_log, tmp_pat
     assert entry["ref"].split(":", 1)[1].endswith("make_greeting")
     assert entry["store"] == "$cache"
     # spec-v3: the entry records the project-id scope it was produced under.
-    assert entry["project"] == project_id(str(proj))
+    assert entry["scope"] == project_id(str(proj))
 
     # Artifact metadata back-points at that index (audit only). spec-v3 layout:
     # <cache>/cached/<project-id>/<cachetype>/<hash>.

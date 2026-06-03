@@ -869,27 +869,6 @@ def get_dataset_path(
 # store shadows the others (Theme A / spec-v1.1 portable storage model).
 _READ_STORE_ORDER = ("repo", "data", "cache")
 
-_LEGACY_DIR_WARNED = False
-
-
-def _warn_legacy_dir_once() -> None:
-    """One-time notice that datasets resolve from the legacy read-only location,
-    with the manual-migration escape hatch (the tool ships no auto-migration)."""
-    global _LEGACY_DIR_WARNED
-    if _LEGACY_DIR_WARNED:
-        return
-    _LEGACY_DIR_WARNED = True
-    legacy = storage.legacy_data_root()
-    current = storage.store_root("data")
-    logger.warning(
-        "Reading datasets from the legacy location %s (pre-v1.1 default; "
-        "read-only). New downloads go to the current data store at %s. To keep "
-        "using the legacy folder, set DATAMANIFEST_DATA_DIR=%s; otherwise "
-        "migrate it manually (e.g. with rsync) at your convenience.",
-        legacy, current, legacy,
-    )
-
-
 def resolve_existing_path(db: "Database", entry: "DatasetEntry", extract=None) -> str:
     """Return the on-disk path to read *entry* from.
 
@@ -978,7 +957,6 @@ def resolve_existing_path(db: "Database", entry: "DatasetEntry", extract=None) -
             seen_legacy.add(root)
             legacy_candidate = os.path.join(root, key)
             if os.path.isfile(legacy_candidate) or os.path.isdir(legacy_candidate):
-                _warn_legacy_dir_once()
                 return legacy_candidate
     return get_dataset_path(
         entry,

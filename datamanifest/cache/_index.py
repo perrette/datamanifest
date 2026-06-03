@@ -29,10 +29,10 @@ CACHED_INDEX_NAME = "cached.toml"
 
 # Fields recorded for each produced dataset in ``cached.toml`` (write ordering is
 # canonical/sorted regardless; this documents the schema and drives
-# :meth:`CachedIndex.register`). ``project``/``version`` are spec-v3 additions
+# :meth:`CachedIndex.register`). ``scope``/``version`` are spec-v3 additions
 # recorded only when non-empty (an artifact's project-id scope and the optional
 # recipe ``version``), so a plain entry stays the original five fields.
-CACHED_ENTRY_FIELDS = ("cachetype", "hash", "ref", "format", "store", "project", "version")
+CACHED_ENTRY_FIELDS = ("cachetype", "hash", "ref", "format", "store", "scope", "version")
 
 # A produced artifact defaults to the OS-reclaimable ``$cache`` folder.
 DEFAULT_STORE = "$cache"
@@ -95,14 +95,14 @@ class CachedIndex:
         ref: str = "",
         format: str = "",
         store: str = DEFAULT_STORE,
-        project: str = "",
+        scope: str = "",
         version: str = "",
     ) -> None:
         """Add or update the produced dataset *name* (keyed by portable name).
 
         Identity is the portable ``(cachetype, hash)`` pair — never an absolute
         path — so the index stays relocatable. Re-registering an existing name
-        overwrites it. *project* (the artifact's project-id scope) and *version*
+        overwrites it. *scope* (the artifact's project-id scope) and *version*
         (the optional recipe version) are spec-v3 fields recorded only when
         non-empty, so a plain entry keeps the original five fields.
         """
@@ -113,8 +113,8 @@ class CachedIndex:
             "format": format,
             "store": store,
         }
-        if project:
-            entry["project"] = project
+        if scope:
+            entry["scope"] = scope
         if version:
             entry["version"] = version
         self.entries[name] = entry
