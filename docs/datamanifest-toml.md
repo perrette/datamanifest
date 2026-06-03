@@ -9,15 +9,15 @@ implementation owns it, and [`DataManifest.jl`](https://github.com/awi-esc/DataM
 ## Conformance
 
 This package conforms to **schema v1** (`_META.schema = 1`) against spec tag
-**`spec-v3`**. The two version axes are independent: `_META.schema` is the
+**`spec-v3.6`**. The two version axes are independent: `_META.schema` is the
 data-model version (bumped only on breaking structural change), and the spec tag
 tracks prose/fixture evolution. Pinning the tag here is what lets this package and
 `DataManifest.jl` move at their own pace while sharing one normative format.
 
-**Pinned spec:** https://github.com/perrette/datamanifest.toml/blob/spec-v3/SCHEMA.md
+**Pinned spec:** https://github.com/perrette/datamanifest.toml/blob/spec-v3.6/SCHEMA.md
 
 > **Note:** The conformance fixture tarball still points at `spec-v1.1`. Re-pinning
-> the fixture suite to the `spec-v3` git tag requires a network fetch and is a manual
+> the fixture suite to the `spec-v3.6` git tag requires a network fetch and is a manual
 > post-merge step; the offline test suite runs against the already-downloaded fixtures.
 
 The whole *contract* two implementations must agree on — top-level layout, common
@@ -41,7 +41,7 @@ and runs only the fixtures tagged for them. This package's status:
 | `cache-produce` | ✅ | Produce-or-load: the `@cached` decorator with canonical-JSON→SHA-256 param-hash keying, optional `version=` segment (path + `config.toml` entry, not in hash), `config.toml`/`metadata.toml` sidecars; spec-v3 artifact path `<cache>/cached/<project-id>/<cachetype>/[<version>/]<hash>`. See [Produce-or-load cache layer](#produce-or-load-cache-layer). |
 | `inspect` | ✅ | The `cached.toml` produced-dataset index and `datamanifest list` maintenance surface: `--kind`/`--scope`/`--orphan`/`--older-than`/`--format`/`--fields` filters + `--delete`/`--move` actions (dry run by default; `--yes` to apply). `last-access` is read-derived from the filesystem access time at inspect time — never written on read (best-effort, advisory). |
 | `sync` | ✅ | Cross-machine `push`/`pull` of a stored object over rsync+ssh (`datamanifest push/pull <id> <ssh-host>`, plus bulk `list --push/--pull <host>`), addressed by its machine-independent id (fetched by `name`/`alias`/`doi`; produced by `cachetype[/version]/hash`, full or an unambiguous hash prefix). The remote store root is resolved best-effort from the remote env (`ssh <host> 'source ~/.bashrc; env'`, parsing `DATAMANIFEST_*`) then the deterministic `[_STORAGE._HOST]` overrides then the shared `platformdirs` default — all via the existing `folder_base` ladder. Writes no manifest (bytes only; received object lands as an orphan), integrity is rsync's, idempotent. `$repo`-stored datasets are refused (project-relative, out of scope). |
-| `delegation` | ✅ | Cross-language fetch (fetch-ladder rung 3): when a dataset has no native Python fetcher, no `_LANG.shell` fetcher, and no `uri`, and a foreign `[<ds>._LANG.<other>].fetcher` is present, the foreign runtime is invoked to materialize the bytes into the shared store. The Python mechanism runs the local Julia `DataManifest` env directly (`julia --project=<env> -e 'using DataManifest; download_dataset(Database("<abs datasets.toml>"), "<name>")'`) — discovered by walking up from the manifest dir (or `$JULIA_PROJECT`) for a `Project.toml` whose `[deps]` lists `DataManifest`, gated on `shutil.which("julia")`. The subprocess inherits `os.environ`, so `DATAMANIFEST_*` store overrides keep both ends on the same path. On any failure or a missing toolchain the ladder falls through to `uri` (silently — probe failure is normal). Fetched datasets only (never `@cached`); on by default and probe-gated; the per-file `delegate` field and the `--delegate` / `--no-delegate` flags toggle it. |
+| `delegation` | ✅ | Cross-language fetch (fetch-ladder rung 3): when a dataset has no native Python fetcher, no `_LANG.shell` fetcher, and no `uri`, and a foreign `[<ds>._LANG.<other>].fetcher` is present, the foreign runtime is invoked to materialize the bytes into the shared store. The Python mechanism runs the local Julia `DataManifest` env directly (`julia --project=<env> -e 'using DataManifest; download_dataset(Database("<abs datasets.toml>"), "<name>")'`) — discovered by walking up from the manifest dir (or `$JULIA_PROJECT`) for a `Project.toml` whose `[deps]` lists `DataManifest`, gated on `shutil.which("julia")`. The subprocess inherits `os.environ`, so `DATAMANIFEST_*` store overrides keep both ends on the same path. On a missing toolchain (no `julia`, or no `Project.toml` depending on `DataManifest`) the rung logs a warning and falls through to `uri`. Fetched datasets only (never `@cached`); on by default and probe-gated; the per-file `delegate` field and the `--delegate` / `--no-delegate` flags toggle it. |
 
 ### What differs / is added on top
 
@@ -196,6 +196,6 @@ flags. See the [README](../README.md) or `datamanifest <command> --help`.
 | Concern | Julia — `DataManifest.jl` | Python — `datamanifest` | Schema spec |
 |---|---|---|---|
 | Implementation | [awi-esc/DataManifest.jl](https://github.com/awi-esc/DataManifest.jl) | [perrette/datamanifest](https://github.com/perrette/datamanifest) | — |
-| Schema version | v1 | v1 (v0 accepted on read) | [SCHEMA.md @ spec-v2](https://github.com/perrette/datamanifest.toml/blob/spec-v2/SCHEMA.md) |
-| Language bindings | `[_LANG.julia]` subtrees | `[_LANG.python]` subtrees | [§ Language bindings](https://github.com/perrette/datamanifest.toml/blob/spec-v2/SCHEMA.md) |
-| Common fields | `Databases.jl` `DatasetEntry` | `database.py` `DatasetEntry` | [§ Common fields](https://github.com/perrette/datamanifest.toml/blob/spec-v2/SCHEMA.md) |
+| Schema version | v1 | v1 (v0 accepted on read) | [SCHEMA.md @ spec-v3.6](https://github.com/perrette/datamanifest.toml/blob/spec-v3.6/SCHEMA.md) |
+| Language bindings | `[_LANG.julia]` subtrees | `[_LANG.python]` subtrees | [§ Language bindings](https://github.com/perrette/datamanifest.toml/blob/spec-v3.6/SCHEMA.md) |
+| Common fields | `Databases.jl` `DatasetEntry` | `database.py` `DatasetEntry` | [§ Common fields](https://github.com/perrette/datamanifest.toml/blob/spec-v3.6/SCHEMA.md) |
