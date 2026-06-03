@@ -1,16 +1,17 @@
-"""Storage-root resolution for the spec-v1.1 portable storage model.
+"""Storage-root resolution for the spec-v3 portable storage model.
 
 This module is a *pure* resolver: given a store name (``data`` / ``cache`` /
-``repo`` / ...) it returns the absolute root directory under which datasets of
-that store live. It performs no I/O beyond reading ``platformdirs`` defaults and
-the (injectable) environment.
+``repo`` / ...) it returns the absolute **bare** root directory. The consuming
+layer composes ``<root>[/subpath]/<prefix>/[<scope>/]<key>`` on top via
+:func:`composed_path` — prefix ``datasets/`` (fetch) or ``cached/`` (produce)
+plus an optional scope.
 
 `platformdirs` is the **normative reference** for the default roots — every
 other implementation of the spec must resolve to the identical paths:
 
-- ``data``  = ``platformdirs.user_data_dir("datamanifest")/Datasets``
-- ``cache`` = ``platformdirs.user_cache_dir("datamanifest")/Datasets``
-- ``repo``  = ``<project_root>/datasets``
+- ``data``  = ``platformdirs.user_data_dir("datamanifest")``
+- ``cache`` = ``platformdirs.user_cache_dir("datamanifest")``
+- ``repo``  = ``<project_root>``
 
 Per-store precedence (highest first):
 
@@ -133,18 +134,6 @@ def _patched_environ(env):
         os.environ.update(saved)
 
 
-def _default_root(store, project_root, env):
-    """The built-in default root for *store*, before env/config overrides."""
-    if store == "repo":
-        return os.path.join(project_root or "", "datasets")
-    with _patched_environ(env):
-        if store == "cache":
-            base = platformdirs.user_cache_dir("datamanifest")
-        else:  # "data" (and any other store) default under the data root
-            base = platformdirs.user_data_dir("datamanifest")
-    return os.path.join(base, "Datasets")
-
-
 def _normalize(value, store, project_root, env):
     """Expand ``~``/``$VAR`` (honouring *env*) and resolve a relative ``repo``
     value against *project_root*."""
@@ -208,9 +197,9 @@ def store_root(store, *, project_root="", storage_config=None, env=os.environ,
     if raw is None and isinstance(storage_config.get(store), str):
         raw = storage_config[store]
 
-    # 5. Built-in default.
+    # 5. Built-in default (bare root, no content prefix).
     if raw is None:
-        raw = _default_root(store, project_root, env)
+        raw = _bare_default_root(store, project_root, env)
 
     return _normalize(raw, store, project_root, env)
 
@@ -274,58 +263,19 @@ def _interpolate(value, *, project_root, storage_config, env, host, profile,
 
 def folder_root(name, *, project_root="", storage_config=None, env=os.environ,
                 host=None, profile=None, _resolving=()):
-    """Resolve folder variable *name* to its absolute root directory.
+    """Resolve folder variable *name* to its absolute bare root directory.
 
-    Like :func:`store_root` this walks the spec ladder
-    ``DATAMANIFEST_<NAME>_DIR`` → ``_PROFILE`` → ``_HOST`` → ``[_STORAGE].<name>``
-    → built-in default, but it understands the spec-v2 storage model:
+    Delegates to :func:`folder_base` (spec-v3 bare-root resolver). The
+    *profile* parameter is accepted for API compatibility but ignored — the
+    ``_PROFILE`` rung is dropped in spec-v3.
 
-    - **Any** folder variable resolves, not just ``data`` / ``cache`` / ``repo``.
-      A user-defined name with no definition on any rung is an error (only the
-      built-ins have a default).
-    - Values are **path expressions**: ``$NAME`` / ``${NAME}`` interpolates
-      folder variable *NAME* (recursively) when one is defined, otherwise the
-      environment variable *NAME*; ``~`` expands to home.
-    - A folder variable whose value references itself (directly or through a
-      cycle) raises :class:`ValueError`.
-
-    For the built-in folders this returns exactly the paths :func:`store_root`
-    returns today.
-
-    Parameters mirror :func:`store_root`. ``_resolving`` is an internal tuple of
-    folder names currently being expanded, used for cycle detection.
+    Parameters mirror :func:`folder_base`. ``_resolving`` is an internal tuple
+    used for cycle detection.
     """
-    if not name:
-        raise ValueError("folder_root requires a non-empty folder name")
-    if storage_config is None:
-        storage_config = {}
-    if host is None:
-        host = socket.gethostname()
-    if profile is None:
-        profile = env.get("DATAMANIFEST_PROFILE", "")
-
-    if name in _resolving:
-        cycle = " -> ".join((*_resolving, name))
-        raise ValueError(f"folder variable ${name} references itself ({cycle})")
-
-    raw = _folder_raw(name, storage_config, env, host, profile)
-
-    if raw is None:
-        if name not in _BUILTIN_FOLDERS:
-            raise ValueError(
-                f"undefined folder variable ${name}: define it in [_STORAGE], a "
-                f"_HOST/_PROFILE override, or DATAMANIFEST_{name.upper()}_DIR"
-            )
-        # Built-in default roots are already absolute, real paths.
-        return _default_root(name, project_root, env)
-
-    expanded = _interpolate(
-        raw, project_root=project_root, storage_config=storage_config,
-        env=env, host=host, profile=profile, resolving=(*_resolving, name),
+    return folder_base(
+        name, project_root=project_root, storage_config=storage_config,
+        env=env, host=host, _resolving=_resolving,
     )
-    if name == "repo" and not os.path.isabs(expanded):
-        expanded = os.path.join(project_root or "", expanded)
-    return expanded
 
 
 def project_default(storage_config=None):
