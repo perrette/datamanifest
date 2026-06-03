@@ -130,6 +130,19 @@ class CachedIndex:
                 out.add(f"{ctype}/{h}")
         return out
 
+    def scoped_keys(self) -> set:
+        """The set of ``(scope, cachetype, version, hash)`` tuples this index
+        roots — scope-aware reachability, so an artifact under another project's
+        scope is **not** counted as referenced by this index even when its
+        ``cachetype``/``hash`` happen to coincide."""
+        out = set()
+        for entry in self.entries.values():
+            ctype = entry.get("cachetype", "")
+            h = entry.get("hash", "")
+            if ctype and h:
+                out.add((entry.get("scope", ""), ctype, entry.get("version", ""), h))
+        return out
+
     def to_dict(self) -> dict:
         data = {"_META": {"schema": self.SCHEMA}}
         for name, entry in self.entries.items():

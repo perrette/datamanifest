@@ -251,9 +251,10 @@ def test_list_kind_data_lists_fetched_dataset(tmp_path):
     assert "mt/" not in result.stdout  # the cached orphan is filtered out
 
 
-def test_default_list_shows_datasets_and_cached(tmp_path):
-    # The bare `list` (no maintenance flags) renders a human view that groups
-    # fetched datasets and produced artifacts under colour-coded headers.
+def test_default_list_hides_unlisted_cached_unless_all(tmp_path):
+    # The bare `list` (no maintenance flags) renders a human view of fetched
+    # datasets, but cached artifacts this project's cached.toml does not root
+    # are hidden by default and only surface (flagged) under --all.
     cache = tmp_path / "cache"
     _orphan_artifact(cache, "mt", {"g": "5x5"})
     data_file = tmp_path / "external.csv"
@@ -266,13 +267,19 @@ def test_default_list_shows_datasets_and_cached(tmp_path):
     env["DATAMANIFEST_TOML"] = str(toml)
     env["NO_COLOR"] = "1"  # deterministic, escape-free output
 
-    result = _run("list", env=env)
-    assert result.returncode == 0, result.stderr
-    assert "Datasets" in result.stdout
-    assert "Cached" in result.stdout
-    assert "mydata" in result.stdout          # the fetched dataset
-    assert "mt/" in result.stdout             # the produced artifact
-    assert "orphan" in result.stdout          # flagged: no cached.toml root
+    # Default: the fetched dataset shows; the unlisted orphan does not.
+    default = _run("list", env=env)
+    assert default.returncode == 0, default.stderr
+    assert "Datasets" in default.stdout
+    assert "mydata" in default.stdout
+    assert "mt/" not in default.stdout
+
+    # --all surfaces the orphan, flagged.
+    allruns = _run("list", "--all", env=env)
+    assert allruns.returncode == 0, allruns.stderr
+    assert "mydata" in allruns.stdout
+    assert "mt/" in allruns.stdout
+    assert "orphan" in allruns.stdout
 
 
 # ----- init -----

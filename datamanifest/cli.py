@@ -123,16 +123,18 @@ def _enumerate_objects(db):
     # the project's sibling cached.toml.
     cache_root = storage.resolve_selector("$cache")
     prefix = storage.content_prefix("cached")
-    referenced_keys = set()
+    referenced = set()
     base = os.path.dirname(db.datasets_toml) if db.datasets_toml else os.getcwd()
     cached_toml = os.path.join(base or ".", CACHED_INDEX_NAME)
     if os.path.isfile(cached_toml):
         try:
-            referenced_keys = CachedIndex.read(cached_toml).keys()
+            referenced = CachedIndex.read(cached_toml).scoped_keys()
         except Exception:  # noqa: BLE001 - an unreadable index roots nothing
-            referenced_keys = set()
+            referenced = set()
     for obj in enumerate_artifacts(cache_root, prefix=prefix):
-        obj.referenced = obj.key in referenced_keys
+        # Scope-aware: another project's artifact (different scope) is not ours
+        # even when its cachetype/hash coincide.
+        obj.referenced = (obj.scope, obj.cachetype, obj.version, obj.hash) in referenced
         objects.append(obj)
 
     # Present fetched datasets (always referenced — they are manifest entries).
@@ -227,12 +229,15 @@ def _fit(text, width, *, keep_tail=False) -> str:
     return "…" + text[-(width - 1):] if keep_tail else text[: width - 1] + "…"
 
 
-def _default_list_data(db):
+def _default_list_data(db, *, include_unlisted=False):
     """Rows for the human default listing, as ``(datasets, cached)``.
 
-    *datasets* is every manifest entry with present/size/location resolved;
-    *cached* is every produced artifact under ``$cache``, tagged with its
-    registry name and reachability from the sibling ``cached.toml``.
+    *datasets* is every manifest entry with present/size/location resolved.
+    *cached* is, by default, only the produced artifacts **this project's**
+    ``cached.toml`` roots (matched scope-aware, so another project's artifacts
+    are not mistaken for ours). With *include_unlisted* it also walks ``$cache``
+    and appends the rest — orphans and other projects' artifacts — flagged
+    unreferenced.
     """
     from .database import resolve_existing_path
 
@@ -257,7 +262,7 @@ def _default_list_data(db):
 
     base = os.path.dirname(db.datasets_toml) if db.datasets_toml else os.getcwd()
     cached_toml = os.path.join(base or ".", CACHED_INDEX_NAME)
-    names_by_id = {}
+    names_by_id = {}  # (scope, cachetype, version, hash) -> registry name
     if os.path.isfile(cached_toml):
         try:
             idx = CachedIndex.read(cached_toml)
@@ -265,20 +270,26 @@ def _default_list_data(db):
             idx = None
         if idx is not None:
             for nm, e in idx.entries.items():
-                names_by_id[(e.get("cachetype", ""), e.get("hash", ""))] = nm
+                names_by_id[(e.get("scope", ""), e.get("cachetype", ""),
+                             e.get("version", ""), e.get("hash", ""))] = nm
 
     cache_root = storage.resolve_selector("$cache")
     prefix = storage.content_prefix("cached")
     cached = []
     for obj in enumerate_artifacts(cache_root, prefix=prefix):
-        ident = (obj.cachetype, obj.hash)
+        ident = (obj.scope, obj.cachetype, obj.version, obj.hash)
+        referenced = ident in names_by_id
+        # By default show only what this project's cached.toml roots; --all
+        # surfaces orphans and other projects' artifacts too.
+        if not referenced and not include_unlisted:
+            continue
         cached.append({
             "name": names_by_id.get(ident) or f"{obj.cachetype}/{obj.hash[:12]}",
             "scope": obj.scope,
             "format": obj.format,
             "size": obj.size,
             "location": obj.location,
-            "referenced": ident in names_by_id,
+            "referenced": referenced,
         })
     return datasets, cached
 
@@ -287,8 +298,9 @@ def _print_default_list(db, args):
     """The default ``datamanifest list`` view: one styled line per object,
     datasets and cached artifacts grouped and color-coded, sized to the
     terminal width. ``--present`` / ``--missing`` keep their plain name-only
-    output (scriptable)."""
-    datasets, cached = _default_list_data(db)
+    output (scriptable); ``--all`` also lists cached artifacts this project's
+    ``cached.toml`` does not root (orphans and other projects')."""
+    datasets, cached = _default_list_data(db, include_unlisted=getattr(args, "all", False))
 
     if args.present or args.missing:
         for d in datasets:
@@ -746,10 +758,12 @@ def main():
         "list",
         help="List datasets, or inspect/maintain stored objects",
         description=(
-            "With no flags (or --present/--missing/--all), list dataset names. "
-            "Any maintenance flag switches to the object view: produced (cached) "
-            "artifacts and fetched datasets with their fields, plus the explicit "
-            "--delete / --move actions (dry run unless --yes)."
+            "With no maintenance flags, list fetched datasets and the cached "
+            "artifacts this project's cached.toml roots (--all also shows "
+            "orphans and other projects'; --present/--missing print plain "
+            "dataset names). Any maintenance flag switches to the object view: "
+            "produced (cached) artifacts and fetched datasets with their fields, "
+            "plus the explicit --delete / --move actions (dry run unless --yes)."
         ),
     )
     filter_group = p_list.add_argument_group("name filter")
@@ -761,7 +775,9 @@ def main():
         "--missing", action="store_true", help="Show only missing datasets"
     )
     _excl.add_argument(
-        "--all", action="store_true", help="Show all datasets (default)"
+        "--all", action="store_true",
+        help="In the default view, also list cached artifacts this project's "
+             "cached.toml does not root (orphans and other projects')",
     )
     obj_group = p_list.add_argument_group("object view (maintenance)")
     obj_group.add_argument(
