@@ -236,6 +236,18 @@ def to_dict(entry: DatasetEntry) -> dict:
             "lang_python_loader_kwargs",
         }:
             continue
+        # Bare bindings (spec-v3.4): `fetcher`/`loader` are emitted below via
+        # _python_binding (string when bare, table when carrying args/kwargs);
+        # their paired *_args/*_kwargs fields are never written as flat keys.
+        if name in {
+            "fetcher",
+            "fetcher_args",
+            "fetcher_kwargs",
+            "loader",
+            "loader_args",
+            "loader_kwargs",
+        }:
+            continue
         # `delegate` defaults to True (delegation on); only the non-default
         # opt-out (`delegate = false`) is written, so the common case stays
         # absent from the manifest.
@@ -253,6 +265,19 @@ def to_dict(entry: DatasetEntry) -> dict:
         if name == "store" and value == "":
             continue
         output[name] = value
+    # Bare bindings (spec-v3.4): keep them BARE on write — never promote a bare
+    # `fetcher`/`loader` into [<ds>._LANG.python]. Emit each as a top-level
+    # dataset key via _python_binding (a string when it carries no args/kwargs,
+    # a { ref, args, kwargs } table otherwise). `shell` is already written as a
+    # plain top-level string by the field loop above (spec-v3.5 canonical form).
+    if entry.fetcher:
+        output["fetcher"] = _python_binding(
+            entry.fetcher, entry.fetcher_args, entry.fetcher_kwargs
+        )
+    if entry.loader:
+        output["loader"] = _python_binding(
+            entry.loader, entry.loader_args, entry.loader_kwargs
+        )
     # Re-emit preserved extension keys verbatim (cross-language passthrough).
     # Appended last so any table-valued extra serializes after scalar fields.
     # `_LANG` is handled specially below: its foreign subtrees are spliced in
@@ -1267,6 +1292,8 @@ class Database:
             and self.datasets_folder == other.datasets_folder
             and self.datasets_toml == other.datasets_toml
             and self.loaders == other.loaders
+            and self.loaders_args == other.loaders_args
+            and self.loaders_kwargs == other.loaders_kwargs
             and self.loaders_python_includes == other.loaders_python_includes
             and self.lang_python_loaders == other.lang_python_loaders
             and self.lang_python_loaders_args == other.lang_python_loaders_args
@@ -1296,12 +1323,19 @@ class Database:
 
     # ----- TOML serialization (Databases.jl:184-258) -----
     def to_dict(self) -> dict:
+        # [_LOADERS] is a bare, language-implicit format→binding map (spec-v3.4):
+        # written back as a bare map, each value a string when it carries no
+        # args/kwargs, a { ref, args, kwargs } table otherwise (via
+        # _python_binding). It is preserved bare — never promoted into
+        # [_LANG.python.loaders].
         loaders_table: dict = {}
         if self.loaders_python_includes:
             loaders_table["python_includes"] = list(self.loaders_python_includes)
         for n, c in self.loaders.items():
             if not _is_empty(c):
-                loaders_table[n] = c
+                loaders_table[n] = _python_binding(
+                    c, self.loaders_args.get(n), self.loaders_kwargs.get(n)
+                )
         result: dict = {}
         if loaders_table:
             result["_LOADERS"] = loaders_table
@@ -1385,9 +1419,10 @@ class Database:
 
         _legacy: set = set()
 
+        # [_LOADERS] is a supported (spec-v3.4 language-implicit) form, not a
+        # legacy one, so reading it does not trigger the migrate warning.
         loaders_section = datasets.get("_LOADERS", datasets.get("_loaders"))
         if isinstance(loaders_section, dict):
-            _legacy.add("_LOADERS")
             includes = loaders_section.get(
                 "python_includes", loaders_section.get("julia_includes", [])
             )
@@ -1457,7 +1492,10 @@ class Database:
         names = [k for k in datasets if not k.startswith("_")]
         for i, name in enumerate(names):
             info = dict(datasets[name])
-            for _leg in ("python", "callable", "shell", "loader"):
+            # Only the inline-code language-named flat fields are legacy
+            # (spec Deprecations). Bare `fetcher`/`loader`/`shell` are supported
+            # spec-v3.4/v3.5 forms and do not trigger the migrate warning.
+            for _leg in ("python", "callable"):
                 if info.get(_leg):
                     _legacy.add(_leg)
             persist_on_last_iteration = persist and i == len(names) - 1
