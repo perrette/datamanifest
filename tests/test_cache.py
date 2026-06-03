@@ -39,11 +39,22 @@ def test_param_hash_accepts_str_int_bool_nested():
     param_hash({"s": "x", "i": 3, "b": True, "arr": [1, 2], "obj": {"k": "v"}})
 
 
-def test_param_hash_rejects_float():
+def test_param_hash_accepts_finite_float():
+    # finite floats are valid hash inputs and hash deterministically.
+    assert param_hash({"x": 1.5}) == param_hash({"x": 1.5})
+    # a float and an int that render differently are distinct keys.
+    assert param_hash({"x": 1.0}) != param_hash({"x": 1})
+    param_hash({"nested": {"a": [1, 2.0]}})  # finite floats anywhere are fine
+
+
+def test_param_hash_rejects_nonfinite_float():
+    import math
+
+    for bad in (math.nan, math.inf, -math.inf):
+        with pytest.raises(ValueError):
+            param_hash({"x": bad})
     with pytest.raises(ValueError):
-        param_hash({"x": 1.5})
-    with pytest.raises(ValueError):
-        param_hash({"nested": {"a": [1, 2.0]}})
+        param_hash({"nested": [1, math.inf]})
 
 
 def test_param_hash_rejects_none():
