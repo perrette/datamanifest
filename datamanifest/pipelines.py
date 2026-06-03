@@ -696,6 +696,30 @@ def download_dataset(db, dataset, extract=None, overwrite: bool = False):
             verify_checksum(db, dataset, extract=extract, skip_if_complete=True)
             return existing
 
+    # Fetch-ladder rung 3 — cross-language fetch (the rare case). Reached only
+    # when this Python tool has no native fetcher and no shell fetcher
+    # (resolve_fetcher returns no python/shell binding), delegation is enabled
+    # for the entry, and a foreign-language fetcher binding is present. The
+    # foreign runtime (Julia's DataManifest) materializes the dataset into the
+    # shared store; Python then reads it from disk. On any failure or a missing
+    # toolchain the ladder advances to rung 4 (uri) — probe failure is normal,
+    # so it falls through silently.
+    if (
+        not dataset.uris
+        and resolve_fetcher(dataset)[0] not in ("python", "shell")
+        and getattr(dataset, "delegate", True)
+    ):
+        from . import delegation
+
+        if delegation.foreign_fetcher_lang(dataset) is not None:
+            delegated = delegation.delegate_fetch(
+                db, dataset, name, project_root=project_root
+            )
+            if delegated is not None:
+                logger.info("Dataset materialized via delegation at: %s", delegated)
+                verify_checksum(db, dataset, extract=extract, skip_if_complete=True)
+                return delegated
+
     if overwrite or not (os.path.isfile(download_path) or os.path.isdir(download_path)):
         logger.info("Downloading dataset: %s to %s", dataset.uri, download_path)
         req_paths_by_ref: dict = {}
