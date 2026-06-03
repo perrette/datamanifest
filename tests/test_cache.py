@@ -75,6 +75,17 @@ def cache_root(tmp_path, monkeypatch):
     return root
 
 
+@pytest.fixture
+def scope_base(cache_root):
+    """The spec-v3 project-scoped base a bare ``@cached`` (no ``project_root``)
+    materializes under: ``<cache>/cached/<project-id>/``. The project-id of a
+    bare produce is the path-hash of the cwd (here ``tmp_path``, chdir'd into by
+    the ``cache_root`` fixture)."""
+    from datamanifest.store.locations import project_id
+
+    return cache_root / "cached" / project_id("")
+
+
 def test_cached_rejects_positional_args(cache_root):
     @cached(cachetype="t", format="txt")
     def produce(*, name):
@@ -84,7 +95,7 @@ def test_cached_rejects_positional_args(cache_root):
         produce("positional")
 
 
-def test_cached_round_trip_miss_then_hit(cache_root):
+def test_cached_round_trip_miss_then_hit(cache_root, scope_base):
     calls = {"n": 0}
 
     @cached(cachetype="greeting", format="txt")
@@ -98,7 +109,7 @@ def test_cached_round_trip_miss_then_hit(cache_root):
     assert calls["n"] == 1
 
     h = param_hash({"name": "world"})
-    artifact_dir = cache_root / "greeting" / h
+    artifact_dir = scope_base / "greeting" / h
     assert (artifact_dir / "data.txt").read_text() == "hello world"
     assert (artifact_dir / "config.toml").exists()
     assert (artifact_dir / "metadata.toml").exists()
@@ -129,18 +140,18 @@ def test_cached_round_trip_miss_then_hit(cache_root):
     assert meta_after == meta_before
 
 
-def test_cached_distinct_params_distinct_artifacts(cache_root):
+def test_cached_distinct_params_distinct_artifacts(cache_root, scope_base):
     @cached(cachetype="g", format="txt")
     def produce(*, name):
         return f"hi {name}"
 
     produce(name="a")
     produce(name="b")
-    assert (cache_root / "g" / param_hash({"name": "a"}) / "data.txt").exists()
-    assert (cache_root / "g" / param_hash({"name": "b"}) / "data.txt").exists()
+    assert (scope_base / "g" / param_hash({"name": "a"}) / "data.txt").exists()
+    assert (scope_base / "g" / param_hash({"name": "b"}) / "data.txt").exists()
 
 
-def test_cached_underscore_kwargs_excluded_from_hash(cache_root):
+def test_cached_underscore_kwargs_excluded_from_hash(cache_root, scope_base):
     seen = {}
 
     @cached(cachetype="g", format="json")
@@ -151,14 +162,14 @@ def test_cached_underscore_kwargs_excluded_from_hash(cache_root):
     produce(name="x", _debug=True)
     # The hash key ignores _debug; the artifact lands at hash({"name":"x"}).
     h = param_hash({"name": "x"})
-    artifact = cache_root / "g" / h / "data.json"
+    artifact = scope_base / "g" / h / "data.json"
     assert artifact.exists()
     with open(artifact) as fh:
         assert json.load(fh) == {"name": "x"}
     assert seen["debug"] is True  # but the body still saw the runtime knob
 
 
-def test_cached_escape_hatch_forces_recompute(cache_root):
+def test_cached_escape_hatch_forces_recompute(cache_root, scope_base):
     calls = {"n": 0}
 
     @cached(cachetype="g", format="txt")
@@ -174,10 +185,10 @@ def test_cached_escape_hatch_forces_recompute(cache_root):
     assert calls["n"] == 2
     # The re-materialized artifact reflects the recompute.
     h = param_hash({"name": "z"})
-    assert (cache_root / "g" / h / "data.txt").read_text() == "z-2"
+    assert (scope_base / "g" / h / "data.txt").read_text() == "z-2"
 
 
-def test_cached_key_selector_narrows_table(cache_root):
+def test_cached_key_selector_narrows_table(cache_root, scope_base):
     @cached(cachetype="g", format="txt", key=["name"])
     def produce(*, name, region):
         return f"{name}/{region}"
@@ -185,6 +196,76 @@ def test_cached_key_selector_narrows_table(cache_root):
     produce(name="n", region="r1")
     # Only `name` is hashed; the artifact dir keys on {"name": "n"} alone.
     h = param_hash({"name": "n"})
-    artifact_dir = cache_root / "g" / h
+    artifact_dir = scope_base / "g" / h
     assert (artifact_dir / "data.txt").exists()
     assert config_key_table(read_config(str(artifact_dir))) == {"name": "n"}
+
+
+# ----- spec-v3 path composition: cached/ prefix + project-id scope -----------
+
+def test_cached_produce_lands_under_cached_project_scope(cache_root, scope_base):
+    @cached(cachetype="t", format="txt")
+    def produce(*, name):
+        return name
+
+    produce(name="v")
+    h = param_hash({"name": "v"})
+    # <cache>/cached/<project-id>/t/<hash>/data.txt
+    assert (scope_base / "t" / h / "data.txt").read_text() == "v"
+    # the cached/ prefix and the project-id scope are real path segments
+    assert scope_base.parent.name == "cached"
+    assert scope_base.parent.parent == cache_root
+
+
+# ----- spec-v3 recipe version ------------------------------------------------
+
+def test_cached_version_adds_path_segment_not_in_hash(cache_root, scope_base):
+    @cached(cachetype="t", format="txt", version="v3")
+    def produce(*, name):
+        return name
+
+    produce(name="w")
+    # version does not change the param hash ...
+    h = param_hash({"name": "w"})
+    # ... it inserts a <cachetype>/<version>/<hash> segment.
+    artifact_dir = scope_base / "t" / "v3" / h
+    assert (artifact_dir / "data.txt").read_text() == "w"
+    # version is recorded in config.toml's [_META] (never in the key table).
+    config = read_config(str(artifact_dir))
+    assert config["_META"]["version"] == "v3"
+    assert config_key_table(config) == {"name": "w"}
+    assert config_is_valid(str(artifact_dir))
+
+
+def test_cached_version_same_hash_as_unversioned(cache_root, scope_base):
+    @cached(cachetype="t", format="txt")
+    def plain(*, name):
+        return name
+
+    @cached(cachetype="t", format="txt", version="v9")
+    def versioned(*, name):
+        return name
+
+    plain(name="k")
+    versioned(name="k")
+    h = param_hash({"name": "k"})
+    # Same kwargs hash to the same <hash> with or without a version; the version
+    # only differs as a path segment.
+    assert (scope_base / "t" / h / "data.txt").exists()
+    assert (scope_base / "t" / "v9" / h / "data.txt").exists()
+
+
+# ----- spec-v3 explicit per-call cache_dir bypass ----------------------------
+
+def test_cached_cache_dir_is_verbatim(cache_root, tmp_path):
+    @cached(cachetype="t", format="txt", version="v2")
+    def produce(*, name):
+        return name
+
+    explicit = tmp_path / "explicit"
+    produce(name="q", cache_dir=str(explicit))
+    h = param_hash({"name": "q"})
+    # <cache_dir>/<cachetype>/[<version>/]<hash> — no cached/ prefix, no scope.
+    assert (explicit / "t" / "v2" / h / "data.txt").read_text() == "q"
+    # nothing landed under the composed $cache root.
+    assert not (cache_root / "cached").exists()

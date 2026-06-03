@@ -54,17 +54,23 @@ METADATA_NAME = "metadata.toml"
 
 # ----- config.toml -----------------------------------------------------------
 
-def write_config(directory: str, cachetype: str, hash: str, key_table: dict) -> str:
+def write_config(directory: str, cachetype: str, hash: str, key_table: dict,
+                 version: str = "") -> str:
     """Write ``<directory>/config.toml`` for a produced artifact.
 
     The file is the *key table* verbatim (the hash-affecting parameters) plus a
-    ``[_META]`` block (``schema``, ``cachetype``, ``hash``), so any tool can
-    recompute :func:`param_hash` over the key table and confirm the directory's
-    identity. Returns the path written.
+    ``[_META]`` block (``schema``, ``cachetype``, ``hash``, and the spec-v3
+    recipe ``version`` when set), so any tool can recompute :func:`param_hash`
+    over the key table and confirm the directory's identity. ``version`` is
+    recorded in ``[_META]`` (never in the key table), so it does not affect the
+    recomputed hash. Returns the path written.
     """
     os.makedirs(directory, exist_ok=True)
     data = dict(key_table)
-    data["_META"] = {"schema": 1, "cachetype": cachetype, "hash": hash}
+    meta = {"schema": 1, "cachetype": cachetype, "hash": hash}
+    if version:
+        meta["version"] = version
+    data["_META"] = meta
     path = os.path.join(directory, CONFIG_NAME)
     with open(path, "wb") as f:
         tomli_w.dump(_canonical(data), f)

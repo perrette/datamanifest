@@ -19,6 +19,7 @@ from datamanifest.cache import (
 )
 from datamanifest.cache._gc import find_produced_artifacts
 from datamanifest.cache._sidecars import write_config
+from datamanifest.store.locations import project_id
 
 
 # ----- fixtures --------------------------------------------------------------
@@ -121,9 +122,12 @@ def test_cached_produce_registers_and_back_points(cache_root, usage_log, tmp_pat
     assert ":" in entry["ref"]
     assert entry["ref"].split(":", 1)[1].endswith("make_greeting")
     assert entry["store"] == "$cache"
+    # spec-v3: the entry records the project-id scope it was produced under.
+    assert entry["project"] == project_id(str(proj))
 
-    # Artifact metadata back-points at that index (audit only).
-    artifact = cache_root / "greet" / entry["hash"]
+    # Artifact metadata back-points at that index (audit only). spec-v3 layout:
+    # <cache>/cached/<project-id>/<cachetype>/<hash>.
+    artifact = cache_root / "cached" / project_id(str(proj)) / "greet" / entry["hash"]
     md = read_metadata(str(artifact))
     assert md["origin"]["cached_toml"] == os.path.abspath(str(index_path))
 
@@ -143,9 +147,11 @@ def test_cached_hit_does_not_duplicate_or_restamp(cache_root, usage_log, tmp_pat
 
     make_greeting(who="x")
     index_path = proj / "cached.toml"
-    metadata_path = cache_root / "greet" / CachedIndex.read(
-        str(index_path)
-    ).entries["make_greeting"]["hash"] / "metadata.toml"
+    artifact_hash = CachedIndex.read(str(index_path)).entries["make_greeting"]["hash"]
+    metadata_path = (
+        cache_root / "cached" / project_id(str(proj)) / "greet"
+        / artifact_hash / "metadata.toml"
+    )
     first_index = index_path.read_bytes()
     first_meta_mtime = metadata_path.stat().st_mtime
 
