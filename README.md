@@ -4,9 +4,9 @@
 ![python](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2Fperrette%2Fdatamanifest%2Frefs%2Fheads%2Fmain%2Fpyproject.toml)
 [![CI](https://github.com/perrette/datamanifest/actions/workflows/ci.yaml/badge.svg)](https://github.com/perrette/datamanifest/actions/workflows/ci.yaml)
 
-Keep track of datasets used in a scientific project.
+Keep track of datasets used in a scientific project: data dependencies and internal caching.
 
-`datamanifest` provides a simple way to declare data dependencies — URLs, git repositories, checksums, formats — in a `datasets.toml` file, and handles download, verification, extraction, and loading. It is a Python port of [`DataManifest.jl`](https://github.com/awi-esc/DataManifest.jl) (same author), with the same manifest format and feature surface.
+`datamanifest` provides a simple way to declare data dependencies — URLs, git repositories, checksums, formats — in a `datasets.toml` file, and handles download, verification, extraction, and loading. It can now also cache your own computed results (versioned), reusing the same infrastructure. `datamanifest` started as a Python port of [`DataManifest.jl`](https://github.com/awi-esc/DataManifest.jl) (same author), sharing its manifest format and feature surface; it has since grown a CLI and now develops in parallel as the Python implementation of a [multi-language specification](https://github.com/perrette/datamanifest.toml).
 
 ## Installation
 
@@ -299,7 +299,7 @@ A single `datasets.toml` can be consumed by both tools: each reads the common fi
 
 ## Related projects
 
-**The DataManifest family (one manifest, many languages).** `datamanifest` shares its `datasets.toml` format with sibling implementations in other languages, so a project in any of them reads the same declaration:
+**The DataManifest family (one manifest, many languages).** `datamanifest` shares its [`datasets.toml` format](https://github.com/perrette/datamanifest.toml) with sibling implementations in other languages, so a project in any of them reads the same declaration:
 
 - [`awi-esc/DataManifest.jl`](https://github.com/awi-esc/DataManifest.jl) — the Julia implementation this port is based on, sharing the same `datasets.toml` via the `_LANG` namespace.
 
