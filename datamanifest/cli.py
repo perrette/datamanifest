@@ -10,6 +10,7 @@ DATAMANIFEST_TOML env-var or a cwd-upward walk (Item 17).
 """
 
 import argparse
+import datetime
 import os
 import sys
 
@@ -28,38 +29,224 @@ def _get_db():
 
 # ----- subcommand implementations -----
 
-def _cmd_list(args):
-    db = _get_db()
+# Fields a maintenance object exposes, in display order. ``key``/``hash`` and
+# the timestamps double as the spec-v3 ``datamanifest list`` object schema.
+_OBJECT_FIELDS = (
+    "kind", "key", "hash", "cachetype", "version", "scope", "format",
+    "size", "location", "referenced", "created", "last-access",
+)
+_DEFAULT_OBJECT_FIELDS = ("kind", "referenced", "key", "location")
+
+
+def _object_size(path: str) -> int:
+    """Total bytes of *path* (a file, or every file under a directory)."""
+    if os.path.isfile(path):
+        try:
+            return os.path.getsize(path)
+        except OSError:
+            return 0
+    from .cache._inspect import _dir_size
+
+    return _dir_size(path)
+
+
+def _get_field(obj, name: str) -> str:
+    """Render the maintenance field *name* of *obj* for display."""
+    attr = "last_access" if name == "last-access" else name
+    val = getattr(obj, attr, "")
+    if name == "referenced":
+        return {True: "true", False: "false", None: "?"}[val]
+    return "" if val is None else str(val)
+
+
+def _age_seconds(iso: str, now: float):
+    """Seconds between *now* (epoch) and the RFC-3339 stamp *iso* (``None`` when
+    *iso* is empty or unparseable)."""
+    if not iso:
+        return None
+    try:
+        dt = datetime.datetime.strptime(iso, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=datetime.timezone.utc
+        )
+    except ValueError:
+        return None
+    return now - dt.timestamp()
+
+
+def _is_maintenance(args) -> bool:
+    """True when any object-view / maintenance flag is set on ``list``."""
+    return any((
+        args.kind, args.scope, args.format, args.orphan,
+        args.older_than, args.fields, args.delete, args.move,
+    ))
+
+
+def _enumerate_objects(db):
+    """The composition root: enumerate produced artifacts (cache layer) and
+    fetched datasets (fetch layer) as a single list of maintenance objects.
+
+    Reachability is resolved here — the one place that bridges both layers: a
+    produced artifact is ``referenced`` iff its portable key is rooted by the
+    project's ``cached.toml``; a present fetched dataset is referenced by its
+    manifest entry. The cache-layer enumeration itself imports only ``store``.
+    """
+    from . import storage
+    from .cache import CACHED_INDEX_NAME, CachedIndex, enumerate_artifacts
+    from .cache._inspect import CacheObject
+    from .cache._usage import iso_from_mtime, last_access
     from .database import resolve_existing_path
 
-    present = []
-    missing = []
+    objects = []
+
+    # Produced artifacts under the resolved $cache root, tagged referenced via
+    # the project's sibling cached.toml.
+    cache_root = storage.resolve_selector("$cache")
+    prefix = storage.content_prefix("cached")
+    referenced_keys = set()
+    base = os.path.dirname(db.datasets_toml) if db.datasets_toml else os.getcwd()
+    cached_toml = os.path.join(base or ".", CACHED_INDEX_NAME)
+    if os.path.isfile(cached_toml):
+        try:
+            referenced_keys = CachedIndex.read(cached_toml).keys()
+        except Exception:  # noqa: BLE001 - an unreadable index roots nothing
+            referenced_keys = set()
+    for obj in enumerate_artifacts(cache_root, prefix=prefix):
+        obj.referenced = obj.key in referenced_keys
+        objects.append(obj)
+
+    # Present fetched datasets (always referenced — they are manifest entries).
     for name, entry in db.datasets.items():
         try:
             path = resolve_existing_path(db, entry)
-        except Exception:
-            missing.append(name)
+        except Exception:  # noqa: BLE001 - unresolvable entry is not on disk
             continue
-        if os.path.isfile(path) or os.path.isdir(path):
-            present.append(name)
-        else:
-            missing.append(name)
+        if not (os.path.isfile(path) or os.path.isdir(path)):
+            continue
+        objects.append(CacheObject(
+            kind="datasets",
+            location=os.path.abspath(path),
+            key=name,
+            format=getattr(entry, "format", "") or "",
+            size=_object_size(path),
+            created=iso_from_mtime(path),
+            last_access=last_access(path),
+            referenced=True,
+        ))
+    return objects
 
-    if args.present:
-        for name in present:
-            print(name)
-    elif args.missing:
-        for name in missing:
-            print(name)
-    else:
-        # Default and --all: present first, separator, then missing.
-        for name in present:
-            print(name)
-        if missing:
-            print()
-            print("# missing")
+
+def _filter_objects(objects, args):
+    """Apply the ``list`` filter flags (``--kind``/``--scope``/``--format``/
+    ``--orphan``/``--older-than``) to *objects*."""
+    out = objects
+    if args.kind:
+        out = [o for o in out if o.kind == args.kind]
+    if args.scope is not None:
+        out = [o for o in out if o.scope == args.scope]
+    if args.format:
+        out = [o for o in out if o.format == args.format]
+    if args.orphan:
+        out = [o for o in out if o.referenced is False]
+    if args.older_than:
+        seconds = _parse_duration(args.older_than)
+        now = datetime.datetime.now(datetime.timezone.utc).timestamp()
+        kept = []
+        for o in out:
+            age = _age_seconds(o.last_access, now)
+            if age is not None and age > seconds:
+                kept.append(o)
+        out = kept
+    return out
+
+
+def _cmd_list(args):
+    db = _get_db()
+
+    if not _is_maintenance(args):
+        # Legacy name listing: present datasets first, then the missing ones.
+        from .database import resolve_existing_path
+
+        present, missing = [], []
+        for name, entry in db.datasets.items():
+            try:
+                path = resolve_existing_path(db, entry)
+            except Exception:
+                missing.append(name)
+                continue
+            if os.path.isfile(path) or os.path.isdir(path):
+                present.append(name)
+            else:
+                missing.append(name)
+
+        if args.present:
+            for name in present:
+                print(name)
+        elif args.missing:
             for name in missing:
                 print(name)
+        else:
+            for name in present:
+                print(name)
+            if missing:
+                print()
+                print("# missing")
+                for name in missing:
+                    print(name)
+        return
+
+    # ----- maintenance object view -----
+    objects = _filter_objects(_enumerate_objects(db), args)
+
+    if args.delete or args.move:
+        _maintain(objects, args)
+        return
+
+    fields = (
+        [f.strip() for f in args.fields.split(",") if f.strip()]
+        if args.fields else list(_DEFAULT_OBJECT_FIELDS)
+    )
+    for obj in objects:
+        print("\t".join(_get_field(obj, f) for f in fields))
+
+
+def _maintain(objects, args):
+    """Run ``--delete`` / ``--move`` over the selected *objects*.
+
+    Both default to a **dry run** (report only); ``--yes`` performs the action.
+    Only produced (``kind="cached"``) artifacts are eligible — fetched datasets,
+    ``$data``/``$repo`` and ``local_path`` data are reported as skipped and never
+    touched.
+    """
+    from .cache import delete_object, move_object
+
+    do_it = args.yes
+    if args.move:
+        verb = "Moved" if do_it else "Would move"
+    else:
+        verb = "Deleted" if do_it else "Would delete"
+
+    acted = 0
+    for obj in objects:
+        if obj.kind != "cached":
+            print(f"Skipped ({obj.kind}, protected): {obj.location}")
+            continue
+        if args.move:
+            dest = os.path.join(args.move, obj.cachetype, obj.hash) if not obj.version \
+                else os.path.join(args.move, obj.cachetype, obj.version, obj.hash)
+            print(f"{verb}: {obj.key}  {obj.location} -> {dest}")
+            if do_it:
+                move_object(obj, args.move)
+        else:
+            print(f"{verb}: {obj.key}  {obj.location}")
+            if do_it:
+                delete_object(obj)
+        acted += 1
+
+    noun = "artifact" if acted == 1 else "artifacts"
+    if not do_it:
+        print(f"{verb}: {acted} produced {noun} (dry run; pass --yes to apply)")
+    else:
+        print(f"{verb}: {acted} produced {noun}")
 
 
 def _cmd_download(args):
@@ -247,15 +434,11 @@ _DURATION_UNITS = {
     "w": 604800, "wk": 604800, "week": 604800, "weeks": 604800,
 }
 
-# GC default grace age — produced artifacts younger than this are kept even when
-# unreferenced, so an in-flight produce is never reclaimed out from under a
-# concurrent reader. Seven days mirrors Julia's depot GC default sensibility.
-_GC_DEFAULT_GRACE = "7d"
-
-
 def _parse_duration(text: str) -> float:
     """Parse a human duration (``"7d"``, ``"36h"``, ``"3600"``, ``"90 s"``) into
-    seconds. A bare number is seconds. Raises ``ValueError`` on a bad unit."""
+    seconds. A bare number is seconds. Raises ``ValueError`` on a bad unit.
+
+    Backs the ``datamanifest list --older-than`` age filter."""
     s = str(text).strip().lower()
     if not s:
         raise ValueError("empty duration")
@@ -275,98 +458,6 @@ def _parse_duration(text: str) -> float:
             "(s/m/h/d/w), e.g. '7d', '36h', '3600'"
         )
     return float(num) * _DURATION_UNITS[unit]
-
-
-def _cmd_gc(args):
-    """Reclaim unreferenced produced (@cached) artifacts under the $cache folder.
-
-    Composition root (the one place that bridges both layers): it gathers the
-    live root set from the cache layer's usage log plus the active
-    datasets.toml / cached.toml, computes the union of produced live keys (every
-    cached.toml) and fetched $cache live keys (every datasets.toml, via the fetch
-    layer's Database), then hands that to the cache-layer GC collector, which
-    walks only the resolved $cache folder.
-    """
-    from . import storage
-    from .cache import CachedIndex, collect, known_paths, prune_missing, record_path
-    from .cache._index import CACHED_INDEX_NAME
-    from .database import Database
-
-    try:
-        grace = _parse_duration(args.grace)
-    except ValueError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    # 1. Discover root files: the usage log, plus the active project's
-    #    datasets.toml / cached.toml (recorded so future runs find them too).
-    prune_missing()
-    root_paths = set(known_paths())
-
-    active_toml = ""
-    try:
-        from .config import get_default_toml
-        active_toml = get_default_toml() or ""
-    except Exception:  # noqa: BLE001 - no active project is fine
-        active_toml = ""
-    if active_toml and os.path.isfile(active_toml):
-        root_paths.add(os.path.abspath(active_toml))
-        sibling = os.path.join(os.path.dirname(active_toml), CACHED_INDEX_NAME)
-        if os.path.isfile(sibling):
-            root_paths.add(os.path.abspath(sibling))
-            record_path(sibling)
-
-    # 2/3. Build the live key set from every still-existing root.
-    live_keys = set()
-    cached_indexes = []
-    datasets_tomls = []
-    for path in sorted(root_paths):
-        if not os.path.isfile(path):
-            continue
-        base = os.path.basename(path)
-        if base == CACHED_INDEX_NAME:
-            cached_indexes.append(path)
-        else:
-            datasets_tomls.append(path)
-
-    # Produced live keys: every still-existing cached.toml (cache layer only).
-    for path in cached_indexes:
-        try:
-            live_keys |= CachedIndex.read(path).keys()
-        except Exception as e:  # noqa: BLE001 - skip an unreadable index
-            print(f"Warning: skipping {path}: {e}", file=sys.stderr)
-
-    # Fetched $cache live keys: every still-existing datasets.toml (fetch layer).
-    # A fetched entry whose resolved store selector is $cache is a root, keyed by
-    # its entry.key, so it is never collected.
-    for path in datasets_tomls:
-        try:
-            db = Database(datasets_toml=path, persist=False)
-        except Exception as e:  # noqa: BLE001 - skip an unreadable manifest
-            print(f"Warning: skipping {path}: {e}", file=sys.stderr)
-            continue
-        proj = db.get_project_root()
-        for entry in db.datasets.values():
-            selector = entry.store or storage.project_default(db.storage_config)
-            name, _, _sub = selector.lstrip("$").partition("/")
-            if name == "cache" and entry.key:
-                live_keys.add(entry.key)
-
-    # 4. Resolve the single $cache root and collect.
-    cache_root = storage.resolve_selector("$cache")
-    candidates = collect(
-        cache_root, live_keys,
-        grace_seconds=grace, dry_run=args.dry_run,
-    )
-
-    verb = "Would collect" if args.dry_run else "Collected"
-    if not candidates:
-        kept = "(nothing unreferenced past the grace age)"
-        print(f"{verb}: 0 produced artifacts {kept}")
-        return
-    for cand in candidates:
-        print(f"{verb}: {cand.key}  {cand.path}")
-    print(f"{verb}: {len(candidates)} produced artifact(s) under {cache_root}")
 
 
 def _cmd_migrate(args):
@@ -398,11 +489,18 @@ def main():
     subparsers = parser.add_subparsers(dest="command", metavar="COMMAND")
     subparsers.required = True
 
-    # list
+    # list — dataset listing + the spec-v3 store-maintenance surface.
     p_list = subparsers.add_parser(
-        "list", help="List datasets (present first, then missing)"
+        "list",
+        help="List datasets, or inspect/maintain stored objects",
+        description=(
+            "With no flags (or --present/--missing/--all), list dataset names. "
+            "Any maintenance flag switches to the object view: produced (cached) "
+            "artifacts and fetched datasets with their fields, plus the explicit "
+            "--delete / --move actions (dry run unless --yes)."
+        ),
     )
-    filter_group = p_list.add_argument_group("filter")
+    filter_group = p_list.add_argument_group("name filter")
     _excl = filter_group.add_mutually_exclusive_group()
     _excl.add_argument(
         "--present", action="store_true", help="Show only present datasets"
@@ -412,6 +510,48 @@ def main():
     )
     _excl.add_argument(
         "--all", action="store_true", help="Show all datasets (default)"
+    )
+    obj_group = p_list.add_argument_group("object view (maintenance)")
+    obj_group.add_argument(
+        "--kind", choices=["datasets", "cached"],
+        help="Only objects of this kind (fetched datasets / produced artifacts)",
+    )
+    obj_group.add_argument(
+        "--scope", metavar="SCOPE",
+        help="Only objects under this scope segment (e.g. a project-id)",
+    )
+    obj_group.add_argument(
+        "--format", metavar="FMT", help="Only objects in this serialization format"
+    )
+    obj_group.add_argument(
+        "--orphan", action="store_true",
+        help="Only unreferenced produced artifacts (no cached.toml root)",
+    )
+    obj_group.add_argument(
+        "--older-than", dest="older_than", metavar="AGE",
+        help="Only objects last accessed more than AGE ago (e.g. 7d, 36h, 3600)",
+    )
+    obj_group.add_argument(
+        "--fields", metavar="F1,F2,...",
+        help=(
+            "Comma-separated fields to print (default: "
+            + ",".join(_DEFAULT_OBJECT_FIELDS)
+            + "). Available: " + ",".join(_OBJECT_FIELDS) + "."
+        ),
+    )
+    act_group = p_list.add_argument_group("object actions (maintenance)")
+    _act_excl = act_group.add_mutually_exclusive_group()
+    _act_excl.add_argument(
+        "--delete", action="store_true",
+        help="Delete the selected produced artifacts (dry run unless --yes)",
+    )
+    _act_excl.add_argument(
+        "--move", metavar="DEST",
+        help="Move the selected produced artifacts under DEST (dry run unless --yes)",
+    )
+    act_group.add_argument(
+        "--yes", "-y", action="store_true",
+        help="Actually perform --delete / --move (otherwise a dry run)",
     )
     p_list.set_defaults(func=_cmd_list)
 
@@ -533,27 +673,6 @@ def main():
         help="Rewrite FILE in place instead of writing to stdout",
     )
     p_format.set_defaults(func=_cmd_format)
-
-    # gc
-    p_gc = subparsers.add_parser(
-        "gc",
-        help="Reclaim unreferenced produced (@cached) artifacts under $cache",
-    )
-    gc_opts = p_gc.add_argument_group("options")
-    gc_opts.add_argument(
-        "--dry-run", action="store_true",
-        help="Show what would be collected without deleting anything",
-    )
-    gc_opts.add_argument(
-        "--grace", "--min-age", dest="grace", metavar="AGE",
-        default=_GC_DEFAULT_GRACE,
-        help=(
-            "Keep artifacts younger than AGE even when unreferenced "
-            "(seconds, or a unit: 7d, 36h, 90m, 3600). Default: "
-            f"{_GC_DEFAULT_GRACE}."
-        ),
-    )
-    p_gc.set_defaults(func=_cmd_gc)
 
     args = parser.parse_args()
     try:

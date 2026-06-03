@@ -15,9 +15,15 @@ the fetch layer never sees a produced dataset.
 """
 
 from ._decorator import cached
-from ._gc import collect
 from ._hash import key_table_from_kwargs, param_hash
 from ._index import CACHED_INDEX_NAME, CachedIndex
+from ._inspect import (
+    CacheObject,
+    delete_object,
+    enumerate_artifacts,
+    find_produced_artifacts,
+    move_object,
+)
 from ._sidecars import (
     config_is_valid,
     config_key_table,
@@ -26,7 +32,15 @@ from ._sidecars import (
     write_config,
     write_metadata,
 )
-from ._usage import known_paths, prune_missing, read_usage, record_path, usage_log_path
+from ._usage import (
+    known_paths,
+    last_access,
+    prune_missing,
+    read_usage,
+    record_path,
+    touch_last_access,
+    usage_log_path,
+)
 
 __all__ = [
     "cached",
@@ -40,10 +54,16 @@ __all__ = [
     "read_metadata",
     "CachedIndex",
     "CACHED_INDEX_NAME",
-    "collect",
+    "CacheObject",
+    "enumerate_artifacts",
+    "find_produced_artifacts",
+    "delete_object",
+    "move_object",
     "usage_log_path",
     "record_path",
     "read_usage",
     "known_paths",
     "prune_missing",
+    "last_access",
+    "touch_last_access",
 ]

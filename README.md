@@ -77,7 +77,7 @@ ds = load_anomaly(grid="5x5")          # cache hit: loads and returns
 ds = load_anomaly(grid="5x5", cached=False)  # force recompute
 ```
 
-The keyword arguments (minus `_`-prefixed runtime knobs) are hashed (canonical JSON → SHA-256) into a portable `<cachetype>/<hash>` key; the artifact and its `config.toml` / `metadata.toml` sidecars live under `$cache`. Produced datasets are **not** written into `datasets.toml` — they are indexed in a sibling `cached.toml`, and `datamanifest gc` reclaims unreferenced ones. The cache layer (`datamanifest.cache`) is an in-repo layer over the shared `datamanifest.store` substrate and never touches the fetch path.
+The keyword arguments (minus `_`-prefixed runtime knobs) are hashed (canonical JSON → SHA-256) into a portable `<hash>` key; the artifact and its `config.toml` / `metadata.toml` sidecars land at `<cache>/cached/<project-id>/<cachetype>/[<version>/]<hash>` (spec-v3 layout). An optional `version=` string is a path segment recorded in `config.toml` and `cached.toml` but **not** in the param hash. Produced datasets are **not** written into `datasets.toml` — they are indexed in a sibling `cached.toml`; `datamanifest list --orphan --delete` (with `--yes` to apply, default dry run) is the maintenance command. The cache layer (`datamanifest.cache`) is an in-repo layer over the shared `datamanifest.store` substrate and never touches the fetch path.
 
 ## CLI usage
 
@@ -87,7 +87,7 @@ datamanifest COMMAND [OPTIONS]
 
 | Command | Description |
 |---|---|
-| `list [--present\|--missing\|--all]` | List datasets; default shows present first, then missing |
+| `list [--present\|--missing\|--all] [--kind K] [--scope S] [--orphan] [--older-than AGE] [--format F] [--fields ...] [--delete\|--move DIR] [--yes]` | List datasets and cached artifacts; with `--delete`/`--move` becomes the maintenance command (dry run by default; `--yes` to apply) |
 | `download [NAME ...] [--all] [--overwrite]` | Download specific datasets or all of them |
 | `path NAME` | Print the resolved on-disk path (composable in shell) |
 | `add URI [--name N] [--no-download] [--extract]` | Register and (by default) download a dataset |
@@ -97,7 +97,6 @@ datamanifest COMMAND [OPTIONS]
 | `init [--folder PATH] [--force]` | Create a fresh `datasets.toml` in the current directory |
 | `where` | Print active `datasets_toml` and `datasets_folder` paths |
 | `migrate FILE` | Rewrite a manifest to the current schema in-place (v0→v1 `_LANG` form; v1.1→v2 bare-store `"x"` → `"$x"`) |
-| `gc [--dry-run] [--grace AGE]` | Reclaim unreferenced `@cached` artifacts under `$cache` (root-reachability; default grace `7d`) |
 
 Examples:
 
@@ -118,9 +117,10 @@ datamanifest verify
 datamanifest update-checksums --dry-run   # preview which would change
 datamanifest update-checksums             # write the new checksums
 
-# Reclaim unreferenced @cached artifacts under $cache
-datamanifest gc --dry-run                 # preview what would be collected
-datamanifest gc --grace 30d               # delete orphans older than 30 days
+# Inspect and clean up @cached artifacts
+datamanifest list --kind cached --orphan          # dry-run: list orphaned cached artifacts
+datamanifest list --kind cached --orphan --delete --yes  # delete them
+datamanifest list --older-than 30d --delete       # preview artifacts older than 30 days
 
 # Where is the active manifest?
 datamanifest where
@@ -144,30 +144,30 @@ datamanifest where
 | Named + default loaders (csv, parquet, nc, json, yaml, toml, zip, tar) | yes |
 | TOML manifest round-trip (read `tomllib`, write `tomli_w`) | yes |
 | Project-root auto-discovery (`pyproject.toml` walk, env vars) | yes |
-| CLI (`datamanifest list/download/path/add/remove/show/verify/update-checksums/init/where/migrate/format/gc`) | yes |
+| CLI (`datamanifest list/download/path/add/remove/show/verify/update-checksums/init/where/migrate/format`) | yes |
 | Schema v1 `_LANG` namespace (read + write) | yes |
 | Fetch ladder: own Python fetcher → shell template → URI | yes |
 | Load ladder: own Python loader → manifest default → built-in | yes |
 | Lossless round-trip of foreign `_LANG.*` subtrees | yes |
 | v0 → v1 migration (`datamanifest migrate`) | yes |
-| Portable storage model (spec-v2: `$`-selectors, folder variables, `[_STORAGE]` + platformdirs roots) | yes |
+| Portable storage model (spec-v3: bare roots, `datasets/`/`cached/` content prefixes, `$`-selectors, folder variables, `[_STORAGE]` + platformdirs roots, `DATAMANIFEST_DIR`) | yes |
 | Parameterized bindings (`{ ref, args, kwargs }` + `$var` substitution) | yes |
 | Safe concurrent materialization (`.tmp` → atomic publish → `.complete` marker) | yes |
 | Verify-once integrity (checksum only at fetch; `.complete` entry skips re-hash) | yes |
 | Recursive canonical key ordering / byte-identity (normative reference) | yes |
-| Produce-or-load cache (`@cached`: param-hash keying, `config.toml`/`metadata.toml` sidecars) | yes |
-| `cached.toml` index + `datamanifest gc` (root-reachability collector) | yes |
+| Produce-or-load cache (`@cached`: param-hash keying, optional `version=` segment, `config.toml`/`metadata.toml` sidecars; spec-v3 path `<cache>/cached/<project-id>/<cachetype>/[<version>/]<hash>`) | yes |
+| `cached.toml` index + `datamanifest list` inspect/maintenance (`--orphan`, `--delete`, `--move`) | yes |
 
-## Storage model (spec-v2)
+## Storage model (spec-v3)
 
 > **Behavior change from earlier releases.** Prior releases stored all datasets
-> under `$XDG_CACHE_HOME/Datasets` (typically `~/.cache/Datasets`).
-> As of spec-v1.1, the default `$data` store resolves to
-> `platformdirs.user_data_dir("datamanifest")/Datasets` (typically
-> `~/.local/share/datamanifest/Datasets` on Linux), and the `$cache` store to
-> `platformdirs.user_cache_dir("datamanifest")/Datasets`.
-> If you have existing datasets at the old location, move them or pass an explicit
-> `datasets_folder` to `Database`.
+> under a `/Datasets`-suffixed root (e.g. `~/.local/share/datamanifest/Datasets`).
+> As of **spec-v3 (v0.6.0)**, folder variables resolve to **bare** roots: `$data` is
+> `platformdirs.user_data_dir("datamanifest")` (typically `~/.local/share/datamanifest`
+> on Linux) and content is composed as `<root>/datasets/<key>` (fetch) or
+> `<root>/cached/<project-id>/<cachetype>/[<version>/]<hash>` (produced artifacts).
+> A legacy read-only probe still finds datasets at old `/Datasets`-suffixed locations
+> unless `DATAMANIFEST_DATA_DIR` or `DATAMANIFEST_DIR` is set.
 
 Each dataset entry carries an optional `store` field — a **`$`-selector**
 (`$folder` or `$folder/subpath`) referencing a named **folder variable**. The
@@ -175,31 +175,28 @@ built-in folder variables are `$data`, `$cache`, and `$repo`. User-defined folde
 are declared in `[_STORAGE]`.
 
 A `[_STORAGE]` table lets you define folder variables, set a project-wide default
-selector, and override roots per host (glob) or per profile:
+selector, and override roots per host (glob):
 
 ```toml
 [_STORAGE]
 default = "$data"                        # project-wide default store selector
-data    = "~/data/Datasets"             # override built-in $data root
-cache   = "~/.cache/Datasets"           # override built-in $cache root
-repo    = "datasets"                    # relative → <project_root>/datasets
+data    = "~/data"                       # override built-in $data bare root
+cache   = "~/.cache/datamanifest"       # override built-in $cache bare root
+repo    = "."                            # relative → <project_root>
 scratch = "/tmp/$USER/scratch"          # user-defined folder variable
 
 [_STORAGE._HOST."login*.hpc.edu"]
-data    = "/scratch/$USER/Datasets"     # path expressions: $folder/$ENV/~ expand
+data    = "/scratch/$USER"              # path expressions: $folder/$ENV/~ expand
 
-[_STORAGE._PROFILE.cluster]
-data    = "/work/proj/Datasets"         # activated by DATAMANIFEST_PROFILE=cluster
-
-[bigsim]                                # default selector ($data) — store omitted
+[bigsim]                                # default selector ($data) → $data/datasets/bigsim
 uri   = "https://example.com/bigsim.nc"
 
 [scratch_run]
-store = "$cache"                        # disposable, re-fetchable
+store = "$cache"                        # disposable, re-fetchable → $cache/datasets/scratch_run
 uri   = "https://example.com/scratch.nc"
 
 [derived_table]
-store = "$repo"                         # lives under <project_root>/datasets
+store = "$repo"                         # lives under <project_root>/datasets/derived_table
 format = "csv"
 
 [hpc_output]
@@ -209,16 +206,18 @@ format = "nc"
 
 **Per-folder-variable precedence** (highest first):
 1. `DATAMANIFEST_<FOLDER>_DIR` environment variable (e.g. `DATAMANIFEST_DATA_DIR`).
-2. `[_STORAGE._PROFILE.<name>].<folder>` — when `DATAMANIFEST_PROFILE` is set.
-3. First `[_STORAGE._HOST.<glob>].<folder>` where the glob matches the hostname.
-4. `[_STORAGE].<folder>` base value.
-5. `platformdirs` default (`data`/`cache`) or `<project_root>/datasets` (`repo`).
+2. First `[_STORAGE._HOST.<glob>].<folder>` where the glob matches the hostname.
+3. `[_STORAGE].<folder>` base value.
+4. Built-in: `$data`/`$cache` = `DATAMANIFEST_DIR` if set, else `platformdirs.user_{data,cache}_dir("datamanifest")`; `$repo` = `<project_root>`.
    User-defined folders with no definition on any rung are an error.
 
-**Read resolution** probes the entry's own selector folder first, then searches
-`$repo → $data → $cache` (built-in probe order) and returns the first root where
-`<root>/<key>` exists and has been successfully materialized (`.complete` marker
-present). Falls back to the write path (selected store) when not found.
+`_PROFILE` is a preserved structural key (round-tripped verbatim) but **no longer applied** during resolution as of spec-v3.
+
+**Content path composition** (consuming layer, not the selector):
+- Fetched datasets: `<root>[/subpath]/datasets/<key>`
+- Produced artifacts: `<root>/cached/<project-id>/<cachetype>/[<version>/]<hash>`
+
+**Read resolution** probes built-in roots under their `datasets/` prefix (`$repo → $data → $cache`), then a legacy read-only probe for pre-v3 locations (skipped when `DATAMANIFEST_DATA_DIR`/`DATAMANIFEST_DIR` is set).
 
 **v1.1 → v2 migration:** If you have existing manifests with bare `store = "cache"`
 entries, run `datamanifest migrate datasets.toml` to rewrite them to `store = "$cache"`
@@ -312,7 +311,7 @@ A single `datasets.toml` can be consumed by both tools: each reads the common fi
 
 ## Conformance
 
-This release targets **spec-v2** of the shared [datamanifest.toml schema](https://github.com/perrette/datamanifest.toml).
+This release targets **spec-v3** of the shared [datamanifest.toml schema](https://github.com/perrette/datamanifest.toml).
 
 Implemented capabilities:
 
@@ -321,14 +320,15 @@ Implemented capabilities:
 | `lang-read` — parse `_LANG` namespace on read | yes |
 | `lang-write` — regenerate `_LANG.python`, preserve foreign `_LANG.*` verbatim | yes |
 | `shell-fetch` — `_LANG.shell.fetcher` template in the fetch ladder | yes |
-| `storage` — `$`-selectors, folder variables (`$data`/`$cache`/`$repo` + user-defined), `[_STORAGE].default`, path-expression interpolation, platformdirs roots, read-order resolution | yes |
+| `storage` — spec-v3: bare roots, `datasets/`/`cached/` content prefixes, `$`-selectors, folder variables (`$data`/`$cache`/`$repo` + user-defined), `[_STORAGE].default`, `DATAMANIFEST_DIR`, path-expression interpolation, platformdirs roots, read-order resolution | yes |
 | `binding-args` — `{ ref, args, kwargs }` table form with `$var` substitution | yes |
 | `byte-identity` — recursive canonical key ordering (normative reference) | yes |
-| `cache-produce` — `@cached` produce-or-load: param-hash keying + `config.toml`/`metadata.toml` sidecars | yes |
-| `cache-gc` — `cached.toml` index + `datamanifest gc` root-reachability collector | yes |
+| `cache-produce` — `@cached` produce-or-load: param-hash keying, optional `version=`, `config.toml`/`metadata.toml` sidecars; spec-v3 path `<cache>/cached/<project-id>/<cachetype>/[<version>/]<hash>` | yes |
+| `inspect` — `cached.toml` index + `datamanifest list` maintenance surface (`--orphan`/`--older-than`/`--delete`/`--move`) | yes |
+| `sync` — cross-machine push/pull of cached artifacts | not yet |
 | `delegation` — peer-CLI runtime (delegate fetch/load to another tool) | not yet |
 
-The conformance test suite (`tests/test_conformance.py`) downloads the pinned spec fixture tarball, verifies every file against a recorded per-file SHA-256 hash (`tests/conformance_pin.toml`), and runs only the fixtures whose `capabilities` are a subset of the above set, skipping the rest with a reason. Re-pinning the fixture suite to the `spec-v2` tag is a manual post-merge step (requires network access).
+The conformance test suite (`tests/test_conformance.py`) downloads the pinned spec fixture tarball, verifies every file against a recorded per-file SHA-256 hash (`tests/conformance_pin.toml`), and runs only the fixtures whose `capabilities` are a subset of the above set, skipping the rest with a reason. Re-pinning the fixture suite to the `spec-v3` tag is a manual post-merge step (requires network access).
 
 ## Related projects
 

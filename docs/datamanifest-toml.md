@@ -9,15 +9,15 @@ implementation owns it, and [`DataManifest.jl`](https://github.com/awi-esc/DataM
 ## Conformance
 
 This package conforms to **schema v1** (`_META.schema = 1`) against spec tag
-**`spec-v2`**. The two version axes are independent: `_META.schema` is the
+**`spec-v3`**. The two version axes are independent: `_META.schema` is the
 data-model version (bumped only on breaking structural change), and the spec tag
 tracks prose/fixture evolution. Pinning the tag here is what lets this package and
 `DataManifest.jl` move at their own pace while sharing one normative format.
 
-**Pinned spec:** https://github.com/perrette/datamanifest.toml/blob/spec-v2/SCHEMA.md
+**Pinned spec:** https://github.com/perrette/datamanifest.toml/blob/spec-v3/SCHEMA.md
 
 > **Note:** The conformance fixture tarball still points at `spec-v1.1`. Re-pinning
-> the fixture suite to the `spec-v2` git tag requires a network fetch and is a manual
+> the fixture suite to the `spec-v3` git tag requires a network fetch and is a manual
 > post-merge step; the offline test suite runs against the already-downloaded fixtures.
 
 The whole *contract* two implementations must agree on — top-level layout, common
@@ -35,11 +35,12 @@ and runs only the fixtures tagged for them. This package's status:
 | `lang-read` | ✅ | Parses `[<ds>._LANG.python]` / `[_LANG.python.loaders]`; applies the load ladder. |
 | `lang-write` | ✅ | Regenerates `_LANG.python`, preserves foreign `_LANG.*` and unknown `_*` tables verbatim (lossless round-trip). |
 | `shell-fetch` | ✅ | Executes the `[<ds>._LANG.shell].fetcher` command template (`expand_shell_template`). |
-| `storage` | ✅ | spec-v2 storage model: folder variables (`$data`, `$cache`, `$repo` built-in; user-defined via `[_STORAGE]`), `$folder[/subpath]` selectors, `[_STORAGE].default` project default, path-expression interpolation (`$folder`/`$ENV`/`~`) in `local_path` and `[_STORAGE]` values, env-var/`_HOST`/`_PROFILE` precedence ladder, `repo→data→cache` built-in probe order, atomic publish + `.complete` markers. Bare (non-`$`) `store` values are rejected with a migration hint. |
+| `storage` | ✅ | spec-v3 storage model: **bare roots** (`$data`/`$cache` resolve to `platformdirs` dirs without `/Datasets` suffix; `$repo` = project root); content composed as `<root>/datasets/<key>` (fetch) or `<root>/cached/<project-id>/<cachetype>/[<version>/]<hash>` (produced); `DATAMANIFEST_DIR` application base; folder variables (`$data`, `$cache`, `$repo` built-in; user-defined via `[_STORAGE]`), `$folder[/subpath]` selectors, `[_STORAGE].default` project default, path-expression interpolation, env-var/`_HOST` precedence ladder (no `_PROFILE` rung), `repo→data→cache` built-in probe order under `datasets/` prefix, atomic publish + `.complete` markers. Bare (non-`$`) `store` values are rejected with a migration hint. |
 | `byte-identity` | ✅ | Canonical lexicographic key ordering; this package is the **normative reference** (`sort_recursive` in the `datamanifest.store` substrate). |
 | `binding-args` | ✅ | Executes the `{ ref, args, kwargs }` table form with `$var` substitution (`_substitute_vars`). |
-| `cache-produce` | ✅ | Produce-or-load: the `@cached` decorator with canonical-JSON→SHA-256 param-hash keying, `config.toml`/`metadata.toml` sidecars, and `store="$cache"` default (`datamanifest.cache`). See [Produce-or-load cache layer](#produce-or-load-cache-layer). |
-| `cache-gc` | ✅ | The `cached.toml` produced-dataset index, a depot usage log, and `datamanifest gc` (root-reachability collector). |
+| `cache-produce` | ✅ | Produce-or-load: the `@cached` decorator with canonical-JSON→SHA-256 param-hash keying, optional `version=` segment (path + `config.toml` entry, not in hash), `config.toml`/`metadata.toml` sidecars; spec-v3 artifact path `<cache>/cached/<project-id>/<cachetype>/[<version>/]<hash>`. See [Produce-or-load cache layer](#produce-or-load-cache-layer). |
+| `inspect` | ✅ | The `cached.toml` produced-dataset index and `datamanifest list` maintenance surface: `--kind`/`--scope`/`--orphan`/`--older-than`/`--format`/`--fields` filters + `--delete`/`--move` actions (dry run by default; `--yes` to apply). `last-access` updated on read (best-effort advisory). |
+| `sync` | ❌ | Cross-machine push/pull of cached artifacts is not yet implemented (deferred to a separate follow-up). |
 | `delegation` | ❌ | Peer-CLI delegation (fetch-ladder rung 3) is not implemented; the ladder skips straight to `uri` download. No `datamanifest fetch` subcommand yet. |
 
 ### What differs / is added on top
@@ -98,10 +99,9 @@ actually invoked.
 
 ### Produce-or-load cache layer
 
-spec-v2.1 reframes produce-or-load as an **in-repo layer**, not a separate package
-(no `[cache]` extra). The code is organised in three layers with a one-way import
-arrow — the substrate is consumed by both feature layers, and neither feature layer
-imports the other:
+The produce-or-load feature is an **in-repo layer** (no `[cache]` extra). The code is
+organised in three layers with a one-way import arrow — the substrate is consumed by
+both feature layers, and neither feature layer imports the other:
 
 ```
 datamanifest.store   (Layer 0 substrate)  — location resolution, safe-materialize, loaders, canonical sort
@@ -112,22 +112,26 @@ datamanifest.database/pipelines    datamanifest.cache
 
 `@cached` (`from datamanifest.cache import cached`) wraps a **keyword-only** producing
 function: its keyword arguments (minus `_`-prefixed runtime knobs) form the key table,
-which is hashed (canonical JSON → SHA-256) into a `<cachetype>/<hash>` key. The result
-is materialized once under `$cache` as `<cache_root>/<cachetype>/<hash>/<basename>.<ext>`
+which is hashed (canonical JSON → SHA-256) into a `<hash>` key. The result is materialized
+once under `$cache` at `<cache>/cached/<project-id>/<cachetype>/[<version>/]<hash>/`
 beside a `config.toml` (re-hashable key table + `[_META]`) and a write-if-absent
 `metadata.toml` (provenance + an `[origin].cached_toml` back-pointer); subsequent calls
 load and return it. A `cached=False` call argument forces a recompute.
 
-Each produce registers the artifact in a sibling **`cached.toml`** (the `Manifest.toml`
-analogue — gitignored per-machine state by default). **`datamanifest gc`** is a
-root-reachability collector: it reclaims produced artifacts under `$cache` that no
-still-existing root (`cached.toml` produced keys + `datasets.toml` `$cache` fetched keys)
-references and that are older than `--grace` (default `7d`); `--dry-run` previews. Roots
-are discovered via a depot usage log at `platformdirs.user_state_dir("datamanifest")/usage.toml`
-(override with `DATAMANIFEST_USAGE_LOG`). It never touches `$data`/`$repo`, and
-identifies produced artifacts by their `config.toml` sidecar (so fetched `$cache`
-datasets are never collected). The `gc` command is the composition root — the only place
-that imports both the fetch and cache layers.
+An optional `version=` string (e.g. `@cached(cachetype="t", version="v2")`) inserts a
+path segment before `<hash>` and is recorded in `config.toml` and `cached.toml`. It is
+**not** part of the param hash, so changing only `version=` produces a distinct artifact
+path without invalidating the hash for callers with other versions. A per-call `cache_dir=`
+argument bypasses folder/prefix/scope and uses the supplied directory verbatim.
+
+Each produce registers the artifact in a sibling **`cached.toml`** (gitignored per-machine
+state by default). **`datamanifest list`** is the maintenance command: `--kind cached`
+selects produced artifacts; `--orphan` flags those with no `cached.toml` root reference;
+`--older-than AGE` filters by last-access time. `--delete` / `--move DIR` act on the
+selected set (dry run by default; `--yes` to apply). The `list` command is the composition
+root — the only place that imports both the fetch and cache layers. It never touches
+`$data`/`$repo`, and identifies produced artifacts by their `config.toml` sidecar (so
+fetched `$cache` datasets are never selected by `--kind cached`).
 
 ### Canonical serialization
 
@@ -162,7 +166,8 @@ rewrite it.
 
 The package ships a `datamanifest` CLI (`list`, `download`, `path`, `add`,
 `remove`, `show`, `verify`, `update-checksums`, `init`, `where`, `migrate`,
-`format`). See the [README](../README.md) or `datamanifest <command> --help`.
+`format`). `list` doubles as the inspect/maintenance command via `--delete`/`--move`
+flags. See the [README](../README.md) or `datamanifest <command> --help`.
 
 ## Cross-reference
 
