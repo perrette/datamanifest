@@ -183,6 +183,25 @@ def _python_binding(ref: str, args, kwargs):
     return binding
 
 
+def _split_python_binding(binding):
+    """Split a Python binding value into ``(ref, args, kwargs)``.
+
+    The inverse of :func:`_python_binding`: accepts a bare ``ref`` string or a
+    parameterized ``{ ref, args, kwargs }`` table, and returns the ref plus its
+    (possibly empty) ordered ``args`` list and ``kwargs`` dict. An empty/unknown
+    value yields ``("", [], {})``.
+    """
+    if isinstance(binding, dict):
+        return (
+            str(binding.get("ref", "")),
+            list(binding.get("args", []) or []),
+            dict(binding.get("kwargs", {}) or {}),
+        )
+    if binding:
+        return str(binding), [], {}
+    return "", [], {}
+
+
 def to_dict(entry: DatasetEntry) -> dict:
     output = {}
     for f in fields(entry):
@@ -485,23 +504,40 @@ def resolve_fetcher(entry: DatasetEntry):
     return (None, None)
 
 
-def resolve_loader_ref(db, entry: DatasetEntry) -> str:
-    """Resolve *entry*'s effective Python loader entry-point ref (design §6 load ladder).
+def resolve_loader_binding(db, entry: DatasetEntry):
+    """Resolve *entry*'s effective Python loader binding (design §6 load ladder).
 
-    Ladder: own ``[<ds>._LANG.python].loader`` (v1) or legacy ``loader=`` →
-    manifest ``[_LANG.python.loaders][format]``. Returns ``""`` when neither
-    applies, so the caller falls through to a named ``_LOADERS`` loader and then
-    the built-in format default. Loaders never delegate (design §6).
+    Returns ``(ref, args, kwargs)``. Ladder: own ``[<ds>._LANG.python].loader``
+    (with its args/kwargs) or legacy ``loader=`` → manifest
+    ``[_LANG.python.loaders][format]`` (with its args/kwargs). The manifest
+    format-default loader supports the same parameterized ``{ ref, args, kwargs }``
+    form as a per-dataset binding. Returns ``("", [], {})`` when neither applies,
+    so the caller falls through to a named ``_LOADERS`` loader and then the
+    built-in format default. Loaders never delegate (design §6).
     """
-    own = entry.lang_python_loader or entry.loader
-    if own:
-        return own
+    if entry.lang_python_loader:
+        return (
+            entry.lang_python_loader,
+            list(entry.lang_python_loader_args),
+            dict(entry.lang_python_loader_kwargs),
+        )
+    if entry.loader:
+        return entry.loader, [], {}
     fmt = (entry.format or "").strip().lower()
     if fmt:
         for name, ref in db.lang_python_loaders.items():
             if str(name).strip().lower() == fmt:
-                return ref
-    return ""
+                return (
+                    ref,
+                    list(db.lang_python_loaders_args.get(name, [])),
+                    dict(db.lang_python_loaders_kwargs.get(name, {})),
+                )
+    return "", [], {}
+
+
+def resolve_loader_ref(db, entry: DatasetEntry) -> str:
+    """The effective Python loader ref only (see :func:`resolve_loader_binding`)."""
+    return resolve_loader_binding(db, entry)[0]
 
 
 def is_a_git_repo(entry: DatasetEntry) -> bool:
@@ -1081,7 +1117,11 @@ class Database:
         self.loaders_python_includes: list = []
         self.loader_cache: dict = {}
         # v1 _LANG.python.loaders: format→ref map from [_LANG.python.loaders].
+        # A value may be a bare ref or a parameterized { ref, args, kwargs }
+        # table; the ref lives here and any args/kwargs in the parallel maps.
         self.lang_python_loaders: dict = {}
+        self.lang_python_loaders_args: dict = {}
+        self.lang_python_loaders_kwargs: dict = {}
         # Database-level passthrough for unknown _* top-level tables (mirrors
         # per-dataset extra). schema_version comes from [_META].schema; None => v0.
         self.extra: dict = {}
@@ -1104,6 +1144,8 @@ class Database:
             and self.loaders == other.loaders
             and self.loaders_python_includes == other.loaders_python_includes
             and self.lang_python_loaders == other.lang_python_loaders
+            and self.lang_python_loaders_args == other.lang_python_loaders_args
+            and self.lang_python_loaders_kwargs == other.lang_python_loaders_kwargs
             and self.extra == other.extra
             and self.schema_version == other.schema_version
         )
@@ -1151,7 +1193,16 @@ class Database:
         # splice every foreign top-level [_LANG.<other>] subtree back verbatim.
         lang_table: dict = {}
         if self.lang_python_loaders:
-            lang_table["python"] = {"loaders": dict(self.lang_python_loaders)}
+            lang_table["python"] = {
+                "loaders": {
+                    fmt: _python_binding(
+                        ref,
+                        self.lang_python_loaders_args.get(fmt),
+                        self.lang_python_loaders_kwargs.get(fmt),
+                    )
+                    for fmt, ref in self.lang_python_loaders.items()
+                }
+            }
         foreign_lang = self.extra.get("_LANG")
         if isinstance(foreign_lang, dict):
             for k, v in foreign_lang.items():
@@ -1240,7 +1291,18 @@ class Database:
             if isinstance(python_top, dict):
                 loaders_map = python_top.get("loaders", {})
                 if isinstance(loaders_map, dict):
-                    self.lang_python_loaders = dict(loaders_map)
+                    # Each format→loader value is a bare ref or a parameterized
+                    # { ref, args, kwargs } table (same form as a per-dataset
+                    # binding); split it across the ref/args/kwargs maps.
+                    for fmt, val in loaders_map.items():
+                        ref, a, kw = _split_python_binding(val)
+                        if not ref:
+                            continue
+                        self.lang_python_loaders[str(fmt)] = ref
+                        if a:
+                            self.lang_python_loaders_args[str(fmt)] = a
+                        if kw:
+                            self.lang_python_loaders_kwargs[str(fmt)] = kw
             foreign_lang = {k: v for k, v in lang_top.items() if k != "python"}
             if foreign_lang:
                 self.extra["_LANG"] = foreign_lang

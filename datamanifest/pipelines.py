@@ -34,7 +34,7 @@ from .database import (
     parse_uri_metadata,
     resolve_existing_path,
     resolve_fetcher,
-    resolve_loader_ref,
+    resolve_loader_binding,
     search_dataset,
     verify_checksum,
 )
@@ -832,15 +832,15 @@ def load_dataset(db, dataset, loader=None, **kwargs):
     # v1 load ladder (design §6): own loader (own _LANG.python.loader / legacy
     # entry.loader) → manifest [_LANG.python.loaders][format]. A resolved ref is
     # always run in-process — loaders never delegate.
-    loader_ref = resolve_loader_ref(db, entry)
+    loader_ref, loader_args, loader_kwargs = resolve_loader_binding(db, entry)
     if loader_ref != "":
         fn = _get_loader_function(db, loader_ref)
-        if entry.lang_python_loader_args or entry.lang_python_loader_kwargs:
+        if loader_args or loader_kwargs:
             variables = _binding_variables(
                 entry, path=path, project_root=db.get_project_root()
             )
-            call_args = _substitute_vars(list(entry.lang_python_loader_args), variables)
-            call_kwargs = _substitute_vars(dict(entry.lang_python_loader_kwargs), variables)
+            call_args = _substitute_vars(list(loader_args), variables)
+            call_kwargs = _substitute_vars(dict(loader_kwargs), variables)
             return fn(*call_args, **call_kwargs)
         return fn(path)
 

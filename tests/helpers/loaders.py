@@ -6,6 +6,16 @@ def my_loader(path):
     return ("loaded", path)
 
 
+def param_loader(path, *, grid=None, scale=1):
+    """A parameterized loader: records the path + kwargs it was called with.
+
+    Used to verify the ``{ ref, args, kwargs }`` table form of a manifest-wide
+    ``[_LANG.python.loaders]`` default, including ``$var`` substitution.
+    """
+    param_loader.last_call = {"path": path, "grid": grid, "scale": scale}
+    return ("param", path, grid, scale)
+
+
 def my_downloader(download_path, **kwargs):
     """A download-phase python hook: writes a sentinel file at download_path.
 
