@@ -1,4 +1,8 @@
-"""Tests for Phase 2 of the cache layer: cached.toml index, usage log, GC.
+"""Tests for the cache layer's index + inspection maintenance (spec-v3).
+
+Covers the ``cached.toml`` index round-trip, ``@cached`` produce registration,
+and the ``cache/_inspect.py`` object enumeration / delete / move that backs the
+``datamanifest list`` maintenance surface (which replaced the old automatic GC).
 
 Offline only: a ``tmp_path`` cache root (via ``DATAMANIFEST_CACHE_DIR``), a
 ``tmp_path`` usage log (via ``DATAMANIFEST_USAGE_LOG``), and the trivial ``txt``
@@ -13,12 +17,16 @@ import pytest
 from datamanifest.cache import (
     CachedIndex,
     cached,
-    collect,
+    delete_object,
+    enumerate_artifacts,
+    find_produced_artifacts,
+    move_object,
     read_metadata,
     read_usage,
 )
-from datamanifest.cache._gc import find_produced_artifacts
+from datamanifest.cache._inspect import CacheObject
 from datamanifest.cache._sidecars import write_config
+from datamanifest.cache._usage import iso_from_mtime, last_access, touch_last_access
 from datamanifest.store.locations import project_id
 
 
@@ -162,76 +170,118 @@ def test_cached_hit_does_not_duplicate_or_restamp(cache_root, usage_log, tmp_pat
     assert metadata_path.stat().st_mtime == first_meta_mtime  # no re-stamp
 
 
-# ----- GC collector ----------------------------------------------------------
+# ----- last-access stamp (best-effort, advisory) -----------------------------
 
-def _produce_artifact(cache_root, cachetype, key_table, *, name=None):
-    """Materialize a minimal produced artifact (config.toml-bearing dir)."""
+def test_last_access_round_trip(tmp_path):
+    d = tmp_path / "artifact"
+    d.mkdir()
+    # A bare new dir reports *some* access stamp (the OS access time).
+    assert last_access(str(d))  # non-empty RFC-3339 string
+    # Backdate, then touch -> the reported stamp advances.
+    old = d.stat().st_mtime - 10_000
+    os.utime(d, (old, old))
+    before = last_access(str(d))
+    touch_last_access(str(d))
+    after = last_access(str(d))
+    assert after >= before
+    # iso_from_mtime is independent of the access bump (mtime preserved).
+    assert iso_from_mtime(str(d))
+
+
+def test_last_access_missing_path_is_empty(tmp_path):
+    assert last_access(str(tmp_path / "nope")) == ""
+    # touch on a missing path is a silent no-op (advisory).
+    touch_last_access(str(tmp_path / "nope"))
+
+
+# ----- inspect: enumerate produced artifacts ---------------------------------
+
+def _produce_artifact(cache_root, cachetype, key_table, *, version=""):
+    """Materialize a minimal produced artifact under the cached/ prefix."""
     from datamanifest.cache import param_hash
 
     h = param_hash(key_table)
-    directory = cache_root / cachetype / h
+    parts = ["cached", cachetype] + ([version] if version else []) + [h]
+    directory = cache_root.joinpath(*parts)
     directory.mkdir(parents=True)
-    (directory / "data.txt").write_text("v")
-    write_config(str(directory), cachetype, h, key_table)
-    # mark complete so it looks like a real published artifact
+    (directory / "data.txt").write_text("payload")
+    write_config(str(directory), cachetype, h, key_table, version=version)
     (directory / ".complete").write_text("")
-    return str(directory), f"{cachetype}/{h}"
+    return directory, f"{cachetype}/{h}"
 
 
-def test_gc_collects_orphan_keeps_referenced(cache_root):
+def test_find_produced_artifacts_skips_non_config_dirs(cache_root):
     cache_root.mkdir(parents=True, exist_ok=True)
-    kept_dir, kept_key = _produce_artifact(cache_root, "kept", {"g": "5x5"})
-    orph_dir, orph_key = _produce_artifact(cache_root, "orphan", {"g": "10x10"})
-
-    # only the kept key is rooted; grace 0 so age always exceeds it
-    collected = collect(str(cache_root), {kept_key}, grace_seconds=0)
-    collected_keys = {c.key for c in collected}
-    assert collected_keys == {orph_key}
-    assert not os.path.exists(orph_dir)
-    assert os.path.exists(kept_dir)
-
-
-def test_gc_grace_protects_young_artifact(cache_root):
-    cache_root.mkdir(parents=True, exist_ok=True)
-    orph_dir, orph_key = _produce_artifact(cache_root, "young", {"g": "1"})
-
-    # grace is huge; the just-created artifact is younger -> kept even unrooted
-    collected = collect(str(cache_root), set(), grace_seconds=10_000)
-    assert collected == []
-    assert os.path.exists(orph_dir)
-
-
-def test_gc_ignores_fetched_cache_dir_without_config(cache_root):
-    cache_root.mkdir(parents=True, exist_ok=True)
-    # A fetched $cache dataset: a directory under $cache with NO config.toml.
+    prod_dir, key = _produce_artifact(cache_root, "kept", {"g": "5x5"})
+    # A fetched-style dir (no config.toml) under the cache root must be skipped.
     fetched = cache_root / "somehost.org" / "file.nc"
     fetched.mkdir(parents=True)
     (fetched / "payload.bin").write_text("bytes")
 
-    # It is not even enumerated as a produced artifact ...
-    assert list(find_produced_artifacts(str(cache_root))) == []
-    # ... and a full collect (with no live keys, grace 0) never touches it.
-    collect(str(cache_root), set(), grace_seconds=0)
-    assert fetched.is_dir()
+    found = dict(find_produced_artifacts(str(cache_root)))
+    assert found == {str(prod_dir): key}
 
 
-def test_gc_never_walks_data_or_repo(tmp_path, cache_root):
+def test_enumerate_artifacts_fields(cache_root):
     cache_root.mkdir(parents=True, exist_ok=True)
-    # A produced-looking artifact under a $data/$repo root must never be seen:
-    # collect() is only ever handed the resolved $cache folder.
-    data_root = tmp_path / "data"
-    data_root.mkdir()
-    prod_dir, _key = _produce_artifact(data_root, "underdata", {"g": "x"})
+    prod_dir, key = _produce_artifact(cache_root, "mytype", {"g": "5x5"}, version="v3")
 
-    collect(str(cache_root), set(), grace_seconds=0)
-    assert os.path.exists(prod_dir)  # untouched — never under cache_root
+    objs = list(enumerate_artifacts(str(cache_root), prefix="cached"))
+    assert len(objs) == 1
+    obj = objs[0]
+    assert obj.kind == "cached"
+    assert obj.key == key
+    assert obj.cachetype == "mytype"
+    assert obj.version == "v3"
+    assert obj.format == "txt"          # data.txt
+    assert obj.size > 0
+    assert obj.created
+    assert obj.last_access
+    assert obj.referenced is None       # the composition root resolves this
+    assert os.path.abspath(str(prod_dir)) == obj.location
 
 
-def test_gc_dry_run_reports_without_deleting(cache_root):
+def test_enumerate_artifacts_scope_from_path(cache_root):
     cache_root.mkdir(parents=True, exist_ok=True)
-    orph_dir, orph_key = _produce_artifact(cache_root, "orphan", {"g": "z"})
+    # A scoped layout: cached/<scope>/<cachetype>/<hash>.
+    from datamanifest.cache import param_hash
 
-    candidates = collect(str(cache_root), set(), grace_seconds=0, dry_run=True)
-    assert [c.key for c in candidates] == [orph_key]
-    assert all(not c.collected for c in candidates)
-    assert os.path.exists(orph_dir)  # nothing deleted
+    h = param_hash({"g": "1"})
+    directory = cache_root / "cached" / "proj-abc" / "t" / h
+    directory.mkdir(parents=True)
+    (directory / "data.txt").write_text("x")
+    write_config(str(directory), "t", h, {"g": "1"})
+
+    (obj,) = list(enumerate_artifacts(str(cache_root), prefix="cached"))
+    assert obj.scope == "proj-abc"
+
+
+# ----- inspect: delete / move are explicit and produced-only -----------------
+
+def test_delete_object_removes_artifact_and_markers(cache_root):
+    cache_root.mkdir(parents=True, exist_ok=True)
+    prod_dir, _key = _produce_artifact(cache_root, "t", {"g": "5x5"})
+    (obj,) = list(enumerate_artifacts(str(cache_root), prefix="cached"))
+
+    delete_object(obj)
+    assert not os.path.exists(str(prod_dir))
+    assert not os.path.exists(str(prod_dir) + ".complete")
+
+
+def test_delete_object_refuses_non_cached(tmp_path):
+    fake = CacheObject(kind="datasets", location=str(tmp_path / "data" / "x"))
+    with pytest.raises(ValueError):
+        delete_object(fake)
+
+
+def test_move_object_preserves_key_path(cache_root, tmp_path):
+    cache_root.mkdir(parents=True, exist_ok=True)
+    prod_dir, _key = _produce_artifact(cache_root, "t", {"g": "5x5"}, version="v2")
+    (obj,) = list(enumerate_artifacts(str(cache_root), prefix="cached"))
+
+    dest_root = tmp_path / "elsewhere"
+    new = move_object(obj, str(dest_root))
+    # <dest>/<cachetype>/<version>/<hash>/data.txt
+    assert new == os.path.join(str(dest_root), "t", "v2", obj.hash)
+    assert os.path.isfile(os.path.join(new, "data.txt"))
+    assert not os.path.exists(str(prod_dir))

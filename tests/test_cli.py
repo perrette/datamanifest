@@ -13,7 +13,17 @@ _DATASETS_TOML = os.path.join(_REPO_ROOT, "datasets.toml")
 
 
 def _run(*args, env=None):
-    """Run *args* via the CLI binary and return the CompletedProcess."""
+    """Run *args* via the CLI binary and return the CompletedProcess.
+
+    Pins ``PYTHONPATH`` to this repo so the binary imports the source tree under
+    test rather than whatever the shared editable install resolves to (the
+    ``datamanifest`` console-script is invoked by absolute path, so the cwd is
+    not on its ``sys.path``; in a git worktree the editable install can point at
+    the main checkout instead).
+    """
+    env = dict(os.environ if env is None else env)
+    existing = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = _REPO_ROOT + (os.pathsep + existing if existing else "")
     return subprocess.run(
         [_BIN, *args],
         capture_output=True,
@@ -40,8 +50,15 @@ def test_version():
 def test_help_lists_all_subcommands():
     result = _run("--help")
     assert result.returncode == 0
-    for sub in ["list", "download", "path", "add", "remove", "show", "verify", "update-checksums", "init", "where", "migrate", "format", "gc"]:
+    for sub in ["list", "download", "path", "add", "remove", "show", "verify", "update-checksums", "init", "where", "migrate", "format"]:
         assert sub in result.stdout, f"subcommand {sub!r} missing from --help output"
+
+
+def test_gc_subcommand_removed():
+    # spec-v3 retired the automatic collector: `gc` is gone (the maintenance
+    # surface is `list --delete`). The subcommand must no longer parse.
+    result = _run("gc", "--help")
+    assert result.returncode != 0
 
 
 # ----- list -----
@@ -56,6 +73,9 @@ def test_list_help():
     assert result.returncode == 0
     assert "--present" in result.stdout
     assert "--missing" in result.stdout
+    # spec-v3 maintenance surface: filter + action flags on `list`.
+    for flag in ["--kind", "--scope", "--orphan", "--older-than", "--format", "--delete", "--move"]:
+        assert flag in result.stdout, f"list --help missing {flag}"
 
 
 # ----- path -----
@@ -97,9 +117,10 @@ def test_update_checksums_dry_run_does_not_write(tmp_path):
     assert src.read_bytes() == before
 
 
-# ----- gc (produce-or-load cache garbage collection) -----
+# ----- list maintenance (spec-v3: replaces gc) -----
 
 def test_parse_duration_units():
+    # Still ships — it now backs `list --older-than`.
     from datamanifest.cli import _parse_duration
 
     assert _parse_duration("3600") == 3600
@@ -110,45 +131,58 @@ def test_parse_duration_units():
         _parse_duration("5furlongs")
 
 
-def test_gc_help():
-    result = _run("gc", "--help")
-    assert result.returncode == 0
-    assert "--dry-run" in result.stdout
-    assert "--grace" in result.stdout
-
-
-def test_gc_dry_run_then_collects_orphan(tmp_path):
-    # An orphan produced artifact (config.toml sidecar, no cached.toml root)
-    # older than the grace age: gc --dry-run reports it but keeps it; a real
-    # gc run reclaims it. Exercises _cmd_gc end-to-end via the CLI binary.
+def _orphan_artifact(cache, cachetype, key_table):
+    """Materialize a produced orphan (config.toml-bearing dir under cached/)."""
     from datamanifest.cache._hash import param_hash
     from datamanifest.cache._sidecars import write_config
 
-    cache = tmp_path / "cache"
-    key_table = {"grid": "5x5"}
     h = param_hash(key_table)
-    artifact = cache / "mytype" / h
+    # An unscoped layout: <cache>/cached/<cachetype>/<hash> still enumerates as a
+    # produced artifact (no cached.toml roots it, so it reads as an orphan).
+    artifact = cache / "cached" / cachetype / h
     artifact.mkdir(parents=True)
-    write_config(str(artifact), "mytype", h, key_table)
-    # Backdate the artifact (and its sidecar) so it is older than --grace.
-    old = artifact.stat().st_mtime - 10_000
-    for p in (artifact, artifact / "config.toml"):
-        os.utime(p, (old, old))
+    (artifact / "data.txt").write_text("v")
+    write_config(str(artifact), cachetype, h, key_table)
+    (artifact / ".complete").write_text("")
+    return artifact, f"{cachetype}/{h}"
 
-    # Empty manifest + empty usage log → no roots reference the artifact.
+
+def _maint_env(tmp_path, cache):
     (tmp_path / "datasets.toml").write_text("")
     env = dict(os.environ)
     env["DATAMANIFEST_CACHE_DIR"] = str(cache)
     env["DATAMANIFEST_USAGE_LOG"] = str(tmp_path / "usage.toml")
     env["DATAMANIFEST_TOML"] = str(tmp_path / "datasets.toml")
+    return env
 
-    dry = _run("gc", "--dry-run", "--grace", "1", env=env)
+
+def test_list_orphan_reports_unreferenced(tmp_path):
+    cache = tmp_path / "cache"
+    artifact, key = _orphan_artifact(cache, "mytype", {"grid": "5x5"})
+    env = _maint_env(tmp_path, cache)
+
+    result = _run("list", "--orphan", "--fields", "kind,referenced,key", env=env)
+    assert result.returncode == 0, result.stderr
+    assert key in result.stdout
+    assert "false" in result.stdout
+    assert "cached" in result.stdout
+
+
+def test_list_delete_dry_run_then_applies(tmp_path):
+    cache = tmp_path / "cache"
+    artifact, key = _orphan_artifact(cache, "mytype", {"grid": "5x5"})
+    env = _maint_env(tmp_path, cache)
+
+    # Dry run (default): reports but keeps.
+    dry = _run("list", "--orphan", "--delete", env=env)
     assert dry.returncode == 0, dry.stderr
-    assert artifact.is_dir(), "dry-run must not delete"
+    assert artifact.is_dir(), "dry run must not delete"
+    assert "dry run" in dry.stdout.lower()
 
-    run = _run("gc", "--grace", "1", env=env)
+    # --yes applies.
+    run = _run("list", "--orphan", "--delete", "--yes", env=env)
     assert run.returncode == 0, run.stderr
-    assert not artifact.exists(), "gc should have reclaimed the orphan artifact"
+    assert not artifact.exists(), "--delete --yes should remove the orphan"
 
 
 # ----- init -----
