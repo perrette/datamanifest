@@ -107,6 +107,11 @@ datamanifest init
 # Add and download a dataset
 datamanifest add "https://zenodo.org/record/.../file.zip" --extract
 
+# List this project's datasets and cached artifacts (one styled line each,
+# clickable file:// locations); --all also shows orphans / other projects'
+datamanifest list
+datamanifest list --all
+
 # Use the path in a shell pipeline
 python analysis.py --data "$(datamanifest path file)"
 
