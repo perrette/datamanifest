@@ -78,6 +78,7 @@ def _is_maintenance(args) -> bool:
     return any((
         args.kind, args.scope, args.format, args.orphan,
         args.older_than, args.fields, args.delete, args.move,
+        getattr(args, "push", None), getattr(args, "pull", None),
     ))
 
 
@@ -201,6 +202,23 @@ def _cmd_list(args):
         _maintain(objects, args)
         return
 
+    if getattr(args, "push", None) or getattr(args, "pull", None):
+        from . import sync
+
+        host = args.push or args.pull
+        direction = "push" if args.push else "pull"
+        sync_objects = []
+        for obj in objects:
+            try:
+                sync_objects.append(sync.sync_object_from_location(
+                    db, kind=obj.kind, ident=obj.key, location=obj.location,
+                ))
+            except sync.RemoteRepoError as e:
+                print(f"Skipped ($repo, out of scope): {obj.key}", file=sys.stderr)
+                continue
+        _do_transfer(db, sync_objects, host, direction, args)
+        return
+
     fields = (
         [f.strip() for f in args.fields.split(",") if f.strip()]
         if args.fields else list(_DEFAULT_OBJECT_FIELDS)
@@ -247,6 +265,60 @@ def _maintain(objects, args):
         print(f"{verb}: {acted} produced {noun} (dry run; pass --yes to apply)")
     else:
         print(f"{verb}: {acted} produced {noun}")
+
+
+def _fmt_size(n: int) -> str:
+    """Human-readable byte size for the sync dry-run report."""
+    size = float(n)
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+        if size < 1024 or unit == "TiB":
+            return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{n} B"
+
+
+def _do_transfer(db, objects, host, direction, args):
+    """Push/pull each resolved :class:`SyncObject` to/from *host*.
+
+    Shared by the ``push`` / ``pull`` subcommands and ``list --push/--pull``.
+    With ``--dry-run`` it reports the selection (id, kind, local & remote paths,
+    size) and transfers nothing."""
+    from . import sync
+
+    project_root = db.get_project_root()
+    verb = direction.capitalize()
+    for obj in objects:
+        plan = sync.transfer(
+            db, obj, host, direction=direction, project_root=project_root,
+            dry_run=args.dry_run,
+        )
+        if args.dry_run:
+            print(
+                f"Would {direction}: {plan['kind']} {plan['id']}  "
+                f"{_fmt_size(plan['size'])}\n"
+                f"  local : {plan['local']}\n"
+                f"  remote: {host}:{plan['remote']}"
+            )
+        else:
+            print(f"{verb}ed: {plan['kind']} {plan['id']}  -> {host}:{plan['remote']}"
+                  if direction == "push" else
+                  f"{verb}ed: {plan['kind']} {plan['id']}  <- {host}:{plan['remote']}")
+
+
+def _cmd_push(args):
+    db = _get_db()
+    from . import sync
+
+    objects = sync.resolve_objects(db, args.id, batch=args.batch)
+    _do_transfer(db, objects, args.host, "push", args)
+
+
+def _cmd_pull(args):
+    db = _get_db()
+    from . import sync
+
+    objects = sync.resolve_objects(db, args.id, batch=args.batch)
+    _do_transfer(db, objects, args.host, "pull", args)
 
 
 def _cmd_download(args):
@@ -553,6 +625,20 @@ def main():
         "--yes", "-y", action="store_true",
         help="Actually perform --delete / --move (otherwise a dry run)",
     )
+    sync_group = p_list.add_argument_group("object actions (sync)")
+    _sync_excl = sync_group.add_mutually_exclusive_group()
+    _sync_excl.add_argument(
+        "--push", metavar="SSH_HOST",
+        help="Push the selected objects to SSH_HOST (rsync over ssh)",
+    )
+    _sync_excl.add_argument(
+        "--pull", metavar="SSH_HOST",
+        help="Pull the selected objects from SSH_HOST (rsync over ssh)",
+    )
+    sync_group.add_argument(
+        "--dry-run", action="store_true",
+        help="With --push/--pull: report the selection and transfer nothing",
+    )
     p_list.set_defaults(func=_cmd_list)
 
     # download
@@ -673,6 +759,33 @@ def main():
         help="Rewrite FILE in place instead of writing to stdout",
     )
     p_format.set_defaults(func=_cmd_format)
+
+    # push / pull — cross-machine sync of a single object (rsync over ssh).
+    for name, func, arrow in (("push", _cmd_push, "to"), ("pull", _cmd_pull, "from")):
+        p_sync = subparsers.add_parser(
+            name,
+            help=f"Transfer a stored object {arrow} an SSH host (rsync over ssh)",
+            description=(
+                f"{name.capitalize()} a single stored object {arrow} SSH_HOST. "
+                "The object is addressed by its machine-independent id: a fetched "
+                "dataset by name/alias/doi, or a produced artifact by "
+                "cachetype[/version]/hash (full or an unambiguous hash prefix). "
+                "An ambiguous id errors unless --batch. Writes no manifest; "
+                "idempotent. $repo-stored datasets are refused (out of scope)."
+            ),
+        )
+        p_sync.add_argument("id", metavar="ID", help="Object identifier")
+        p_sync.add_argument("host", metavar="SSH_HOST", help="user@host or host")
+        sync_opts = p_sync.add_argument_group("options")
+        sync_opts.add_argument(
+            "--dry-run", action="store_true",
+            help="Report the selection (id, kind, paths, size) and transfer nothing",
+        )
+        sync_opts.add_argument(
+            "--batch", action="store_true",
+            help="Transfer all objects matching an ambiguous id instead of erroring",
+        )
+        p_sync.set_defaults(func=func)
 
     args = parser.parse_args()
     try:

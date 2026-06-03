@@ -85,6 +85,7 @@ __all__ = [
     "SyncObject",
     "resolve_object",
     "resolve_objects",
+    "sync_object_from_location",
     "remote_env",
     "remote_root",
     "transfer",
@@ -413,6 +414,39 @@ def resolve_objects(db, ident, *, project_root=None, batch=False):
     if not objects:
         raise ValueError(f"no object found for id {ident!r}")
     return objects
+
+
+def sync_object_from_location(db, *, kind, ident, location, selector=None,
+                              project_root=None):
+    """Build a :class:`SyncObject` from an already-resolved on-disk *location*.
+
+    Used by the bulk ``list --push/--pull`` path, where the maintenance
+    enumeration has already produced the object's kind / key / absolute
+    location: the store-relative ``rel`` is the location stripped of the bare
+    store-folder root (``$data`` for fetched, ``$cache`` for produced — the
+    selector the enumeration walked). Refuses a ``$repo`` location."""
+    if project_root is None:
+        project_root = db.get_project_root()
+    if selector is None:
+        selector = "$cache" if kind == "cached" else "$data"
+    folder_name = selector[1:].split("/", 1)[0] if selector.startswith("$") else "data"
+    if folder_name.startswith("{") and folder_name.endswith("}"):
+        folder_name = folder_name[1:-1]
+    if folder_name == "repo":
+        raise RemoteRepoError(
+            f"object {ident!r} is under $repo; $repo is out of scope for sync."
+        )
+    root = store.folder_base(
+        folder_name, project_root=project_root,
+        storage_config=db.storage_config,
+    )
+    local_abs = os.path.abspath(location)
+    rel = _rel_from_composed(local_abs, root)
+    return SyncObject(
+        id=ident, kind=kind, selector=selector, rel=rel,
+        local_abs=local_abs, is_dir=os.path.isdir(local_abs),
+        size=_object_size(local_abs),
+    )
 
 
 # ---------------------------------------------------------------------------
