@@ -21,6 +21,7 @@ from datamanifest.cache import (
     enumerate_artifacts,
     find_produced_artifacts,
     move_object,
+    param_hash,
     read_metadata,
     read_usage,
 )
@@ -168,6 +169,26 @@ def test_cached_hit_does_not_duplicate_or_restamp(cache_root, usage_log, tmp_pat
     assert calls["n"] == 1  # no recompute
     assert index_path.read_bytes() == first_index  # no re-register / churn
     assert metadata_path.stat().st_mtime == first_meta_mtime  # no re-stamp
+
+
+def test_metadata_records_provenance(cache_root, usage_log, tmp_path):
+    proj = tmp_path / "proj"
+    proj.mkdir()
+
+    @cached(cachetype="t", format="txt", project_root=str(proj))
+    def produce(*, name):
+        return name
+
+    produce(name="v")
+    artifact = (
+        cache_root / "cached" / project_id(str(proj)) / "t"
+        / param_hash({"name": "v"})
+    )
+    md = read_metadata(str(artifact))
+    assert md["_META"]["schema"] == 1
+    assert md["tool"].startswith("datamanifestpy ")
+    # `created` is stamped once, as an RFC-3339 UTC instant.
+    assert md["created"].endswith("Z") and "T" in md["created"]
 
 
 # ----- last-access stamp (best-effort, advisory) -----------------------------

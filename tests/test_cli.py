@@ -185,6 +185,72 @@ def test_list_delete_dry_run_then_applies(tmp_path):
     assert not artifact.exists(), "--delete --yes should remove the orphan"
 
 
+def test_list_move_relocates_orphan(tmp_path):
+    cache = tmp_path / "cache"
+    artifact, key = _orphan_artifact(cache, "mt", {"g": "5x5"})
+    dest = tmp_path / "archive"
+    env = _maint_env(tmp_path, cache)
+
+    # Dry run (default): reports but keeps, and does not create the destination.
+    dry = _run("list", "--orphan", "--move", str(dest), env=env)
+    assert dry.returncode == 0, dry.stderr
+    assert artifact.is_dir()
+    assert not dest.exists()
+
+    # --yes applies the move, preserving the <cachetype>/<hash> key path.
+    run = _run("list", "--orphan", "--move", str(dest), "--yes", env=env)
+    assert run.returncode == 0, run.stderr
+    assert not artifact.exists()
+    h = key.split("/", 1)[1]
+    assert (dest / "mt" / h / "data.txt").exists()
+
+
+def test_older_than_filter_excludes_recent():
+    # Unit-test the --older-than filter directly: enumeration bumps a directory's
+    # atime (relatime updates it on the walk), so an end-to-end backdate is not
+    # reliable — but the filter logic over the last-access field is exact.
+    import datetime
+    import types
+
+    from datamanifest.cache._inspect import CacheObject
+    from datamanifest.cli import _filter_objects
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    stamp = "%Y-%m-%dT%H:%M:%SZ"
+    old = (now - datetime.timedelta(days=10)).strftime(stamp)
+    fresh = now.strftime(stamp)
+    objs = [
+        CacheObject(kind="cached", location="/x/old", key="old/h", last_access=old),
+        CacheObject(kind="cached", location="/x/new", key="new/h", last_access=fresh),
+    ]
+    args = types.SimpleNamespace(
+        kind=None, scope=None, format=None, orphan=False, older_than="1d"
+    )
+    kept = {o.key for o in _filter_objects(objs, args)}
+    assert "old/h" in kept and "new/h" not in kept
+
+
+def test_list_kind_data_lists_fetched_dataset(tmp_path):
+    # A present fetched dataset (via local_path) alongside a cached orphan:
+    # --kind datasets shows the fetched entry and excludes the produced artifact.
+    cache = tmp_path / "cache"
+    _orphan_artifact(cache, "mt", {"g": "5x5"})
+    data_file = tmp_path / "external.csv"
+    data_file.write_text("a,b\n1,2\n")
+    toml = tmp_path / "datasets.toml"
+    toml.write_text(f'[mydata]\nlocal_path = "{data_file}"\nformat = "csv"\n')
+    env = dict(os.environ)
+    env["DATAMANIFEST_CACHE_DIR"] = str(cache)
+    env["DATAMANIFEST_USAGE_LOG"] = str(tmp_path / "usage.toml")
+    env["DATAMANIFEST_TOML"] = str(toml)
+
+    result = _run("list", "--kind", "datasets", "--fields", "kind,key", env=env)
+    assert result.returncode == 0, result.stderr
+    assert "mydata" in result.stdout
+    assert "datasets" in result.stdout
+    assert "mt/" not in result.stdout  # the cached orphan is filtered out
+
+
 # ----- init -----
 
 def test_init_creates_file(tmp_path):
