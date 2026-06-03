@@ -263,8 +263,9 @@ schema = 1
 fetcher = "mypkg.fetch:download_mydata"   # entry-point ref; resolved via importlib
 loader  = "mypkg.load:load_mydata"
 
-[_LANG.python.loaders]
-csv = "mypkg.loaders:load_csv"            # per-format default for this manifest
+[_LANG.python.loaders]                    # project-wide format → loader defaults
+csv = "pandas.io.parsers:read_csv"        # string form (a bare module:function ref)
+nc  = { ref = "myclimate.loaders:load_nc", kwargs = { decode_times = false } }  # table form
 
 [mydata._LANG.julia]
 fetcher = "MyPkg.fetch_mydata"            # preserved verbatim; Python never touches it
@@ -292,8 +293,8 @@ which writes the bytes into the shared store; Python then reads them from disk
 (load never crosses languages, only bytes do). The Julia env is discovered by
 walking up from the manifest directory (or `$JULIA_PROJECT`) for a `Project.toml`
 whose `[deps]` lists `DataManifest`, and the rung is gated on `julia` being on
-`PATH`. When the toolchain is absent the rung is **skipped silently** and the
-ladder advances to the `uri` download. Cross-language fetch applies to fetched
+`PATH`. When the toolchain is absent the rung **logs a warning and skips**, and
+the ladder advances to the `uri` download. Cross-language fetch applies to fetched
 datasets only (never `@cached` produced datasets); it is **on by default** and
 probe-gated (a no-op unless a foreign fetcher and a usable Julia env are both
 present). Toggle it per file with `delegate = false`, or per run with the
@@ -301,17 +302,20 @@ present). Toggle it per file with `delegate = false`, or per run with the
 
 ### Parameterized bindings
 
-Python `fetcher`/`loader` values may be a `{ ref, args, kwargs }` table instead
-of a plain string, allowing the same entry-point to be reused across datasets
-that differ only in arguments:
+A binding (a `fetcher`, a `loader`, or an entry in the `[_LANG.python.loaders]`
+map) may be a `{ ref, args, kwargs }` table instead of a plain string, so one
+entry-point can be reused across datasets that differ only in arguments (example
+from the spec's [`examples/datasets.toml`](https://github.com/perrette/datamanifest.toml/blob/main/examples/datasets.toml)):
 
 ```toml
 [esm_5x5._LANG.python.loader]
-ref    = "mypkg.load:esm"
-kwargs = { grid = "5x5" }
+ref    = "myclimate.loaders:load_esm"
+args   = ["$path"]                                     # positional, in order
+kwargs = { grid = "5x5", skip_models = ["CESM.*"] }    # keyword
 
 [esm_10x10._LANG.python.loader]
-ref    = "mypkg.load:esm"
+ref    = "myclimate.loaders:load_esm"
+args   = ["$path"]
 kwargs = { grid = "10x10" }
 ```
 
@@ -319,7 +323,12 @@ String values in `args` and `kwargs` undergo `$var` substitution before the
 call. Available variables: `$download_path` (fetcher), `$path` (loader),
 `$key`, `$version`, `$doi`, `$format`, `$branch`, `$uri`, `$project_root`.
 
-A bare string `fetcher`/`loader` keeps the conventional keyword-argument call.
+The two forms are interchangeable at **every** binding site (per-dataset
+`fetcher`/`loader` **and** the project-wide `[_LANG.python.loaders]` defaults). A
+bare string `"module:function"` is the alias for `{ ref = "module:function" }`
+and makes the conventional call (a loader gets the dataset path; a fetcher the
+standard context). Canonical writing: a binding with no `args`/`kwargs` is
+written as the **string**, one that carries them as the **table**.
 
 Foreign `_LANG.<other>` subtrees (e.g. `_LANG.julia`) are preserved verbatim on every read→write cycle; Python never modifies them. Unknown structural tables (any `_*` key that Python does not recognise) are similarly passed through.
 

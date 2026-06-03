@@ -1063,6 +1063,76 @@ def test_load_dataset_named_loader_precedes_builtin(tmp_path):
     assert os.path.isfile(result[1])
 
 
+def test_lang_loaders_binding_roundtrip(tmp_path):
+    """[_LANG.python.loaders] values support the { ref, args, kwargs } table form;
+    a bare ref serializes back as a string, a parameterized one as a table."""
+    try:
+        import tomllib
+    except ModuleNotFoundError:  # Python 3.10
+        import tomli as tomllib
+
+    from datamanifest.database import Database
+
+    src = tmp_path / "m.toml"
+    src.write_text(
+        "[_META]\nschema = 1\n\n"
+        "[_LANG.python.loaders]\n"
+        'csv = "pkg.mod:plain"\n'
+        'nc = { ref = "pkg.mod:withargs", kwargs = { grid = "5x5" } }\n'
+    )
+    db = Database(datasets_toml=str(src), persist=False)
+    assert db.lang_python_loaders == {"csv": "pkg.mod:plain", "nc": "pkg.mod:withargs"}
+    assert db.lang_python_loaders_args == {}
+    assert db.lang_python_loaders_kwargs == {"nc": {"grid": "5x5"}}
+
+    out = tmp_path / "out.toml"
+    db.write(str(out))
+    with open(out, "rb") as f:
+        raw = tomllib.load(f)
+    loaders_raw = raw["_LANG"]["python"]["loaders"]
+    assert loaders_raw["csv"] == "pkg.mod:plain"          # bare ref → string
+    assert isinstance(loaders_raw["nc"], dict)            # parameterized → table
+    assert loaders_raw["nc"]["ref"] == "pkg.mod:withargs"
+    assert loaders_raw["nc"]["kwargs"] == {"grid": "5x5"}
+
+    # Re-reading the written file reproduces the parsed fields.
+    db2 = Database(datasets_toml=str(out), persist=False)
+    assert db2.lang_python_loaders == db.lang_python_loaders
+    assert db2.lang_python_loaders_kwargs == db.lang_python_loaders_kwargs
+
+
+def test_lang_loaders_parameterized_execution(tmp_path):
+    """A manifest format-default loader given as a { ref, args, kwargs } table is
+    called with $var-substituted args/kwargs."""
+    import json
+
+    from datamanifest.database import Database
+    from datamanifest.pipelines import load_dataset
+    from tests.helpers import loaders as L
+
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "data.json").write_text(json.dumps({"a": 1}))
+
+    toml = tmp_path / "datasets.toml"
+    toml.write_text(
+        "[_META]\nschema = 1\n\n"
+        "[_LANG.python.loaders]\n"
+        'json = { ref = "tests.helpers.loaders:param_loader", '
+        'args = ["$path"], kwargs = { grid = "5x5" } }\n'
+    )
+    db = Database(
+        datasets_toml=str(toml), datasets_folder=str(tmp_path / "cache"), persist=False
+    )
+    db.skip_checksum = True
+    db.register_dataset(f"file://{src}/data.json", name="j", persist=False)
+
+    result = load_dataset(db, "j")
+    assert result[0] == "param"
+    assert L.param_loader.last_call["grid"] == "5x5"           # kwargs applied
+    assert os.path.isfile(L.param_loader.last_call["path"])    # $path substituted
+
+
 def test_load_dataset_extracted_archive_returns_dir(tmp_path):
     """An extracted-archive entry with no loader returns the extracted directory."""
     from datamanifest.database import Database
