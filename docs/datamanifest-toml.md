@@ -9,19 +9,23 @@ implementation owns it, and [`DataManifest.jl`](https://github.com/awi-esc/DataM
 ## Conformance
 
 This package conforms to **schema v1** (`_META.schema = 1`) against spec tag
-**`spec-v1.1`**. The two version axes are independent: `_META.schema` is the
+**`spec-v2`**. The two version axes are independent: `_META.schema` is the
 data-model version (bumped only on breaking structural change), and the spec tag
 tracks prose/fixture evolution. Pinning the tag here is what lets this package and
 `DataManifest.jl` move at their own pace while sharing one normative format.
 
-**Pinned spec:** https://github.com/perrette/datamanifest.toml/blob/spec-v1.1/SCHEMA.md
+**Pinned spec:** https://github.com/perrette/datamanifest.toml/blob/spec-v2/SCHEMA.md
+
+> **Note:** The conformance fixture tarball still points at `spec-v1.1`. Re-pinning
+> the fixture suite to the `spec-v2` git tag requires a network fetch and is a manual
+> post-merge step; the offline test suite runs against the already-downloaded fixtures.
 
 The whole *contract* two implementations must agree on — top-level layout, common
 fields, `_LANG` bindings and `$var` substitution, the fetch/load ladders, the
-storage model (default roots, `DATAMANIFEST_<STORE>_DIR` env vars, `repo→data→cache`
-read order, `.complete` markers), and canonical byte-identity ordering — is
-normative *in the spec*, not restated here. When this page and the spec disagree,
-the spec wins.
+storage model (folder variables, `$`-selectors, path-expression interpolation,
+`repo→data→cache` read order, `.complete` markers), and canonical byte-identity
+ordering — is normative *in the spec*, not restated here. When this page and the
+spec disagree, the spec wins.
 
 The spec is capability-based: a tool declares which named capabilities it supports
 and runs only the fixtures tagged for them. This package's status:
@@ -31,11 +35,10 @@ and runs only the fixtures tagged for them. This package's status:
 | `lang-read` | ✅ | Parses `[<ds>._LANG.python]` / `[_LANG.python.loaders]`; applies the load ladder. |
 | `lang-write` | ✅ | Regenerates `_LANG.python`, preserves foreign `_LANG.*` and unknown `_*` tables verbatim (lossless round-trip). |
 | `shell-fetch` | ✅ | Executes the `[<ds>._LANG.shell].fetcher` command template (`expand_shell_template`). |
-| `storage` | ✅ | Honors `store` + `[_STORAGE]`; `platformdirs` roots, env-var/`_HOST`/`_PROFILE` precedence, `repo→data→cache` read order, atomic publish + `.complete` markers. |
+| `storage` | ✅ | spec-v2 storage model: folder variables (`$data`, `$cache`, `$repo` built-in; user-defined via `[_STORAGE]`), `$folder[/subpath]` selectors, `[_STORAGE].default` project default, path-expression interpolation (`$folder`/`$ENV`/`~`) in `local_path` and `[_STORAGE]` values, env-var/`_HOST`/`_PROFILE` precedence ladder, `repo→data→cache` built-in probe order, atomic publish + `.complete` markers. Bare (non-`$`) `store` values are rejected with a migration hint. |
 | `byte-identity` | ✅ | Canonical lexicographic key ordering; this package is the **normative reference** (`_sort_recursive`). |
 | `binding-args` | ✅ | Executes the `{ ref, args, kwargs }` table form with `$var` substitution (`_substitute_vars`). |
 | `delegation` | ❌ | Peer-CLI delegation (fetch-ladder rung 3) is not implemented; the ladder skips straight to `uri` download. No `datamanifest fetch` subcommand yet. |
-| `mount` | ◐ | The `mount` store value is parsed and preserved verbatim, but not activated (the spec leaves its mechanics unspecified in v1.1, so this is intentional). |
 
 ### What differs / is added on top
 
@@ -44,8 +47,11 @@ Behavior in this package beyond — or looser than — the normative spec:
 - **v0 read compatibility.** A file with no `[_META]` is read leniently as schema v0
   (flat `python=`, `[_LOADERS]`, …). The spec marks these forms deprecated; this
   package keeps reading them. See [v0 → v1](#v0--v1-read-compatibility-and-migration).
-- **`datamanifest migrate`** — opt-in v0→v1 rewrite for Python bindings. Explicitly
-  **non-normative** in the spec (migration is each tool's own concern).
+- **`datamanifest migrate`** — opt-in v0→v1→v2 rewrite for Python bindings and `store`
+  selectors. Explicitly **non-normative** in the spec (migration is each tool's own
+  concern). Running `datamanifest migrate` rewrites bare `store = "x"` entries to
+  `store = "$x"` (v1.1 → v2) in addition to the existing v0 → v1 Python-binding
+  rewrite.
 - **`datamanifest update-checksums`** — recompute stored `sha256` from disk. A local
   convenience, not part of the spec's CLI surface.
 - **Legacy read-only location probe.** When a dataset isn't in any configured store,
@@ -126,6 +132,6 @@ The package ships a `datamanifest` CLI (`list`, `download`, `path`, `add`,
 | Concern | Julia — `DataManifest.jl` | Python — `datamanifest` | Schema spec |
 |---|---|---|---|
 | Implementation | [awi-esc/DataManifest.jl](https://github.com/awi-esc/DataManifest.jl) | [perrette/datamanifest](https://github.com/perrette/datamanifest) | — |
-| Schema version | v1 | v1 (v0 accepted on read) | [SCHEMA.md @ spec-v1.1](https://github.com/perrette/datamanifest.toml/blob/spec-v1.1/SCHEMA.md) |
-| Language bindings | `[_LANG.julia]` subtrees | `[_LANG.python]` subtrees | [§ Language bindings](https://github.com/perrette/datamanifest.toml/blob/spec-v1.1/SCHEMA.md) |
-| Common fields | `Databases.jl` `DatasetEntry` | `database.py` `DatasetEntry` | [§ Common fields](https://github.com/perrette/datamanifest.toml/blob/spec-v1.1/SCHEMA.md) |
+| Schema version | v1 | v1 (v0 accepted on read) | [SCHEMA.md @ spec-v2](https://github.com/perrette/datamanifest.toml/blob/spec-v2/SCHEMA.md) |
+| Language bindings | `[_LANG.julia]` subtrees | `[_LANG.python]` subtrees | [§ Language bindings](https://github.com/perrette/datamanifest.toml/blob/spec-v2/SCHEMA.md) |
+| Common fields | `Databases.jl` `DatasetEntry` | `database.py` `DatasetEntry` | [§ Common fields](https://github.com/perrette/datamanifest.toml/blob/spec-v2/SCHEMA.md) |
