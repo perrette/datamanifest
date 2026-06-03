@@ -1113,6 +1113,28 @@ def test_get_dataset_path_local_path_no_root():
     assert path == "data/foo.csv"
 
 
+def test_get_dataset_path_v3_datasets_prefix(tmp_path, monkeypatch):
+    """spec-v3: a fetched path composes as ``<bare-root>/datasets/<key>`` for the
+    built-in ``$data`` / ``$cache`` stores (no ``/Datasets`` suffix, no
+    ``datasets_folder`` override)."""
+    from datamanifest.database import get_dataset_path, init_dataset_entry
+
+    data_dir = tmp_path / "appdata"
+    cache_dir = tmp_path / "appcache"
+    monkeypatch.setenv("DATAMANIFEST_DATA_DIR", str(data_dir))
+    monkeypatch.setenv("DATAMANIFEST_CACHE_DIR", str(cache_dir))
+
+    entry = init_dataset_entry("https://example.com/host/f.csv")
+    assert get_dataset_path(entry, project_root=str(tmp_path)) == str(
+        data_dir / "datasets" / entry.key
+    )
+
+    centry = init_dataset_entry("https://example.com/host/f.csv", store="$cache")
+    assert get_dataset_path(centry, project_root=str(tmp_path)) == str(
+        cache_dir / "datasets" / centry.key
+    )
+
+
 def test_skip_download_raises_if_path_missing(tmp_path):
     """skip_download=True raises FileNotFoundError with 'documented URI is' when path absent."""
     from datamanifest.database import Database

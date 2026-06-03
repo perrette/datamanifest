@@ -626,12 +626,15 @@ def get_dataset_path(
     ``skip_download``: returns ``entry.uri`` directly (the user manages the
     file; the pipeline raises if that path is absent).
 
-    Otherwise the path is ``<root>/<key>`` where ``<root>`` is the entry's
-    store **selector** (``$folder[/subpath]``), resolved via
-    :func:`datamanifest.storage.resolve_selector`. An empty ``store`` uses the
-    project default selector (:func:`datamanifest.storage.project_default`). An
+    Otherwise the path is composed (spec-v3) as
+    ``<root>/datasets/<key>`` where ``<root>`` is the **bare** root of the
+    entry's store **selector** (``$folder[/subpath]``), via
+    :func:`datamanifest.storage.composed_path` with ``kind="datasets"`` (scope
+    is empty for fetched datasets). An empty ``store`` uses the project default
+    selector (:func:`datamanifest.storage.project_default`). An
     explicitly-provided *datasets_folder* overrides the default ``$data`` root
-    (back-compat with callers that pass a fixed folder).
+    and is used verbatim, with no ``datasets/`` prefix (back-compat with callers
+    that pass a fixed folder).
     """
     if entry.local_path != "":
         host = socket.gethostname()
@@ -659,13 +662,15 @@ def get_dataset_path(
     if extract:
         key = get_extract_path(key)
     selector = entry.store or storage.project_default(storage_config)
+    # An explicit datasets_folder overrides the default $data root and is used
+    # verbatim (no datasets/ prefix), for back-compat with callers passing a
+    # fixed folder. Otherwise compose the spec-v3 path <root>/datasets/<key>.
     if datasets_folder and selector == "$data":
-        folder = datasets_folder
-    else:
-        folder = storage.resolve_selector(
-            selector, project_root=project_root, storage_config=storage_config
-        )
-    return os.path.join(folder, key)
+        return os.path.join(datasets_folder, key)
+    return storage.composed_path(
+        selector, key, kind="datasets",
+        project_root=project_root, storage_config=storage_config,
+    )
 
 
 # Read-resolution search order: a present, complete entry in a higher-priority
@@ -696,12 +701,16 @@ def _warn_legacy_dir_once() -> None:
 def resolve_existing_path(db: "Database", entry: "DatasetEntry", extract=None) -> str:
     """Return the on-disk path to read *entry* from.
 
-    Probes, in order, the entry's own resolved ``store`` **selector** folder
-    (``$folder[/subpath]``, defaulting to the project default), then the
+    Probes, in order, the entry's own resolved ``store`` **selector** then the
     built-in folders in :data:`_READ_STORE_ORDER` (``repo`` → ``data`` →
-    ``cache``) via :func:`datamanifest.storage.folder_root`, and returns the
-    first ``<root>/<key>`` that exists. A present copy in a higher-priority
-    folder shadows the others (spec-v2 portable storage model). When none exist,
+    ``cache``), each composed (spec-v3) under the ``datasets/`` content prefix
+    via :func:`datamanifest.storage.composed_path` (``<root>/datasets/<key>``),
+    and returns the first that exists. A present copy in a higher-priority
+    folder shadows the others (portable storage model). When none exist, the
+    legacy read-only locations are probed: the pre-v1.1 default
+    (``~/.cache/Datasets/<key>``) and the v0.5.0 spec-v2 layout
+    (``<root>/Datasets/<key>``), skipped when the data dir is pinned via
+    ``DATAMANIFEST_DATA_DIR`` / ``DATAMANIFEST_DIR``. When nothing is found,
     falls back to the *write* path for the entry's selected store (so a
     subsequent fetch materializes there).
     """
@@ -720,48 +729,65 @@ def resolve_existing_path(db: "Database", entry: "DatasetEntry", extract=None) -
     if extract:
         key = get_extract_path(key)
 
-    # Candidate roots in priority order: the entry's own resolved store selector
-    # first, then the built-in folders repo -> data -> cache. The
+    # Candidate paths in priority order: the entry's own resolved store selector
+    # first, then the built-in folders repo -> data -> cache, each composed under
+    # the spec-v3 ``datasets/`` content prefix (``<root>/datasets/<key>``). The
     # ``datasets_folder`` back-compat override still wins for the default data
-    # store.
-    roots = []
+    # store and is used verbatim (no prefix).
+    candidates = []
     selector = entry.store or storage.project_default(db.storage_config)
     if db.datasets_folder and selector == "$data":
-        roots.append(db.datasets_folder)
+        candidates.append(os.path.join(db.datasets_folder, key))
     else:
-        roots.append(
-            storage.resolve_selector(
-                selector, project_root=project_root,
-                storage_config=db.storage_config,
+        candidates.append(
+            storage.composed_path(
+                selector, key, kind="datasets",
+                project_root=project_root, storage_config=db.storage_config,
             )
         )
     for store in _READ_STORE_ORDER:
         if store == "data" and db.datasets_folder:
-            roots.append(db.datasets_folder)
+            candidates.append(os.path.join(db.datasets_folder, key))
         else:
-            roots.append(
+            candidates.append(
+                storage.composed_path(
+                    "$" + store, key, kind="datasets",
+                    project_root=project_root, storage_config=db.storage_config,
+                )
+            )
+
+    seen = set()
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        if os.path.isfile(candidate) or os.path.isdir(candidate):
+            return candidate
+    # Legacy read-only back-compat probes, checked last so any new-layout copy
+    # wins. Covers the pre-v1.1 default (~/.cache/Datasets) and the v0.5.0
+    # spec-v2 layout (<root>/Datasets/<key> per built-in store, via the suffixed
+    # folder_root resolver). Skipped when the user has pinned the data dir
+    # (DATAMANIFEST_DATA_DIR / DATAMANIFEST_DIR). New writes never go here.
+    if not (
+        os.environ.get("DATAMANIFEST_DATA_DIR") or os.environ.get("DATAMANIFEST_DIR")
+    ):
+        legacy_roots = [storage.legacy_data_root()]
+        for store in _READ_STORE_ORDER:
+            legacy_roots.append(
                 storage.folder_root(
                     store, project_root=project_root,
                     storage_config=db.storage_config,
                 )
             )
-
-    seen = set()
-    for root in roots:
-        if root in seen:
-            continue
-        seen.add(root)
-        candidate = os.path.join(root, key)
-        if os.path.isfile(candidate) or os.path.isdir(candidate):
-            return candidate
-    # Legacy read-only back-compat probe (pre-v1.1 default ~/.cache/Datasets),
-    # checked last so any new-store copy wins. Skipped when the user has made an
-    # explicit data-dir choice (DATAMANIFEST_DATA_DIR). New writes never go here.
-    if not os.environ.get("DATAMANIFEST_DATA_DIR"):
-        legacy_candidate = os.path.join(storage.legacy_data_root(), key)
-        if os.path.isfile(legacy_candidate) or os.path.isdir(legacy_candidate):
-            _warn_legacy_dir_once()
-            return legacy_candidate
+        seen_legacy = set()
+        for root in legacy_roots:
+            if root in seen_legacy:
+                continue
+            seen_legacy.add(root)
+            legacy_candidate = os.path.join(root, key)
+            if os.path.isfile(legacy_candidate) or os.path.isdir(legacy_candidate):
+                _warn_legacy_dir_once()
+                return legacy_candidate
     return get_dataset_path(
         entry,
         db.datasets_folder,
