@@ -509,25 +509,57 @@ def lang_shell_fetcher(entry: DatasetEntry) -> str:
     return ""
 
 
+def resolve_python_fetcher(entry: DatasetEntry):
+    """Resolve the own-language (Python) fetcher binding for *entry*.
+
+    Fetch-ladder rung 1 (spec-v3.4): explicit ``[<ds>._LANG.python].fetcher``
+    wins over the bare ``[<ds>].fetcher``, which in turn wins over the legacy
+    flat ``python=`` field. Returns ``(ref, args, kwargs, explicit)`` where
+    *explicit* is ``True`` only for the explicit ``_LANG.python`` binding (so a
+    failure there is a hard error; a failing bare/legacy binding is tolerated and
+    falls through). Returns ``("", [], {}, False)`` when no Python fetcher applies.
+    """
+    if entry.lang_python_fetcher:
+        return (
+            entry.lang_python_fetcher,
+            list(entry.lang_python_fetcher_args),
+            dict(entry.lang_python_fetcher_kwargs),
+            True,
+        )
+    if entry.fetcher:
+        return (
+            entry.fetcher,
+            list(entry.fetcher_args),
+            dict(entry.fetcher_kwargs),
+            False,
+        )
+    if entry.python:
+        return (entry.python, [], {}, False)
+    return ("", [], {}, False)
+
+
 def resolve_fetcher(entry: DatasetEntry):
     """Resolve *entry*'s effective fetch binding via the v1 fetch ladder (design §6).
 
     Returns a ``(kind, value)`` pair:
 
     - ``("python", ref)`` — in-process entry-point hook: own
-      ``[<ds>._LANG.python].fetcher`` (v1) or legacy ``python=``.
-    - ``("shell", template)`` — shell command template: own
-      ``[<ds>._LANG.shell].fetcher`` (v1) or legacy ``shell=``.
+      ``[<ds>._LANG.python].fetcher`` (v1), bare ``fetcher`` (spec-v3.4), or
+      legacy ``python=``.
+    - ``("shell", template)`` — shell command template: bare ``shell``
+      (spec-v3.5 canonical) or legacy ``[<ds>._LANG.shell].fetcher``.
     - ``("uri", None)`` — plain URI download (``uri`` / ``uris``).
     - ``(None, None)`` — nothing to fetch with; the caller raises.
 
     The peer-tool *delegation* rung (design §6, between shell and uri) is
     intentionally NOT implemented in this roadmap (§D), so it is skipped.
     """
-    python_ref = entry.lang_python_fetcher or entry.python
+    python_ref = resolve_python_fetcher(entry)[0]
     if python_ref:
         return ("python", python_ref)
-    shell_template = lang_shell_fetcher(entry) or entry.shell
+    # spec-v3.5: the bare `shell` field is the canonical shell fetcher and wins
+    # over the legacy [<ds>._LANG.shell].fetcher (kept as the fallback).
+    shell_template = entry.shell or lang_shell_fetcher(entry)
     if shell_template:
         return ("shell", shell_template)
     if entry.uri or entry.uris:
@@ -535,34 +567,89 @@ def resolve_fetcher(entry: DatasetEntry):
     return (None, None)
 
 
-def resolve_loader_binding(db, entry: DatasetEntry):
-    """Resolve *entry*'s effective Python loader binding (design §6 load ladder).
+def resolve_shell_or_uri(entry: DatasetEntry):
+    """Resolve the fetch ladder *below* the Python rung: shell, then uri.
 
-    Returns ``(ref, args, kwargs)``. Ladder: own ``[<ds>._LANG.python].loader``
-    (with its args/kwargs) or legacy ``loader=`` → manifest
-    ``[_LANG.python.loaders][format]`` (with its args/kwargs). The manifest
-    format-default loader supports the same parameterized ``{ ref, args, kwargs }``
-    form as a per-dataset binding. Returns ``("", [], {})`` when neither applies,
-    so the caller falls through to a named ``_LOADERS`` loader and then the
-    built-in format default. Loaders never delegate (design §6).
+    Used when a bare/legacy Python fetcher failed and was tolerated, so the
+    engine continues at the next rung. Returns the same ``(kind, value)`` shape
+    as :func:`resolve_fetcher` for ``"shell"`` / ``"uri"`` / ``None``.
     """
+    shell_template = entry.shell or lang_shell_fetcher(entry)
+    if shell_template:
+        return ("shell", shell_template)
+    if entry.uri or entry.uris:
+        return ("uri", None)
+    return (None, None)
+
+
+def resolve_loader_rungs(db, entry: DatasetEntry):
+    """Return the ordered own-language loader rungs for *entry* (design §6).
+
+    Each rung is ``(ref, args, kwargs, explicit)``. The load ladder (rung 1 +
+    rung 2) collapses to, in order:
+
+    1. explicit ``[<ds>._LANG.python].loader`` (explicit=True), else bare
+       ``[<ds>].loader`` (spec-v3.4, explicit=False);
+    2. ``[_LANG.python.loaders][format]`` (explicit=True), else
+       ``[_LOADERS][format]`` (spec-v3.4, explicit=False).
+
+    *explicit* gates tolerance: a failing explicit ``_LANG.python`` binding is a
+    hard error; a failing bare binding warns and falls through to the next rung.
+    A caller that ignores the flag and uses the first rung keeps the old
+    behaviour. The built-in format default (rung 3) is not represented here.
+    """
+    rungs = []
     if entry.lang_python_loader:
-        return (
+        rungs.append((
             entry.lang_python_loader,
             list(entry.lang_python_loader_args),
             dict(entry.lang_python_loader_kwargs),
-        )
-    if entry.loader:
-        return entry.loader, [], {}
+            True,
+        ))
+    elif entry.loader:
+        rungs.append((
+            entry.loader,
+            list(entry.loader_args),
+            dict(entry.loader_kwargs),
+            False,
+        ))
     fmt = (entry.format or "").strip().lower()
     if fmt:
+        explicit_added = False
         for name, ref in db.lang_python_loaders.items():
             if str(name).strip().lower() == fmt:
-                return (
+                rungs.append((
                     ref,
                     list(db.lang_python_loaders_args.get(name, [])),
                     dict(db.lang_python_loaders_kwargs.get(name, {})),
-                )
+                    True,
+                ))
+                explicit_added = True
+                break
+        if not explicit_added:
+            for name, ref in db.loaders.items():
+                if str(name).strip().lower() == fmt:
+                    rungs.append((
+                        ref,
+                        list(db.loaders_args.get(name, [])),
+                        dict(db.loaders_kwargs.get(name, {})),
+                        False,
+                    ))
+                    break
+    return rungs
+
+
+def resolve_loader_binding(db, entry: DatasetEntry):
+    """Effective Python loader binding (first load-ladder rung; design §6).
+
+    Returns ``(ref, args, kwargs)`` for the highest-priority own-language loader
+    rung (see :func:`resolve_loader_rungs`), or ``("", [], {})`` when none
+    applies (the caller then falls through to the built-in format default).
+    """
+    rungs = resolve_loader_rungs(db, entry)
+    if rungs:
+        ref, args, kwargs, _ = rungs[0]
+        return ref, args, kwargs
     return "", [], {}
 
 

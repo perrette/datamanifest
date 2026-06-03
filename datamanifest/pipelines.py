@@ -31,10 +31,13 @@ from . import default_loaders, storage
 from .config import COMPRESSED_FORMATS, logger, project_root_from_paths
 from .database import (
     get_dataset_path,
+    lang_shell_fetcher,
     parse_uri_metadata,
     resolve_existing_path,
     resolve_fetcher,
-    resolve_loader_binding,
+    resolve_loader_rungs,
+    resolve_python_fetcher,
+    resolve_shell_or_uri,
     search_dataset,
     verify_checksum,
 )
@@ -548,22 +551,36 @@ def _fetch_into_path(
 
     # Effective fetch binding via the v1 ladder (design §6): own in-process
     # Python fetcher → shell template → plain uri. Delegation is deferred.
-    kind, value = resolve_fetcher(dataset)
+    #
+    # Fetch rung 1 (spec-v3.4): explicit [<ds>._LANG.python].fetcher wins over
+    # the bare `fetcher`, which wins over legacy `python=`. A failing *bare* or
+    # legacy fetcher is tolerated (warn + fall through to shell/uri); a failing
+    # *explicit* _LANG.python fetcher is a hard error (the author asked for it).
+    py_ref, py_args, py_kwargs, py_explicit = resolve_python_fetcher(dataset)
+    if py_ref:
+        try:
+            _run_python_hook(
+                dataset,
+                download_path,
+                project_root,
+                required_paths_ordered=required_paths_ordered,
+                python_includes=python_includes,
+                ref=py_ref,
+                args=py_args,
+                kwargs=py_kwargs,
+            )
+            return
+        except Exception as exc:  # noqa: BLE001
+            if py_explicit:
+                raise
+            logger.warning(
+                "Bare fetcher %r for dataset %r did not resolve/run in Python "
+                "(%s); falling through the fetch ladder.",
+                py_ref, dataset.key, exc,
+            )
 
-    # Python hook: run the resolved entry-point callable instead of a URI
-    # download (replaces Julia's _run_julia, PipeLines.jl:251-257).
-    if kind == "python":
-        _run_python_hook(
-            dataset,
-            download_path,
-            project_root,
-            required_paths_ordered=required_paths_ordered,
-            python_includes=python_includes,
-            ref=value,
-            args=dataset.lang_python_fetcher_args,
-            kwargs=dataset.lang_python_fetcher_kwargs,
-        )
-        return
+    # Remaining rungs once any Python fetcher has been tried/skipped: shell, uri.
+    kind, value = resolve_shell_or_uri(dataset)
 
     # Shell hook: run the expanded template instead of a URI download
     # (PipeLines.jl:259-270). No shell=True — the command is tokenized with
@@ -581,11 +598,12 @@ def _fetch_into_path(
         return
 
     if kind is None:
-        # No own fetcher, no shell fetcher, no uri — the ladder bottoms out.
+        # No usable fetcher, no shell fetcher, no uri — the ladder bottoms out.
         raise ValueError(
             f"No fetcher available for dataset {dataset.key!r}: it declares no "
-            "in-process fetcher (_LANG.python.fetcher / python=), no shell "
-            "fetcher (_LANG.shell.fetcher / shell=), and no uri to download."
+            "usable in-process fetcher (_LANG.python.fetcher / bare fetcher / "
+            "python=), no shell fetcher (bare shell / _LANG.shell.fetcher), and "
+            "no uri to download."
         )
 
     # kind == "uri": plain URI download — dispatch on the resolved scheme.
@@ -723,7 +741,12 @@ def download_dataset(db, dataset, extract=None, overwrite: bool = False):
         logger.info("Downloading dataset: %s to %s", dataset.uri, download_path)
         req_paths_by_ref: dict = {}
         req_paths_ordered: list = []
-        if reqs and (dataset.shell != "" or dataset.python != ""):
+        if reqs and (
+            dataset.shell != ""
+            or dataset.python != ""
+            or dataset.fetcher != ""
+            or lang_shell_fetcher(dataset) != ""
+        ):
             order = _get_download_order(db, name)
             for ref in reqs:
                 _, dep_entry = search_dataset(db, ref)
@@ -829,20 +852,32 @@ def load_dataset(db, dataset, loader=None, **kwargs):
                     )
         return loader(path)
 
-    # v1 load ladder (design §6): own loader (own _LANG.python.loader / legacy
-    # entry.loader) → manifest [_LANG.python.loaders][format]. A resolved ref is
-    # always run in-process — loaders never delegate.
-    loader_ref, loader_args, loader_kwargs = resolve_loader_binding(db, entry)
-    if loader_ref != "":
-        fn = _get_loader_function(db, loader_ref)
-        if loader_args or loader_kwargs:
-            variables = _binding_variables(
-                entry, path=path, project_root=db.get_project_root()
+    # v1 load ladder (design §6, spec-v3.4): rung 1 own loader
+    # (explicit _LANG.python.loader, else bare `loader`) → rung 2 manifest
+    # format-default (explicit [_LANG.python.loaders][fmt], else bare
+    # [_LOADERS][fmt]) → rung 3 built-in default loader. A resolved ref is run
+    # in-process (loaders never delegate). A *bare* rung that fails to resolve
+    # or call in Python warns and falls through to the next rung; an *explicit*
+    # _LANG.python rung that fails is a hard error (the author asked for it).
+    for loader_ref, loader_args, loader_kwargs, explicit in resolve_loader_rungs(db, entry):
+        try:
+            fn = _get_loader_function(db, loader_ref)
+            if loader_args or loader_kwargs:
+                variables = _binding_variables(
+                    entry, path=path, project_root=db.get_project_root()
+                )
+                call_args = _substitute_vars(list(loader_args), variables)
+                call_kwargs = _substitute_vars(dict(loader_kwargs), variables)
+                return fn(*call_args, **call_kwargs)
+            return fn(path)
+        except Exception as exc:  # noqa: BLE001
+            if explicit:
+                raise
+            logger.warning(
+                "Bare loader %r for dataset %r did not resolve/run in Python "
+                "(%s); falling through the load ladder.",
+                loader_ref, entry.key, exc,
             )
-            call_args = _substitute_vars(list(loader_args), variables)
-            call_kwargs = _substitute_vars(dict(loader_kwargs), variables)
-            return fn(*call_args, **call_kwargs)
-        return fn(path)
 
     # For an extracted archive the resolved path is a directory and there is no
     # single-file format to load; return the directory path directly
@@ -850,8 +885,16 @@ def load_dataset(db, dataset, loader=None, **kwargs):
     if entry.extract and entry.format in COMPRESSED_FORMATS:
         return path
 
-    # Built-in / named _LOADERS default for the format (last ladder rung).
-    return default_loader(db, entry.format)(path)
+    # Rung 3: built-in default loader for the format. The manifest-configured
+    # format defaults ([_LANG.python.loaders] / [_LOADERS]) were already tried
+    # (and tolerated) above, so go straight to the built-in here.
+    fmt = (entry.format or "").strip().lower()
+    if not fmt:
+        raise ValueError(
+            "No loader provided and dataset format is empty. "
+            "Pass a loader function, e.g. loader=lambda path: open(path).read()."
+        )
+    return default_loaders.default_loader(fmt)(path)
 
 
 # ----- module-level convenience wrappers (Item 17) -----
