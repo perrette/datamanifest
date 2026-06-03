@@ -314,6 +314,10 @@ loader = "myproject.loaders:load_temperature"   # bare per-dataset loader
 [derived]
 format  = "nc"
 fetcher = "myproject.build:derived"             # bare per-dataset fetcher (no uri)
+
+[model_output]                                  # bare, language-agnostic shell fetcher
+format = "nc"
+shell  = "make model_output OUTPUT=$download_path"   # same command for every tool
 ```
 
 The bare `shell` field is the **canonical, language-agnostic** shell fetcher (the
@@ -321,6 +325,10 @@ same command for every tool — not a `_LANG` tag); the legacy
 `[<ds>._LANG.shell].fetcher` is still read and preserved as the fallback. Bare
 bindings are kept **bare** on write (never promoted into `_LANG.python`), so a
 hand-authored single-language manifest round-trips unchanged.
+
+A full, runnable example manifest — bare loaders/fetchers, a parameterized loader,
+the bare `shell` fetcher, storage selectors — lives in the spec repo:
+[`examples/datasets.toml`](https://github.com/perrette/datamanifest.toml/blob/main/examples/datasets.toml).
 
 **Cross-language fetch (rung 3).** The rare case: a dataset whose only fetcher is
 defined in another language (e.g. `[<ds>._LANG.julia].fetcher`), with no native
