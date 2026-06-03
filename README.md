@@ -60,6 +60,25 @@ path = datamanifest.get_dataset_path(db, "file")
 
 The module-level functions (`add`, `download_dataset`, `load_dataset`, `get_dataset_path`, …) look up a process-wide default `Database` via `pyproject.toml` discovery, the `DATAMANIFEST_TOML` / `DATASETS_TOML` environment variables, or a `datasets.toml` / `datamanifest.toml` file in the working tree. Pass an explicit `db` as the first argument to bypass auto-discovery.
 
+### Produce-or-load caching (`@cached`)
+
+Cache the result of an expensive computation, keyed by its keyword arguments:
+
+```python
+from datamanifest.cache import cached
+
+@cached(cachetype="esm_anomaly", format="nc")
+def load_anomaly(*, grid="5x5", skip_models=()):
+    ...  # expensive; returns an xarray.Dataset
+    return ds
+
+ds = load_anomaly(grid="5x5")          # computes, materializes under $cache, registers in cached.toml
+ds = load_anomaly(grid="5x5")          # cache hit: loads and returns
+ds = load_anomaly(grid="5x5", cached=False)  # force recompute
+```
+
+The keyword arguments (minus `_`-prefixed runtime knobs) are hashed (canonical JSON → SHA-256) into a portable `<cachetype>/<hash>` key; the artifact and its `config.toml` / `metadata.toml` sidecars live under `$cache`. Produced datasets are **not** written into `datasets.toml` — they are indexed in a sibling `cached.toml`, and `datamanifest gc` reclaims unreferenced ones. The cache layer (`datamanifest.cache`) is an in-repo layer over the shared `datamanifest.store` substrate and never touches the fetch path.
+
 ## CLI usage
 
 ```
@@ -78,6 +97,7 @@ datamanifest COMMAND [OPTIONS]
 | `init [--folder PATH] [--force]` | Create a fresh `datasets.toml` in the current directory |
 | `where` | Print active `datasets_toml` and `datasets_folder` paths |
 | `migrate FILE` | Rewrite a manifest to the current schema in-place (v0→v1 `_LANG` form; v1.1→v2 bare-store `"x"` → `"$x"`) |
+| `gc [--dry-run] [--grace AGE]` | Reclaim unreferenced `@cached` artifacts under `$cache` (root-reachability; default grace `7d`) |
 
 Examples:
 
@@ -97,6 +117,10 @@ datamanifest verify
 # Recompute stored checksums from what's on disk (e.g. after regenerating data)
 datamanifest update-checksums --dry-run   # preview which would change
 datamanifest update-checksums             # write the new checksums
+
+# Reclaim unreferenced @cached artifacts under $cache
+datamanifest gc --dry-run                 # preview what would be collected
+datamanifest gc --grace 30d               # delete orphans older than 30 days
 
 # Where is the active manifest?
 datamanifest where
@@ -120,7 +144,7 @@ datamanifest where
 | Named + default loaders (csv, parquet, nc, json, yaml, toml, zip, tar) | yes |
 | TOML manifest round-trip (read `tomllib`, write `tomli_w`) | yes |
 | Project-root auto-discovery (`pyproject.toml` walk, env vars) | yes |
-| CLI (`datamanifest list/download/path/add/remove/show/verify/update-checksums/init/where/migrate`) | yes |
+| CLI (`datamanifest list/download/path/add/remove/show/verify/update-checksums/init/where/migrate/format/gc`) | yes |
 | Schema v1 `_LANG` namespace (read + write) | yes |
 | Fetch ladder: own Python fetcher → shell template → URI | yes |
 | Load ladder: own Python loader → manifest default → built-in | yes |
@@ -131,6 +155,8 @@ datamanifest where
 | Safe concurrent materialization (`.tmp` → atomic publish → `.complete` marker) | yes |
 | Verify-once integrity (checksum only at fetch; `.complete` entry skips re-hash) | yes |
 | Recursive canonical key ordering / byte-identity (normative reference) | yes |
+| Produce-or-load cache (`@cached`: param-hash keying, `config.toml`/`metadata.toml` sidecars) | yes |
+| `cached.toml` index + `datamanifest gc` (root-reachability collector) | yes |
 
 ## Storage model (spec-v2)
 
@@ -298,6 +324,8 @@ Implemented capabilities:
 | `storage` — `$`-selectors, folder variables (`$data`/`$cache`/`$repo` + user-defined), `[_STORAGE].default`, path-expression interpolation, platformdirs roots, read-order resolution | yes |
 | `binding-args` — `{ ref, args, kwargs }` table form with `$var` substitution | yes |
 | `byte-identity` — recursive canonical key ordering (normative reference) | yes |
+| `cache-produce` — `@cached` produce-or-load: param-hash keying + `config.toml`/`metadata.toml` sidecars | yes |
+| `cache-gc` — `cached.toml` index + `datamanifest gc` root-reachability collector | yes |
 | `delegation` — peer-CLI runtime (delegate fetch/load to another tool) | not yet |
 
 The conformance test suite (`tests/test_conformance.py`) downloads the pinned spec fixture tarball, verifies every file against a recorded per-file SHA-256 hash (`tests/conformance_pin.toml`), and runs only the fixtures whose `capabilities` are a subset of the above set, skipping the rest with a reason. Re-pinning the fixture suite to the `spec-v2` tag is a manual post-merge step (requires network access).
