@@ -66,6 +66,20 @@ class DatasetEntry:
     shell: str = ""
     python: str = ""
     loader: str = ""
+    # Bare per-dataset bindings (spec-v3.4, language-implicit): read as the
+    # running tool's OWN language, equivalent to [<ds>._LANG.<self>].fetcher /
+    # .loader but without the wrapper. Each accepts the bare-ref string or the
+    # parameterized { ref, args, kwargs } table form (the ref lives in the
+    # field, args/kwargs in the paired fields). `loader` (above) is the bare
+    # loader ref; `loader_args`/`loader_kwargs` carry its table form. An explicit
+    # [<ds>._LANG.python] binding overrides the bare one (see resolve_fetcher /
+    # resolve_loader_binding). A bare binding that fails to resolve in Python
+    # warns and falls through the ladder (tolerant); an explicit one hard-errors.
+    fetcher: str = ""
+    fetcher_args: list = field(default_factory=list)
+    fetcher_kwargs: dict = field(default_factory=dict)
+    loader_args: list = field(default_factory=list)
+    loader_kwargs: dict = field(default_factory=dict)
     requires: list = field(default_factory=list)
     # v1 _LANG.python bindings (read via _LANG namespace; written back in Item 4).
     # Each binding may be a bare ref string or a parameterized
@@ -222,6 +236,18 @@ def to_dict(entry: DatasetEntry) -> dict:
             "lang_python_loader_kwargs",
         }:
             continue
+        # Bare bindings (spec-v3.4): `fetcher`/`loader` are emitted below via
+        # _python_binding (string when bare, table when carrying args/kwargs);
+        # their paired *_args/*_kwargs fields are never written as flat keys.
+        if name in {
+            "fetcher",
+            "fetcher_args",
+            "fetcher_kwargs",
+            "loader",
+            "loader_args",
+            "loader_kwargs",
+        }:
+            continue
         # `delegate` defaults to True (delegation on); only the non-default
         # opt-out (`delegate = false`) is written, so the common case stays
         # absent from the manifest.
@@ -239,6 +265,19 @@ def to_dict(entry: DatasetEntry) -> dict:
         if name == "store" and value == "":
             continue
         output[name] = value
+    # Bare bindings (spec-v3.4): keep them BARE on write — never promote a bare
+    # `fetcher`/`loader` into [<ds>._LANG.python]. Emit each as a top-level
+    # dataset key via _python_binding (a string when it carries no args/kwargs,
+    # a { ref, args, kwargs } table otherwise). `shell` is already written as a
+    # plain top-level string by the field loop above (spec-v3.5 canonical form).
+    if entry.fetcher:
+        output["fetcher"] = _python_binding(
+            entry.fetcher, entry.fetcher_args, entry.fetcher_kwargs
+        )
+    if entry.loader:
+        output["loader"] = _python_binding(
+            entry.loader, entry.loader_args, entry.loader_kwargs
+        )
     # Re-emit preserved extension keys verbatim (cross-language passthrough).
     # Appended last so any table-valued extra serializes after scalar fields.
     # `_LANG` is handled specially below: its foreign subtrees are spliced in
@@ -340,6 +379,23 @@ def init_dataset_entry(uri=None, uris=None, ref: str = "", downloads=None, **kwa
             if kwargs.get("python"):
                 raise ValueError("Cannot provide both `callable` and `python`")
             kwargs["python"] = callable_ref
+
+    # Bare per-dataset bindings (spec-v3.4): `fetcher` / `loader` may each be a
+    # bare ref string or a parameterized { ref, args, kwargs } table. Split a
+    # table form into the ref field + the paired args/kwargs fields, so the
+    # dataclass fields always hold scalar ref + list args + dict kwargs.
+    for binding_key, args_field, kwargs_field in (
+        ("fetcher", "fetcher_args", "fetcher_kwargs"),
+        ("loader", "loader_args", "loader_kwargs"),
+    ):
+        bv = kwargs.get(binding_key)
+        if isinstance(bv, dict):
+            ref_v, args_v, kwargs_v = _split_python_binding(bv)
+            kwargs[binding_key] = ref_v
+            if args_v and args_field not in kwargs:
+                kwargs[args_field] = args_v
+            if kwargs_v and kwargs_field not in kwargs:
+                kwargs[kwargs_field] = kwargs_v
 
     # Normalize: uri can be a list (same as uris).
     if isinstance(uri, (list, tuple)):
@@ -446,7 +502,7 @@ def init_dataset_entry(uri=None, uris=None, ref: str = "", downloads=None, **kwa
         elif not entry.version:
             entry.version = ref
     else:
-        if entry.shell == "" and entry.python == "":
+        if entry.shell == "" and entry.python == "" and entry.fetcher == "":
             entry.uri = build_uri(entry)
 
     entry.key = entry.key if entry.key else get_dataset_key(entry)
@@ -478,25 +534,57 @@ def lang_shell_fetcher(entry: DatasetEntry) -> str:
     return ""
 
 
+def resolve_python_fetcher(entry: DatasetEntry):
+    """Resolve the own-language (Python) fetcher binding for *entry*.
+
+    Fetch-ladder rung 1 (spec-v3.4): explicit ``[<ds>._LANG.python].fetcher``
+    wins over the bare ``[<ds>].fetcher``, which in turn wins over the legacy
+    flat ``python=`` field. Returns ``(ref, args, kwargs, explicit)`` where
+    *explicit* is ``True`` only for the explicit ``_LANG.python`` binding (so a
+    failure there is a hard error; a failing bare/legacy binding is tolerated and
+    falls through). Returns ``("", [], {}, False)`` when no Python fetcher applies.
+    """
+    if entry.lang_python_fetcher:
+        return (
+            entry.lang_python_fetcher,
+            list(entry.lang_python_fetcher_args),
+            dict(entry.lang_python_fetcher_kwargs),
+            True,
+        )
+    if entry.fetcher:
+        return (
+            entry.fetcher,
+            list(entry.fetcher_args),
+            dict(entry.fetcher_kwargs),
+            False,
+        )
+    if entry.python:
+        return (entry.python, [], {}, False)
+    return ("", [], {}, False)
+
+
 def resolve_fetcher(entry: DatasetEntry):
     """Resolve *entry*'s effective fetch binding via the v1 fetch ladder (design §6).
 
     Returns a ``(kind, value)`` pair:
 
     - ``("python", ref)`` — in-process entry-point hook: own
-      ``[<ds>._LANG.python].fetcher`` (v1) or legacy ``python=``.
-    - ``("shell", template)`` — shell command template: own
-      ``[<ds>._LANG.shell].fetcher`` (v1) or legacy ``shell=``.
+      ``[<ds>._LANG.python].fetcher`` (v1), bare ``fetcher`` (spec-v3.4), or
+      legacy ``python=``.
+    - ``("shell", template)`` — shell command template: bare ``shell``
+      (spec-v3.5 canonical) or legacy ``[<ds>._LANG.shell].fetcher``.
     - ``("uri", None)`` — plain URI download (``uri`` / ``uris``).
     - ``(None, None)`` — nothing to fetch with; the caller raises.
 
     The peer-tool *delegation* rung (design §6, between shell and uri) is
     intentionally NOT implemented in this roadmap (§D), so it is skipped.
     """
-    python_ref = entry.lang_python_fetcher or entry.python
+    python_ref = resolve_python_fetcher(entry)[0]
     if python_ref:
         return ("python", python_ref)
-    shell_template = lang_shell_fetcher(entry) or entry.shell
+    # spec-v3.5: the bare `shell` field is the canonical shell fetcher and wins
+    # over the legacy [<ds>._LANG.shell].fetcher (kept as the fallback).
+    shell_template = entry.shell or lang_shell_fetcher(entry)
     if shell_template:
         return ("shell", shell_template)
     if entry.uri or entry.uris:
@@ -504,34 +592,89 @@ def resolve_fetcher(entry: DatasetEntry):
     return (None, None)
 
 
-def resolve_loader_binding(db, entry: DatasetEntry):
-    """Resolve *entry*'s effective Python loader binding (design §6 load ladder).
+def resolve_shell_or_uri(entry: DatasetEntry):
+    """Resolve the fetch ladder *below* the Python rung: shell, then uri.
 
-    Returns ``(ref, args, kwargs)``. Ladder: own ``[<ds>._LANG.python].loader``
-    (with its args/kwargs) or legacy ``loader=`` → manifest
-    ``[_LANG.python.loaders][format]`` (with its args/kwargs). The manifest
-    format-default loader supports the same parameterized ``{ ref, args, kwargs }``
-    form as a per-dataset binding. Returns ``("", [], {})`` when neither applies,
-    so the caller falls through to a named ``_LOADERS`` loader and then the
-    built-in format default. Loaders never delegate (design §6).
+    Used when a bare/legacy Python fetcher failed and was tolerated, so the
+    engine continues at the next rung. Returns the same ``(kind, value)`` shape
+    as :func:`resolve_fetcher` for ``"shell"`` / ``"uri"`` / ``None``.
     """
+    shell_template = entry.shell or lang_shell_fetcher(entry)
+    if shell_template:
+        return ("shell", shell_template)
+    if entry.uri or entry.uris:
+        return ("uri", None)
+    return (None, None)
+
+
+def resolve_loader_rungs(db, entry: DatasetEntry):
+    """Return the ordered own-language loader rungs for *entry* (design §6).
+
+    Each rung is ``(ref, args, kwargs, explicit)``. The load ladder (rung 1 +
+    rung 2) collapses to, in order:
+
+    1. explicit ``[<ds>._LANG.python].loader`` (explicit=True), else bare
+       ``[<ds>].loader`` (spec-v3.4, explicit=False);
+    2. ``[_LANG.python.loaders][format]`` (explicit=True), else
+       ``[_LOADERS][format]`` (spec-v3.4, explicit=False).
+
+    *explicit* gates tolerance: a failing explicit ``_LANG.python`` binding is a
+    hard error; a failing bare binding warns and falls through to the next rung.
+    A caller that ignores the flag and uses the first rung keeps the old
+    behaviour. The built-in format default (rung 3) is not represented here.
+    """
+    rungs = []
     if entry.lang_python_loader:
-        return (
+        rungs.append((
             entry.lang_python_loader,
             list(entry.lang_python_loader_args),
             dict(entry.lang_python_loader_kwargs),
-        )
-    if entry.loader:
-        return entry.loader, [], {}
+            True,
+        ))
+    elif entry.loader:
+        rungs.append((
+            entry.loader,
+            list(entry.loader_args),
+            dict(entry.loader_kwargs),
+            False,
+        ))
     fmt = (entry.format or "").strip().lower()
     if fmt:
+        explicit_added = False
         for name, ref in db.lang_python_loaders.items():
             if str(name).strip().lower() == fmt:
-                return (
+                rungs.append((
                     ref,
                     list(db.lang_python_loaders_args.get(name, [])),
                     dict(db.lang_python_loaders_kwargs.get(name, {})),
-                )
+                    True,
+                ))
+                explicit_added = True
+                break
+        if not explicit_added:
+            for name, ref in db.loaders.items():
+                if str(name).strip().lower() == fmt:
+                    rungs.append((
+                        ref,
+                        list(db.loaders_args.get(name, [])),
+                        dict(db.loaders_kwargs.get(name, {})),
+                        False,
+                    ))
+                    break
+    return rungs
+
+
+def resolve_loader_binding(db, entry: DatasetEntry):
+    """Effective Python loader binding (first load-ladder rung; design §6).
+
+    Returns ``(ref, args, kwargs)`` for the highest-priority own-language loader
+    rung (see :func:`resolve_loader_rungs`), or ``("", [], {})`` when none
+    applies (the caller then falls through to the built-in format default).
+    """
+    rungs = resolve_loader_rungs(db, entry)
+    if rungs:
+        ref, args, kwargs, _ = rungs[0]
+        return ref, args, kwargs
     return "", [], {}
 
 
@@ -1112,8 +1255,15 @@ class Database:
         self.datasets_folder = datasets_folder
         self.skip_checksum = skip_checksum
         self.skip_checksum_folders = skip_checksum_folders
-        # Loader registry (behaviour filled in by a later item).
+        # Loader registry (behaviour filled in by a later item). `loaders` is the
+        # bare, language-implicit [_LOADERS] format→binding map (spec-v3.4); a
+        # value may be a bare ref or a { ref, args, kwargs } table — the ref
+        # lives here, any args/kwargs in the parallel maps. It is the
+        # language-implicit counterpart of [_LANG.python.loaders] and is the
+        # lower-precedence rung (explicit wins).
         self.loaders: dict = {}
+        self.loaders_args: dict = {}
+        self.loaders_kwargs: dict = {}
         self.loaders_python_includes: list = []
         self.loader_cache: dict = {}
         # v1 _LANG.python.loaders: format→ref map from [_LANG.python.loaders].
@@ -1142,6 +1292,8 @@ class Database:
             and self.datasets_folder == other.datasets_folder
             and self.datasets_toml == other.datasets_toml
             and self.loaders == other.loaders
+            and self.loaders_args == other.loaders_args
+            and self.loaders_kwargs == other.loaders_kwargs
             and self.loaders_python_includes == other.loaders_python_includes
             and self.lang_python_loaders == other.lang_python_loaders
             and self.lang_python_loaders_args == other.lang_python_loaders_args
@@ -1171,12 +1323,19 @@ class Database:
 
     # ----- TOML serialization (Databases.jl:184-258) -----
     def to_dict(self) -> dict:
+        # [_LOADERS] is a bare, language-implicit format→binding map (spec-v3.4):
+        # written back as a bare map, each value a string when it carries no
+        # args/kwargs, a { ref, args, kwargs } table otherwise (via
+        # _python_binding). It is preserved bare — never promoted into
+        # [_LANG.python.loaders].
         loaders_table: dict = {}
         if self.loaders_python_includes:
             loaders_table["python_includes"] = list(self.loaders_python_includes)
         for n, c in self.loaders.items():
             if not _is_empty(c):
-                loaders_table[n] = c
+                loaders_table[n] = _python_binding(
+                    c, self.loaders_args.get(n), self.loaders_kwargs.get(n)
+                )
         result: dict = {}
         if loaders_table:
             result["_LOADERS"] = loaders_table
@@ -1260,9 +1419,10 @@ class Database:
 
         _legacy: set = set()
 
+        # [_LOADERS] is a supported (spec-v3.4 language-implicit) form, not a
+        # legacy one, so reading it does not trigger the migrate warning.
         loaders_section = datasets.get("_LOADERS", datasets.get("_loaders"))
         if isinstance(loaders_section, dict):
-            _legacy.add("_LOADERS")
             includes = loaders_section.get(
                 "python_includes", loaders_section.get("julia_includes", [])
             )
@@ -1276,7 +1436,20 @@ class Database:
                     "julia_modules",
                 ):
                     continue
-                self.loaders[str(k)] = v if isinstance(v, str) else repr(v)
+                # [_LOADERS] is a language-implicit format→binding map
+                # (spec-v3.4): each value is a bare ref string or a
+                # { ref, args, kwargs } table. Split it across the parallel maps.
+                if isinstance(v, dict):
+                    ref, a, kw = _split_python_binding(v)
+                    if not ref:
+                        continue
+                    self.loaders[str(k)] = ref
+                    if a:
+                        self.loaders_args[str(k)] = a
+                    if kw:
+                        self.loaders_kwargs[str(k)] = kw
+                else:
+                    self.loaders[str(k)] = v if isinstance(v, str) else repr(v)
 
         meta_section = datasets.get("_META")
         if isinstance(meta_section, dict):
@@ -1319,7 +1492,10 @@ class Database:
         names = [k for k in datasets if not k.startswith("_")]
         for i, name in enumerate(names):
             info = dict(datasets[name])
-            for _leg in ("python", "callable", "shell", "loader"):
+            # Only the inline-code language-named flat fields are legacy
+            # (spec Deprecations). Bare `fetcher`/`loader`/`shell` are supported
+            # spec-v3.4/v3.5 forms and do not trigger the migrate warning.
+            for _leg in ("python", "callable"):
                 if info.get(_leg):
                     _legacy.add(_leg)
             persist_on_last_iteration = persist and i == len(names) - 1
@@ -1353,10 +1529,21 @@ class Database:
         the registry clears the resolution cache.
         """
         if loaders is not None:
-            self.loaders = {
-                str(k): (v if isinstance(v, str) else repr(v))
-                for k, v in loaders.items()
-            }
+            self.loaders = {}
+            self.loaders_args = {}
+            self.loaders_kwargs = {}
+            for k, v in loaders.items():
+                if isinstance(v, dict):
+                    ref, a, kw = _split_python_binding(v)
+                    if not ref:
+                        continue
+                    self.loaders[str(k)] = ref
+                    if a:
+                        self.loaders_args[str(k)] = a
+                    if kw:
+                        self.loaders_kwargs[str(k)] = kw
+                else:
+                    self.loaders[str(k)] = v if isinstance(v, str) else repr(v)
         if python_includes is not None:
             self.loaders_python_includes = [str(x) for x in python_includes]
         self.loader_cache.clear()
@@ -1366,32 +1553,43 @@ class Database:
 
 # ----- v0 → v1 migration -----
 def migrate_v0_to_v1(db: "Database") -> None:
-    """Migrate *db* from v0 flat bindings to v1 _LANG form (in-place).
+    """Migrate *db* from v0 inline-code bindings to v1 form (in-place).
 
-    Moves each dataset's ``python=`` to ``[<ds>._LANG.python].fetcher`` and
-    ``loader=`` to ``[<ds>._LANG.python].loader``.  Moves the ``[_LOADERS]``
-    format→ref map to ``[_LANG.python.loaders]``.  Sets ``_META.schema = 1``.
-    ``shell=`` and all foreign keys are left verbatim.
+    Promotes each dataset's inline-code ``python=`` to the explicit
+    ``[<ds>._LANG.python].fetcher`` binding and sets ``_META.schema = 1``.
+
+    The bare per-dataset ``fetcher`` / ``loader`` and the top-level
+    ``[_LOADERS]`` map are **supported** spec-v3.4 language-implicit forms, not
+    legacy ones, so migration leaves them bare (a writer keeps a bare binding
+    bare — never promotes it into ``_LANG.python``).
+
+    For the shell fetcher (spec-v3.5) the migration runs the *other* way: the
+    bare ``shell`` field is the canonical form, so a legacy
+    ``[<ds>._LANG.shell].fetcher`` is **demoted** into a bare ``shell`` (when no
+    bare ``shell`` is already set) and the now-empty ``_LANG.shell`` block is
+    dropped. An existing bare ``shell`` is left bare. All other foreign keys are
+    left verbatim.
     """
     for _name, entry in db.datasets.items():
         if entry.python and not entry.lang_python_fetcher:
             entry.lang_python_fetcher = entry.python
             entry.python = ""
-        if entry.loader and not entry.lang_python_loader:
-            entry.lang_python_loader = entry.loader
-            entry.loader = ""
-        if entry.shell:
-            lang = entry.extra.setdefault("_LANG", {})
-            shell_block = lang.setdefault("shell", {})
-            if not isinstance(shell_block, dict):
-                shell_block = {}
-                lang["shell"] = shell_block
-            if not shell_block.get("fetcher"):
-                shell_block["fetcher"] = entry.shell
-                entry.shell = ""
-    if db.loaders and not db.lang_python_loaders:
-        db.lang_python_loaders = dict(db.loaders)
-        db.loaders = {}
+        # spec-v3.5: demote legacy [<ds>._LANG.shell].fetcher → bare `shell`.
+        lang = entry.extra.get("_LANG")
+        if isinstance(lang, dict):
+            shell_block = lang.get("shell")
+            if isinstance(shell_block, dict):
+                legacy_shell = shell_block.get("fetcher")
+                if isinstance(legacy_shell, str) and legacy_shell:
+                    if not entry.shell:
+                        entry.shell = legacy_shell
+                    shell_block.pop("fetcher", None)
+                    if not shell_block:
+                        lang.pop("shell", None)
+                        if not lang:
+                            entry.extra.pop("_LANG", None)
+    # [_LOADERS] is a supported spec-v3.4 language-implicit map; left bare
+    # (not promoted to [_LANG.python.loaders]).
     db.schema_version = 1
 
 

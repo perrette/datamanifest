@@ -32,9 +32,9 @@ and runs only the fixtures tagged for them. This package's status:
 
 | Capability | Status | Notes |
 |---|---|---|
-| `lang-read` | ✅ | Parses `[<ds>._LANG.python]` / `[_LANG.python.loaders]`; applies the load ladder. |
-| `lang-write` | ✅ | Regenerates `_LANG.python`, preserves foreign `_LANG.*` and unknown `_*` tables verbatim (lossless round-trip). |
-| `shell-fetch` | ✅ | Executes the `[<ds>._LANG.shell].fetcher` command template (`expand_shell_template`). |
+| `lang-read` | ✅ | Parses `[<ds>._LANG.python]` / `[_LANG.python.loaders]` **and** the language-implicit ("bare") forms — a per-dataset `fetcher`/`loader` and the top-level `[_LOADERS]` format→binding map, read as Python (spec-v3.4) — then applies the fetch/load ladders. An explicit `_LANG.python` binding wins over the bare one; a binding present for the running language (bare or explicit) that fails is an error — fail-loud, no silent fall-through (spec-v3.6). |
+| `lang-write` | ✅ | Regenerates `_LANG.python` only from explicit bindings, keeps bare `fetcher`/`loader`/`shell` and `[_LOADERS]` **bare** (never promoted into `_LANG.python`), and preserves foreign `_LANG.*` + unknown `_*` tables verbatim (lossless round-trip). |
+| `shell-fetch` | ✅ | Executes the dataset's bare `shell` command template (spec-v3.5 canonical, language-agnostic), else the legacy `[<ds>._LANG.shell].fetcher` (`expand_shell_template`). |
 | `storage` | ✅ | spec-v3 storage model: **bare roots** (`$data`/`$cache` resolve to `platformdirs` dirs without `/Datasets` suffix; `$repo` = project root); content composed as `<root>/datasets/<key>` (fetch) or `<root>/cached/<project-id>/<cachetype>/[<version>/]<hash>` (produced); `DATAMANIFEST_DIR` application base; folder variables (`$data`, `$cache`, `$repo` built-in; user-defined via `[_STORAGE]`), `$folder[/subpath]` selectors, `[_STORAGE].default` project default, path-expression interpolation, env-var/`_HOST` precedence ladder (no `_PROFILE` rung), `repo→data→cache` built-in probe order under `datasets/` prefix, atomic publish + `.complete` markers. Bare (non-`$`) `store` values are rejected with a migration hint. |
 | `byte-identity` | ✅ | Canonical lexicographic key ordering; this package is the **normative reference** (`sort_recursive` in the `datamanifest.store` substrate). |
 | `binding-args` | ✅ | Executes the `{ ref, args, kwargs }` table form with `$var` substitution (`_substitute_vars`). |
@@ -77,8 +77,15 @@ obsolete and ignored.
 
 ### Built-in default loaders
 
-When a dataset's `format` has no per-dataset `loader` and no
-`[_LANG.python.loaders]` entry, Python falls back to a built-in loader. The
+The load ladder is, in order: (1) the dataset's own loader — explicit
+`[<ds>._LANG.python].loader`, else the bare `loader`; (2) the manifest
+format-default — `[_LANG.python.loaders][format]`, else the language-implicit
+bare `[_LOADERS][format]` map; (3) the built-in loader for the format. (The
+explicit `_LANG.python` rung always wins over the bare counterpart at the same
+level, and a *present* rung — bare or explicit — that fails to resolve/run is an
+error, fail-loud, not a fall-through (spec-v3.6); the ladder only advances past an
+*absent* rung.) When a dataset's
+`format` reaches rung 3, Python uses a built-in loader. The
 format → implementation map (in `datamanifest/default_loaders.py`):
 
 | `format` | Loader | Dependency |
@@ -158,20 +165,24 @@ peer tools pipe their output through to obtain byte-identical files.
 
 ### v0 → v1 read compatibility and migration
 
-Legacy flat fields are accepted on read and mapped to their v1 equivalents:
+Only the **inline-code** language-named flat fields are legacy; the bare
+per-dataset `fetcher`/`loader`, the bare `shell`, and the top-level `[_LOADERS]`
+map are **supported** spec-v3.4/v3.5 forms and are read (and written) as-is, not
+deprecated. What `datamanifest migrate <file>` rewrites:
 
-| v0 field | v1 equivalent |
+| field on read | what `migrate` does |
 |---|---|
-| `python=` / `callable=` (per dataset) | `[<ds>._LANG.python] fetcher =` |
-| `loader=` (per dataset) | `[<ds>._LANG.python] loader =` |
-| `shell=` (per dataset) | `[<ds>._LANG.shell] fetcher =` |
-| `[_LOADERS]` format→ref map | `[_LANG.python.loaders]` |
+| `python=` / `callable=` (per dataset) | promote → `[<ds>._LANG.python] fetcher =` |
+| legacy `[<ds>._LANG.shell].fetcher` | **demote → bare `shell`** (canonical, spec-v3.5); empty `_LANG.shell` block dropped |
+| bare `shell` / `fetcher` / `loader` | left bare (supported form, no rewrite) |
+| `[_LOADERS]` format→binding map | left as a bare `[_LOADERS]` map (supported, spec-v3.4) |
 | `python_includes=` | — (project root auto-added to `sys.path`) |
 
-`datamanifest migrate <file>` rewrites a v0 manifest to v1 in-place (Python
-bindings and flat `shell=` fields; foreign `_LANG.*` keys are left verbatim).
-Migration is a Python-only convenience — the Julia tool reads v0 but does not
-rewrite it.
+`migrate` promotes only the inline-code `python=`/`callable=` fields, demotes the
+legacy `_LANG.shell.fetcher` to bare `shell`, and bumps `[_META].schema = 1`;
+bare `fetcher`/`loader` and `[_LOADERS]` are left bare. Migration is a
+Python-only convenience — the Julia tool reads these forms but does not rewrite
+them.
 
 ### CLI
 

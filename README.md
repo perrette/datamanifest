@@ -145,15 +145,16 @@ datamanifest list --kind cached --push user@hpc     # bulk: push the filtered se
 | SHA-256 checksum verification + auto-fill | yes |
 | ZIP / tar / tar.gz extraction | yes |
 | `requires=` dependency graph (topological order) | yes |
-| Shell template hook (`shell=`) | yes |
-| Python entry-point hook (`python=`) | yes |
+| Shell template hook (bare `shell`, language-agnostic) | yes |
+| Python entry-point hook (`_LANG.python.fetcher` / bare `fetcher` / legacy `python=`) | yes |
+| Language-implicit (bare) `fetcher`/`loader` + `[_LOADERS]` map (fail-loud for present bindings) | yes |
 | Named + default loaders (csv, parquet, nc, json, yaml, toml, zip, tar) | yes |
 | TOML manifest round-trip (read `tomllib`, write `tomli_w`) | yes |
 | Project-root auto-discovery (`pyproject.toml` walk, env vars) | yes |
 | CLI (`list/download/path/add/remove/show/verify/update-checksums/init/where/migrate/format`) | yes |
 | `_LANG` namespace for per-language bindings (read + write) | yes |
-| Fetch ladder: own Python fetcher → shell template → cross-language fetch → URI | yes |
-| Load ladder: own Python loader → manifest default → built-in | yes |
+| Fetch ladder: own Python fetcher (explicit/bare/legacy) → bare shell → cross-language fetch → URI | yes |
+| Load ladder: own Python loader (explicit/bare) → manifest default (`[_LANG.python.loaders]`/`[_LOADERS]`) → built-in | yes |
 | Lossless round-trip of foreign `_LANG.*` subtrees | yes |
 | Manifest migration (`datamanifest migrate`) | yes |
 | Portable storage model (folder variables, `$`-selectors, `[_STORAGE]` with per-host overrides, `platformdirs` roots) | yes |
@@ -272,17 +273,62 @@ fetcher = "MyPkg.fetch_mydata"            # preserved verbatim; Python never tou
 ```
 
 **Fetch ladder** (per dataset, in order):
-1. Own `_LANG.python.fetcher` entry-point
-2. Own `_LANG.shell.fetcher` template
+1. Own Python fetcher — explicit `_LANG.python.fetcher`, else the bare `fetcher`, else legacy `python=`
+2. Bare `shell` command template (else legacy `_LANG.shell.fetcher`)
 3. Cross-language fetch (rung 3) — run a fetcher defined in another language
 4. Plain `uri` download
 5. Error — no source available
 
 **Load ladder** (per dataset, in order):
-1. Own `_LANG.python.loader` entry-point
-2. Manifest `[_LANG.python.loaders][format]` default
+1. Own Python loader — explicit `_LANG.python.loader`, else the bare `loader`
+2. Manifest format default — `[_LANG.python.loaders][format]`, else the bare `[_LOADERS][format]` map
 3. Built-in format default (csv, parquet, nc, …)
 4. Error
+
+At every own-language rung the explicit `_LANG.python` binding wins over the bare
+one. A binding that is **present** for the running language — bare *or* explicit
+`_LANG.python` — is **fail-loud** (spec-v3.6): if it fails to resolve it is an
+error, and if it resolves and then raises the error propagates — never a silent
+fall-through to a different loader/fetcher. The ladder falls through only to skip
+rungs that are **absent** (another language's `_LANG.<other>` binding, or no own
+loader). A manifest meant for more than one language uses explicit
+`[<ds>._LANG.<lang>]` bindings (absent, and so correctly skipped, in the others).
+
+### Language-implicit (bare) bindings
+
+For a single-language project the `[<ds>._LANG.<lang>]` wrapper is needless
+ceremony. A dataset may instead carry a **bare** `fetcher`/`loader` directly, and
+a top-level `[_LOADERS]` table may carry a bare `format → binding` map — all read
+as bindings in the running tool's **own language** (here, Python):
+
+```toml
+[_LOADERS]                                # language-implicit format → loader defaults
+csv = "myproject.io:read_csv"
+nc  = "myproject.io:read_nc"
+
+[temperature]
+uri    = "https://example.com/temperature.csv"
+format = "csv"
+loader = "myproject.loaders:load_temperature"   # bare per-dataset loader
+
+[derived]
+format  = "nc"
+fetcher = "myproject.build:derived"             # bare per-dataset fetcher (no uri)
+
+[model_output]                                  # bare, language-agnostic shell fetcher
+format = "nc"
+shell  = "make model_output OUTPUT=$download_path"   # same command for every tool
+```
+
+The bare `shell` field is the **canonical, language-agnostic** shell fetcher (the
+same command for every tool — not a `_LANG` tag); the legacy
+`[<ds>._LANG.shell].fetcher` is still read and preserved as the fallback. Bare
+bindings are kept **bare** on write (never promoted into `_LANG.python`), so a
+hand-authored single-language manifest round-trips unchanged.
+
+A full, runnable example manifest — bare loaders/fetchers, a parameterized loader,
+the bare `shell` fetcher, storage selectors — lives in the spec repo:
+[`examples/datasets.toml`](https://github.com/perrette/datamanifest.toml/blob/main/examples/datasets.toml).
 
 **Cross-language fetch (rung 3).** The rare case: a dataset whose only fetcher is
 defined in another language (e.g. `[<ds>._LANG.julia].fetcher`), with no native
@@ -323,8 +369,11 @@ String values in `args` and `kwargs` undergo `$var` substitution before the
 call. Available variables: `$download_path` (fetcher), `$path` (loader),
 `$key`, `$version`, `$doi`, `$format`, `$branch`, `$uri`, `$project_root`.
 
-The two forms are interchangeable at **every** binding site (per-dataset
-`fetcher`/`loader` **and** the project-wide `[_LANG.python.loaders]` defaults). A
+The two forms are interchangeable at **every** binding site — explicit
+`[<ds>._LANG.python]` `fetcher`/`loader`, the language-implicit bare
+`fetcher`/`loader`, and the project-wide `[_LANG.python.loaders]` / bare
+`[_LOADERS]` defaults. (The `shell` field is a separate command-template string,
+not a `module:function` binding, so it is always a string, never a table.) A
 bare string `"module:function"` is the alias for `{ ref = "module:function" }`
 and makes the conventional call (a loader gets the dataset path; a fetcher the
 standard context). Canonical writing: a binding with no `args`/`kwargs` is
@@ -340,23 +389,27 @@ datamanifest migrate datasets.toml
 
 Updates a manifest in place through all outstanding steps:
 
-- **Legacy flat fields:** moves per-dataset `python=`/`callable=`/`loader=` into `[<ds>._LANG.python]`, moves `[_LOADERS]` into `[_LANG.python.loaders]`, and adds the `[_META]` header. Foreign keys are left verbatim.
+- **Legacy inline-code fields:** promotes per-dataset `python=`/`callable=` into `[<ds>._LANG.python].fetcher` and adds the `[_META]` header. Bare `fetcher`/`loader` and the `[_LOADERS]` map are **supported** language-implicit forms and are left bare. Foreign keys are left verbatim.
+- **Shell fetcher:** demotes a legacy `[<ds>._LANG.shell].fetcher` into the canonical bare `shell` field (dropping the emptied `_LANG.shell` block); an existing bare `shell` is left as-is.
 - **Storage selectors:** rewrites bare `store = "x"` entries to `store = "$x"` (`"data"`/`""` are elided, leaving the project default). `[_STORAGE]` folder *definitions* (bare keys like `data = "…"`) are left untouched.
 
-Reading an older manifest without migrating still works for most operations, but a manifest with bare `store` values will error on resolution. A one-time deprecation warning is logged for legacy flat fields.
+Reading an older manifest without migrating still works for most operations, but a manifest with bare `store` values will error on resolution. A one-time deprecation warning is logged for the inline-code legacy fields.
 
 ## Python adaptations
 
 The Python port uses the same manifest format as `DataManifest.jl`. The `_LANG` namespace is the preferred form; legacy flat fields are still accepted for backwards compatibility.
 
-**Legacy fields** (still accepted on read):
+**Supported bare forms** (language-implicit / language-agnostic, spec-v3.4/v3.5 — not legacy):
 
-- **`python=`** (or **`callable=`**) — entry-point reference (`"pkg.mod:func"`) resolved via `importlib`. The callable receives keyword arguments `(download_path, project_root, entry, uri, key, version, doi, format, branch, requires_paths)`. No inline code execution (`exec`/`eval`) anywhere.
-- **`loader=`** — format→ref mapping for the dataset's loader.
-- **`python_includes=`** — list of directory paths prepended to `sys.path` during ref resolution.
-- **`[_LOADERS]`** — manifest-wide format→ref loader defaults.
+- **`fetcher`** / **`loader`** (per dataset) — bare bindings read as Python; a string `"pkg.mod:func"` or a `{ ref, args, kwargs }` table. Equivalent to `[<ds>._LANG.python].fetcher/.loader` but without the wrapper; an explicit `_LANG.python` binding overrides the bare one.
+- **`shell`** (per dataset) — the canonical, language-agnostic command-template fetcher.
+- **`[_LOADERS]`** — manifest-wide bare `format → binding` map; the language-implicit counterpart of `[_LANG.python.loaders]`.
 
-These all move into `_LANG.python` / `_LANG.python.loaders`; `datamanifest migrate` performs the conversion.
+**Legacy fields** (still accepted on read; only these are deprecated):
+
+- **`python=`** (or **`callable=`**) — entry-point reference (`"pkg.mod:func"`) resolved via `importlib`. The callable receives keyword arguments `(download_path, project_root, entry, uri, key, version, doi, format, branch, requires_paths)`. No inline code execution (`exec`/`eval`) anywhere. `datamanifest migrate` promotes these into `[<ds>._LANG.python].fetcher`.
+- **`[<ds>._LANG.shell].fetcher`** — the legacy shell fetcher; `migrate` demotes it to the canonical bare `shell`.
+- **`python_includes=`** — list of directory paths prepended to `sys.path` during ref resolution (obsolete; the project root is auto-added).
 
 A single `datasets.toml` can be consumed by both tools: each reads the common fields and ignores the other's extension keys. See [docs/conformance.md](docs/conformance.md) for the shared manifest format and what this implementation supports.
 
