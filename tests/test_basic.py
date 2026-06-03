@@ -9,6 +9,17 @@ def test_import():
     import datamanifest
 
 
+def test_build_uri_no_degenerate_scheme():
+    # A binding-only / local_path entry with no uri must not get a spurious
+    # `uri = "://"` synthesized (which would then be written into the manifest).
+    from datamanifest.database import build_uri, init_dataset_entry, to_dict
+
+    entry = init_dataset_entry(local_path="/data/foo.nc")
+    assert entry.uri == ""
+    assert build_uri(entry) == ""
+    assert "uri" not in to_dict(entry)
+
+
 def test_sha256_path(tmp_path):
     from datamanifest.config import sha256_path
 
