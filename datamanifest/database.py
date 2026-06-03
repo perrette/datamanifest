@@ -1553,11 +1553,15 @@ class Database:
 
 # ----- v0 → v1 migration -----
 def migrate_v0_to_v1(db: "Database") -> None:
-    """Migrate *db* from v0 flat bindings to v1 _LANG form (in-place).
+    """Migrate *db* from v0 inline-code bindings to v1 form (in-place).
 
-    Moves each dataset's ``python=`` to ``[<ds>._LANG.python].fetcher`` and
-    ``loader=`` to ``[<ds>._LANG.python].loader``.  Moves the ``[_LOADERS]``
-    format→ref map to ``[_LANG.python.loaders]``.  Sets ``_META.schema = 1``.
+    Promotes each dataset's inline-code ``python=`` to the explicit
+    ``[<ds>._LANG.python].fetcher`` binding and sets ``_META.schema = 1``.
+
+    The bare per-dataset ``fetcher`` / ``loader`` and the top-level
+    ``[_LOADERS]`` map are **supported** spec-v3.4 language-implicit forms, not
+    legacy ones, so migration leaves them bare (a writer keeps a bare binding
+    bare — never promotes it into ``_LANG.python``).
 
     For the shell fetcher (spec-v3.5) the migration runs the *other* way: the
     bare ``shell`` field is the canonical form, so a legacy
@@ -1570,9 +1574,6 @@ def migrate_v0_to_v1(db: "Database") -> None:
         if entry.python and not entry.lang_python_fetcher:
             entry.lang_python_fetcher = entry.python
             entry.python = ""
-        if entry.loader and not entry.lang_python_loader:
-            entry.lang_python_loader = entry.loader
-            entry.loader = ""
         # spec-v3.5: demote legacy [<ds>._LANG.shell].fetcher → bare `shell`.
         lang = entry.extra.get("_LANG")
         if isinstance(lang, dict):
@@ -1587,13 +1588,8 @@ def migrate_v0_to_v1(db: "Database") -> None:
                         lang.pop("shell", None)
                         if not lang:
                             entry.extra.pop("_LANG", None)
-    if db.loaders and not db.lang_python_loaders:
-        db.lang_python_loaders = dict(db.loaders)
-        db.lang_python_loaders_args = dict(db.loaders_args)
-        db.lang_python_loaders_kwargs = dict(db.loaders_kwargs)
-        db.loaders = {}
-        db.loaders_args = {}
-        db.loaders_kwargs = {}
+    # [_LOADERS] is a supported spec-v3.4 language-implicit map; left bare
+    # (not promoted to [_LANG.python.loaders]).
     db.schema_version = 1
 
 
