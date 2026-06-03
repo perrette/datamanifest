@@ -251,6 +251,30 @@ def test_list_kind_data_lists_fetched_dataset(tmp_path):
     assert "mt/" not in result.stdout  # the cached orphan is filtered out
 
 
+def test_default_list_shows_datasets_and_cached(tmp_path):
+    # The bare `list` (no maintenance flags) renders a human view that groups
+    # fetched datasets and produced artifacts under colour-coded headers.
+    cache = tmp_path / "cache"
+    _orphan_artifact(cache, "mt", {"g": "5x5"})
+    data_file = tmp_path / "external.csv"
+    data_file.write_text("a,b\n1,2\n")
+    toml = tmp_path / "datasets.toml"
+    toml.write_text(f'[mydata]\nlocal_path = "{data_file}"\nformat = "csv"\n')
+    env = dict(os.environ)
+    env["DATAMANIFEST_CACHE_DIR"] = str(cache)
+    env["DATAMANIFEST_USAGE_LOG"] = str(tmp_path / "usage.toml")
+    env["DATAMANIFEST_TOML"] = str(toml)
+    env["NO_COLOR"] = "1"  # deterministic, escape-free output
+
+    result = _run("list", env=env)
+    assert result.returncode == 0, result.stderr
+    assert "Datasets" in result.stdout
+    assert "Cached" in result.stdout
+    assert "mydata" in result.stdout          # the fetched dataset
+    assert "mt/" in result.stdout             # the produced artifact
+    assert "orphan" in result.stdout          # flagged: no cached.toml root
+
+
 # ----- init -----
 
 def test_init_creates_file(tmp_path):

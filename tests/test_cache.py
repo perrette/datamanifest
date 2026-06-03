@@ -266,6 +266,35 @@ def test_cached_bare_value_round_trips(cache_root, scope_base):
     assert produce() == 42  # reload via pickle
 
 
+# ----- hit requires the data file on disk ------------------------------------
+
+def test_cached_recomputes_when_data_file_absent(cache_root, scope_base):
+    """A complete, hash-valid artifact whose data file for *this* format is
+    missing is not a hit — the recipe recomputes instead of failing to read.
+    Guards the collision case where two recipes share a cachetype + hash."""
+    calls = {"n": 0}
+
+    @cached(cachetype="g", format="txt")
+    def produce(*, name):
+        calls["n"] += 1
+        return f"v{calls['n']}"
+
+    assert produce(name="a") == "v1"
+    h = param_hash({"name": "a"})
+    artifact = scope_base / "g" / h
+    assert (artifact / "data.txt").exists()
+
+    # Drop the data file but leave the .complete marker + valid config.toml.
+    (artifact / "data.txt").unlink()
+    assert (artifact / ".complete").exists()
+    assert config_is_valid(str(artifact))
+
+    # Not a hit (data absent) -> recompute, no FileNotFoundError.
+    assert produce(name="a") == "v2"
+    assert calls["n"] == 2
+    assert (artifact / "data.txt").read_text() == "v2"
+
+
 # ----- spec-v3 scope field ---------------------------------------------------
 
 def test_cached_registers_scope_field(cache_root, scope_base):

@@ -12,6 +12,7 @@ DATAMANIFEST_TOML env-var or a cwd-upward walk (Item 17).
 import argparse
 import datetime
 import os
+import shutil
 import sys
 
 from . import __version__
@@ -179,39 +180,183 @@ def _filter_objects(objects, args):
     return out
 
 
+# ----- human-friendly default listing ---------------------------------------
+
+# ANSI styles, applied only when writing to a TTY with NO_COLOR unset.
+_STYLES = {
+    "reset": "\033[0m", "bold": "\033[1m", "dim": "\033[2m",
+    "green": "\033[32m", "cyan": "\033[36m", "red": "\033[31m",
+    "yellow": "\033[33m",
+}
+
+
+def _color_enabled(stream=None) -> bool:
+    """Colorize only on an interactive terminal, honoring the ``NO_COLOR``
+    convention (and a ``DATAMANIFEST_NO_COLOR`` override)."""
+    stream = stream if stream is not None else sys.stdout
+    if os.environ.get("NO_COLOR") or os.environ.get("DATAMANIFEST_NO_COLOR"):
+        return False
+    return bool(getattr(stream, "isatty", lambda: False)())
+
+
+def _paint(text, *styles, on=True) -> str:
+    """Wrap *text* in the named ANSI *styles* when *on* (else return it bare)."""
+    if not on or not styles:
+        return text
+    return "".join(_STYLES[s] for s in styles) + text + _STYLES["reset"]
+
+
+def _osc8(uri, label, *, on=True) -> str:
+    """Render *label* as an OSC-8 terminal hyperlink to *uri* (clickable in
+    modern terminals), matching the papers CLI convention. A no-op when *on* is
+    false or no *uri* is given, so piped/plain output stays clean."""
+    if not on or not uri:
+        return label
+    return f"\033]8;;{uri}\033\\{label}\033]8;;\033\\"
+
+
+def _fit(text, width, *, keep_tail=False) -> str:
+    """Clamp *text* to *width* columns with an ellipsis. With *keep_tail* the
+    end is kept (useful for paths — the basename stays visible)."""
+    if width <= 0:
+        return ""
+    if len(text) <= width:
+        return text
+    if width == 1:
+        return "…"
+    return "…" + text[-(width - 1):] if keep_tail else text[: width - 1] + "…"
+
+
+def _default_list_data(db):
+    """Rows for the human default listing, as ``(datasets, cached)``.
+
+    *datasets* is every manifest entry with present/size/location resolved;
+    *cached* is every produced artifact under ``$cache``, tagged with its
+    registry name and reachability from the sibling ``cached.toml``.
+    """
+    from .database import resolve_existing_path
+
+    datasets = []
+    for name, entry in db.datasets.items():
+        path, present = "", False
+        try:
+            path = resolve_existing_path(db, entry)
+            present = os.path.isfile(path) or os.path.isdir(path)
+        except Exception:  # noqa: BLE001 - an unresolvable entry is just missing
+            present = False
+        datasets.append({
+            "name": name,
+            "format": getattr(entry, "format", "") or "",
+            "present": present,
+            "size": _object_size(path) if present else 0,
+            "location": os.path.abspath(path) if present else "",
+        })
+
+    from . import storage
+    from .cache import CACHED_INDEX_NAME, CachedIndex, enumerate_artifacts
+
+    base = os.path.dirname(db.datasets_toml) if db.datasets_toml else os.getcwd()
+    cached_toml = os.path.join(base or ".", CACHED_INDEX_NAME)
+    names_by_id = {}
+    if os.path.isfile(cached_toml):
+        try:
+            idx = CachedIndex.read(cached_toml)
+        except Exception:  # noqa: BLE001 - an unreadable index names nothing
+            idx = None
+        if idx is not None:
+            for nm, e in idx.entries.items():
+                names_by_id[(e.get("cachetype", ""), e.get("hash", ""))] = nm
+
+    cache_root = storage.resolve_selector("$cache")
+    prefix = storage.content_prefix("cached")
+    cached = []
+    for obj in enumerate_artifacts(cache_root, prefix=prefix):
+        ident = (obj.cachetype, obj.hash)
+        cached.append({
+            "name": names_by_id.get(ident) or f"{obj.cachetype}/{obj.hash[:12]}",
+            "scope": obj.scope,
+            "format": obj.format,
+            "size": obj.size,
+            "location": obj.location,
+            "referenced": ident in names_by_id,
+        })
+    return datasets, cached
+
+
+def _print_default_list(db, args):
+    """The default ``datamanifest list`` view: one styled line per object,
+    datasets and cached artifacts grouped and color-coded, sized to the
+    terminal width. ``--present`` / ``--missing`` keep their plain name-only
+    output (scriptable)."""
+    datasets, cached = _default_list_data(db)
+
+    if args.present or args.missing:
+        for d in datasets:
+            if (args.present and d["present"]) or (args.missing and not d["present"]):
+                print(d["name"])
+        return
+
+    on = _color_enabled()
+    width = shutil.get_terminal_size((80, 20)).columns
+
+    if not datasets and not cached:
+        print(_paint("No datasets or cached artifacts.", "dim", on=on))
+        return
+
+    names = [d["name"] for d in datasets] + [c["name"] for c in cached]
+    name_w = min(max((len(n) for n in names), default=4), 36)
+    name_w = max(name_w, 4)
+    fmt_w, size_w = 8, 9
+    tail_w = max(12, width - (name_w + fmt_w + size_w + 8))
+
+    def emit(glyph, name, fmt, size_str, tail, *, name_styles,
+             tail_styles=("dim",), keep_tail=True, prefix="", link=""):
+        # The name itself links to its on-disk location (clickable file://);
+        # the tail shows the truncated path (also linked) or a status word.
+        uri = f"file://{link}" if link else ""
+        g = _paint(glyph, *name_styles, on=on)
+        n = _osc8(uri, _fit(name, name_w).ljust(name_w), on=on)
+        n = _paint(n, *name_styles, on=on)
+        f = _paint(_fit(fmt or "—", fmt_w).ljust(fmt_w), "dim", on=on)
+        s = _paint(size_str.rjust(size_w), "dim", on=on)
+        tail_fit = _fit(tail, tail_w - len(prefix), keep_tail=keep_tail)
+        t = _paint(_osc8(uri, prefix + tail_fit, on=on), *tail_styles, on=on)
+        print(f"{g} {n}  {f}  {s}  {t}")
+
+    if datasets:
+        print(_paint("Datasets", "bold", on=on))
+        for d in datasets:
+            if d["present"]:
+                emit("●", d["name"], d["format"], _fmt_size(d["size"]),
+                     d["location"], name_styles=("bold", "green"),
+                     link=d["location"])
+            else:
+                emit("○", d["name"], d["format"], "—", "missing",
+                     name_styles=("dim",), tail_styles=("red",), keep_tail=False)
+
+    if cached:
+        if datasets:
+            print()
+        print(_paint("Cached", "bold", on=on))
+        for c in cached:
+            # Referenced artifacts are cyan; orphans (no cached.toml root) are
+            # flagged in yellow — the colour carries the status, no extra column.
+            if c["referenced"]:
+                emit("◆", c["name"], c["format"], _fmt_size(c["size"]),
+                     c["location"], name_styles=("bold", "cyan"),
+                     link=c["location"])
+            else:
+                emit("◆", c["name"], c["format"], _fmt_size(c["size"]),
+                     c["location"], name_styles=("bold", "yellow"),
+                     tail_styles=("yellow",), prefix="orphan  ",
+                     link=c["location"])
+
+
 def _cmd_list(args):
     db = _get_db()
 
     if not _is_maintenance(args):
-        # Legacy name listing: present datasets first, then the missing ones.
-        from .database import resolve_existing_path
-
-        present, missing = [], []
-        for name, entry in db.datasets.items():
-            try:
-                path = resolve_existing_path(db, entry)
-            except Exception:
-                missing.append(name)
-                continue
-            if os.path.isfile(path) or os.path.isdir(path):
-                present.append(name)
-            else:
-                missing.append(name)
-
-        if args.present:
-            for name in present:
-                print(name)
-        elif args.missing:
-            for name in missing:
-                print(name)
-        else:
-            for name in present:
-                print(name)
-            if missing:
-                print()
-                print("# missing")
-                for name in missing:
-                    print(name)
+        _print_default_list(db, args)
         return
 
     # ----- maintenance object view -----

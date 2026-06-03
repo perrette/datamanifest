@@ -345,10 +345,17 @@ def cached(
             )
             data_path = os.path.join(artifact_dir, _data_name(basename, fmt))
 
+            # A hit requires not just a complete, hash-valid artifact but the
+            # expected data file for *this* format on disk. Two recipes that
+            # share a cachetype and hash to the same key (e.g. both take no
+            # kwargs) land in the same directory; if they use different formats
+            # their data files (``data.txt`` vs ``data.pickle``) coexist, but a
+            # stale-format mismatch must recompute rather than fail to read.
             if (
                 cached
                 and materialize.is_complete(artifact_dir)
                 and config_is_valid(artifact_dir)
+                and os.path.exists(data_path)
             ):
                 return _load_value(data_path, fmt)
 
