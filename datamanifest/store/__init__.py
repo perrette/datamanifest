@@ -13,7 +13,7 @@ The import arrow points **up only**: this package imports nothing from the fetch
 or cache layers (stdlib + platformdirs + lazy format readers only).
 """
 
-from . import loaders, locations, materialize
+from . import loaders, locations, materialize, serialize
 from .loaders import default_loader
 from .locations import (
     folder_root,
@@ -27,11 +27,13 @@ from .locations import (
 )
 from .materialize import is_complete, remove_path
 from .materialize import materialize as materialize_target
+from .serialize import sort_recursive
 
 __all__ = [
     "loaders",
     "locations",
     "materialize",
+    "serialize",
     "default_loader",
     "folder_root",
     "legacy_data_root",
@@ -44,4 +46,5 @@ __all__ = [
     "is_complete",
     "remove_path",
     "materialize_target",
+    "sort_recursive",
 ]

@@ -29,6 +29,7 @@ except ModuleNotFoundError:  # Python < 3.11
     import tomli as tomllib
 import tomli_w
 
+from ..store import sort_recursive as _canonical
 from ._hash import key_table_from_kwargs, param_hash  # noqa: F401  (param_hash re-used)
 
 __all__ = [
@@ -46,17 +47,9 @@ CONFIG_NAME = "config.toml"
 METADATA_NAME = "metadata.toml"
 
 
-def _canonical(obj):
-    """Recursively sort dict keys by Unicode code point (sidecar determinism).
-
-    Mirrors the manifest layer's ``_sort_recursive`` so produced sidecars share
-    the same canonical key ordering as ``datasets.toml``.
-    """
-    if isinstance(obj, dict):
-        return {k: _canonical(obj[k]) for k in sorted(obj)}
-    if isinstance(obj, list):
-        return [_canonical(v) for v in obj]
-    return obj
+# ``_canonical`` is the Layer 0 canonical key sort (``store.sort_recursive``),
+# imported above — produced sidecars share the same byte ordering as
+# ``datasets.toml`` / ``cached.toml`` without duplicating the sort.
 
 
 # ----- config.toml -----------------------------------------------------------
