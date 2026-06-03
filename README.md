@@ -163,7 +163,7 @@ datamanifest list --kind cached --push user@hpc     # bulk: push the filtered se
 | Canonical key ordering (stable, cross-tool byte-identical output) | yes |
 | Produce-or-load cache (`@cached`: parameter-hash keying, optional `version=`, `config.toml`/`metadata.toml` sidecars) | yes |
 | `cached.toml` index + `datamanifest list` inspect/maintenance (`--orphan`, `--delete`, `--move`) | yes |
-| Cross-machine sync (`datamanifest push`/`pull` over rsync+ssh, addressed by id; remote root from remote env then `[_STORAGE._HOST]`/default; writes no manifest; idempotent) | yes |
+| Cross-machine sync (`push`/`pull` a stored object over rsync+ssh; writes no manifest; idempotent) | yes |
 
 ## Storage model
 
@@ -227,6 +227,29 @@ format = "nc"
 **Migrating older manifests:** if you have manifests with bare `store = "cache"` entries,
 run `datamanifest migrate datasets.toml` to rewrite them to `store = "$cache"` (and similar
 for other stores). The `$data` default is elided on write.
+
+## Cross-machine sync
+
+Move a stored object between machines instead of re-downloading or recomputing it. Every
+object has a machine-independent address — a fetched dataset by `name`/`alias`/`doi`, a
+produced artifact by `cachetype[/version]/hash` — so only the physical root differs per host:
+
+```bash
+datamanifest push foo user@hpc             # copy dataset `foo` to the host (rsync over ssh)
+datamanifest pull esm_anomaly/83425a3 hpc  # pull a produced artifact by hash prefix
+datamanifest push foo user@hpc --dry-run   # preview resolved paths + size, transfer nothing
+datamanifest list --kind cached --push user@hpc   # bulk: push a filtered selection
+```
+
+- **Transport is rsync over SSH**, and the SSH target (`user@host`) is both the transport and
+  the host identity — no remote registry.
+- **The remote store root** is resolved best-effort from the remote's own environment (the
+  tool probes `DATAMANIFEST_*` via `ssh <host> 'source ~/.bashrc; env'`), then the manifest's
+  `[_STORAGE._HOST]` rules for that host, then the shared default. `$repo` (project-relative)
+  is not syncable.
+- **Sync writes no manifest** — a transferred object lands in the destination store as an
+  orphan (present, unreferenced) and is immediately usable; it is **idempotent** (a no-op when
+  the target already holds the object complete).
 
 ## Per-language bindings (`_LANG`)
 
