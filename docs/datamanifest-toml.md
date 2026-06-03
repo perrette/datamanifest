@@ -112,7 +112,9 @@ datamanifest.database/pipelines    datamanifest.cache
 
 `@cached` (`from datamanifest.cache import cached`) wraps a **keyword-only** producing
 function: its keyword arguments (minus `_`-prefixed runtime knobs) form the key table,
-which is hashed (canonical JSON → SHA-256) into a `<hash>` key. The result is materialized
+which is hashed (canonical JSON → SHA-256) into a `<hash>` key. Hash-input values are
+strings, ints, bools, finite floats, and lists/dicts of those (`None` and non-finite
+floats — `nan`/`inf` — are rejected). The result is materialized
 once under `$cache` at `<cache>/cached/<project-id>/<cachetype>/[<version>/]<hash>/`
 beside a `config.toml` (re-hashable key table + `[_META]`) and a write-if-absent
 `metadata.toml` (provenance + an `[origin].cached_toml` back-pointer); subsequent calls

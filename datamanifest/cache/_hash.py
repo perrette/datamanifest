@@ -16,11 +16,12 @@ key table::
 separators and explicit ``ensure_ascii=False`` pin the byte sequence so every
 implementation of the spec produces the identical digest.
 
-Only stable, exactly-representable scalar types may appear in a key table:
-strings, ints, bools, and ``None``-free arrays and objects. Floats and ``None``
-are **rejected** (``ValueError``) anywhere in the structure — floats because
-their textual representation is not portable, ``None`` because an absent key and
-a ``null`` key must not collide.
+Hash-input values are strings, ints, bools, **finite floats**, and arrays/objects
+of those. Two values are **rejected** (``ValueError``) anywhere in the structure:
+``None`` (an absent key and a ``null`` key must not collide) and **non-finite**
+floats (``nan`` / ``inf``: not representable in JSON and not hash-stable). Finite
+floats are encoded by Python's JSON number formatter (shortest round-tripping
+``repr``); within this implementation the same value always yields the same digest.
 
 Reference vector::
 
@@ -30,6 +31,7 @@ Reference vector::
 
 import hashlib
 import json
+import math
 
 __all__ = [
     "param_hash",
@@ -37,39 +39,42 @@ __all__ = [
 ]
 
 
-def _reject_floats_and_none(value, path=""):
-    """Recursively assert that *value* contains no ``float`` or ``None``.
+def _reject_invalid(value, path=""):
+    """Recursively assert *value* is a valid parameter-hash input.
 
-    ``bool`` is intentionally accepted (it is a valid hash input even though it
-    is an ``int`` subclass). Raises ``ValueError`` naming the offending path.
+    Accepted: strings, ints, ``bool`` (an ``int`` subclass, intentionally
+    allowed), **finite** floats, and arrays/objects of those. Rejected
+    (``ValueError`` naming the offending path): ``None`` (an absent key and a
+    ``null`` key must not collide) and non-finite floats (``nan`` / ``inf``,
+    which JSON cannot represent and which are not hash-stable).
     """
     if value is None:
         raise ValueError(
             f"None is not a valid parameter-hash input (at {path or '<root>'})"
         )
-    # bool is a subclass of int and is allowed; guard floats explicitly.
-    if isinstance(value, float):
+    if isinstance(value, float) and not math.isfinite(value):
         raise ValueError(
-            f"float is not a valid parameter-hash input (at {path or '<root>'}); "
-            "hash inputs are strings/ints/bools/arrays/objects only"
+            f"non-finite float {value!r} is not a valid parameter-hash input "
+            f"(at {path or '<root>'}); use a finite float or a string"
         )
     if isinstance(value, dict):
         for k, v in value.items():
-            _reject_floats_and_none(v, f"{path}.{k}" if path else str(k))
+            _reject_invalid(v, f"{path}.{k}" if path else str(k))
     elif isinstance(value, (list, tuple)):
         for i, v in enumerate(value):
-            _reject_floats_and_none(v, f"{path}[{i}]")
+            _reject_invalid(v, f"{path}[{i}]")
 
 
 def param_hash(key_table: dict) -> str:
     """Return the lowercase-hex SHA-256 of the canonical JSON of *key_table*.
 
-    Raises ``ValueError`` if a ``float`` or ``None`` appears anywhere in the
-    table (see module docstring).
+    Finite floats are accepted; raises ``ValueError`` if ``None`` or a
+    non-finite float appears anywhere in the table (see module docstring).
     """
-    _reject_floats_and_none(key_table)
+    _reject_invalid(key_table)
     canonical = json.dumps(
-        key_table, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        key_table, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+        allow_nan=False,
     )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
