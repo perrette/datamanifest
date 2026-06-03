@@ -40,7 +40,7 @@ def test_version():
 def test_help_lists_all_subcommands():
     result = _run("--help")
     assert result.returncode == 0
-    for sub in ["list", "download", "path", "add", "remove", "show", "verify", "update-checksums", "init", "where"]:
+    for sub in ["list", "download", "path", "add", "remove", "show", "verify", "update-checksums", "init", "where", "migrate", "format", "gc"]:
         assert sub in result.stdout, f"subcommand {sub!r} missing from --help output"
 
 
@@ -95,6 +95,60 @@ def test_update_checksums_dry_run_does_not_write(tmp_path):
     result = _run("update-checksums", "--dry-run", env=env)
     assert result.returncode == 0, result.stderr
     assert src.read_bytes() == before
+
+
+# ----- gc (produce-or-load cache garbage collection) -----
+
+def test_parse_duration_units():
+    from datamanifest.cli import _parse_duration
+
+    assert _parse_duration("3600") == 3600
+    assert _parse_duration("90 s") == 90
+    assert _parse_duration("36h") == 36 * 3600
+    assert _parse_duration("7d") == 7 * 86400
+    with pytest.raises(ValueError):
+        _parse_duration("5furlongs")
+
+
+def test_gc_help():
+    result = _run("gc", "--help")
+    assert result.returncode == 0
+    assert "--dry-run" in result.stdout
+    assert "--grace" in result.stdout
+
+
+def test_gc_dry_run_then_collects_orphan(tmp_path):
+    # An orphan produced artifact (config.toml sidecar, no cached.toml root)
+    # older than the grace age: gc --dry-run reports it but keeps it; a real
+    # gc run reclaims it. Exercises _cmd_gc end-to-end via the CLI binary.
+    from datamanifest.cache._hash import param_hash
+    from datamanifest.cache._sidecars import write_config
+
+    cache = tmp_path / "cache"
+    key_table = {"grid": "5x5"}
+    h = param_hash(key_table)
+    artifact = cache / "mytype" / h
+    artifact.mkdir(parents=True)
+    write_config(str(artifact), "mytype", h, key_table)
+    # Backdate the artifact (and its sidecar) so it is older than --grace.
+    old = artifact.stat().st_mtime - 10_000
+    for p in (artifact, artifact / "config.toml"):
+        os.utime(p, (old, old))
+
+    # Empty manifest + empty usage log → no roots reference the artifact.
+    (tmp_path / "datasets.toml").write_text("")
+    env = dict(os.environ)
+    env["DATAMANIFEST_CACHE_DIR"] = str(cache)
+    env["DATAMANIFEST_USAGE_LOG"] = str(tmp_path / "usage.toml")
+    env["DATAMANIFEST_TOML"] = str(tmp_path / "datasets.toml")
+
+    dry = _run("gc", "--dry-run", "--grace", "1", env=env)
+    assert dry.returncode == 0, dry.stderr
+    assert artifact.is_dir(), "dry-run must not delete"
+
+    run = _run("gc", "--grace", "1", env=env)
+    assert run.returncode == 0, run.stderr
+    assert not artifact.exists(), "gc should have reclaimed the orphan artifact"
 
 
 # ----- init -----
