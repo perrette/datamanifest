@@ -30,7 +30,7 @@ This release targets **spec-v3** of the shared format.
 | `byte-identity` | ✅ | Canonical lexicographic key ordering (this implementation is the reference). |
 | `cache-produce` | ✅ | `@cached` produce-or-load: parameter-hash keying, optional recipe `version`, `config.toml`/`metadata.toml` sidecars, `cached/` content prefix + project scope. |
 | `inspect` | ✅ | The `cached.toml` index and the `datamanifest list` maintenance surface (filter + `--delete`/`--move`, dry-run by default; never an automatic collector). |
-| `sync` | ⬜ not yet | Cross-machine push/pull of stored objects over SSH/rsync. |
+| `sync` | ✅ | Cross-machine `push`/`pull` over rsync+ssh, addressed by machine-independent id (`name`/`alias`/`doi`, or `cachetype[/version]/hash`); remote root resolved best-effort from the remote env (`source ~/.bashrc`) then `[_STORAGE._HOST]`/default; writes no manifest; idempotent. |
 | `delegation` | ⬜ not yet | Run a fetcher defined in another language (peer-CLI / cross-language fetch). |
 
 ## Conformance tests

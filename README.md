@@ -95,6 +95,8 @@ datamanifest COMMAND [OPTIONS]
 | `init [--folder PATH] [--force]` | Create a fresh `datasets.toml` in the current directory |
 | `where` | Print active `datasets_toml` and `datasets_folder` paths |
 | `migrate FILE` | Update an older manifest in place (move legacy flat fields into `_LANG`; rewrite bare `store = "x"` to `$`-selectors) |
+| `push ID SSH_HOST [--dry-run] [--batch]` | Transfer a stored object **to** an SSH host (rsync over ssh), addressed by id (`name`/`alias`/`doi`, or `cachetype[/version]/hash`) |
+| `pull ID SSH_HOST [--dry-run] [--batch]` | Transfer a stored object **from** an SSH host (rsync over ssh), same addressing |
 
 Examples:
 
@@ -122,6 +124,12 @@ datamanifest list --older-than 30d --delete       # preview artifacts older than
 
 # Where is the active manifest?
 datamanifest where
+
+# Move a stored object between machines (rsync over ssh; no re-download/recompute)
+datamanifest push foo user@hpc --dry-run            # preview: resolved paths + size
+datamanifest push foo user@hpc                      # push the dataset `foo` to the host
+datamanifest pull esm_anomaly/83425a3 user@hpc      # pull a produced artifact by hash prefix
+datamanifest list --kind cached --push user@hpc     # bulk: push the filtered set
 ```
 
 ## Features
@@ -155,6 +163,7 @@ datamanifest where
 | Canonical key ordering (stable, cross-tool byte-identical output) | yes |
 | Produce-or-load cache (`@cached`: parameter-hash keying, optional `version=`, `config.toml`/`metadata.toml` sidecars) | yes |
 | `cached.toml` index + `datamanifest list` inspect/maintenance (`--orphan`, `--delete`, `--move`) | yes |
+| Cross-machine sync (`datamanifest push`/`pull` over rsync+ssh, addressed by id; remote root from remote env then `[_STORAGE._HOST]`/default; writes no manifest; idempotent) | yes |
 
 ## Storage model
 
