@@ -11,12 +11,13 @@ fetch/cache-layer imports):
    produce (harmless, and a cheap index of where artifacts were registered).
 
 2. **Last-access** — :func:`last_access` reports when a produced artifact was
-   last *read*, and :func:`touch_last_access` bumps that stamp. The
-   implementation is the filesystem access time of the artifact directory: the
-   OS updates it whenever the artifact's value is loaded (a ``@cached`` hit opens
-   the data file), so "touched on read" comes for free. It is **advisory**: a
-   ``noatime`` mount or a manual ``utime`` can defeat it, and nothing depends on
-   it for correctness.
+   last *read*, **derived at inspect time from the filesystem access time**
+   (``st_atime``); the tool **never writes it**. The OS bumps atime on its own
+   when a ``@cached`` hit opens the data file, so a read costs no extra I/O and
+   **no sidecar/index TOML is ever rewritten on read**. Advisory and coarse by
+   construction: ``relatime`` (the usual default) advances atime at most once a
+   day, ``noatime`` makes it track mtime, and network / read-only filesystems may
+   not maintain it at all — so it is a filter input, never a deletion authority.
 
 **Usage-log location (this implementation's choice).** ``platformdirs.user_state_dir
 ("datamanifest")/usage.toml`` — a per-user, machine-local *state* directory (on
@@ -46,7 +47,6 @@ __all__ = [
     "prune_missing",
     "iso_from_mtime",
     "last_access",
-    "touch_last_access",
 ]
 
 USAGE_LOG_NAME = "usage.toml"
@@ -81,35 +81,26 @@ def iso_from_mtime(path: str) -> str:
 
 
 def last_access(path: str) -> str:
-    """The last time a produced artifact at *path* was read, as an RFC-3339 UTC
-    stamp (empty when *path* is absent).
+    """Best-effort RFC-3339 UTC last-access stamp for the artifact at *path*,
+    **derived at read time from the filesystem** — never written.
 
-    Implemented as the filesystem **access time** of the artifact directory — the
-    OS bumps it whenever the artifact's value is loaded (a ``@cached`` hit opens
-    the data file). Advisory only: a ``noatime`` mount makes atime track mtime,
-    in which case this still returns a sane (if coarse) stamp.
+    Reports the access time (``st_atime``); when that is unusable it falls back
+    to the modification time, and returns ``""`` (unknown) when the path cannot
+    be ``stat``-ed. The tool never mutates the artifact to record access — a
+    ``@cached`` hit already bumps atime by opening the data file, and inspection
+    only ``stat``s. Advisory and coarse (see the module docstring): a filter
+    input, never a deletion authority.
     """
     try:
-        ts = os.path.getatime(path)
+        st = os.stat(path)
     except OSError:
+        return ""
+    ts = st.st_atime if st.st_atime and st.st_atime > 0 else st.st_mtime
+    if not ts or ts <= 0:
         return ""
     return datetime.datetime.fromtimestamp(ts, datetime.timezone.utc).strftime(
         "%Y-%m-%dT%H:%M:%SZ"
     )
-
-
-def touch_last_access(path: str) -> None:
-    """Bump *path*'s last-access stamp to now (best-effort, never raises).
-
-    Sets the access time while preserving the modification time, so a
-    touch-on-read does not masquerade as a fresh write. Silently does nothing
-    when *path* is gone or the filesystem refuses the update (advisory).
-    """
-    try:
-        mtime = os.path.getmtime(path)
-        os.utime(path, (datetime.datetime.now().timestamp(), mtime))
-    except OSError:
-        pass
 
 
 def read_usage(env=os.environ) -> dict:

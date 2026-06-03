@@ -39,7 +39,7 @@ and runs only the fixtures tagged for them. This package's status:
 | `byte-identity` | ✅ | Canonical lexicographic key ordering; this package is the **normative reference** (`sort_recursive` in the `datamanifest.store` substrate). |
 | `binding-args` | ✅ | Executes the `{ ref, args, kwargs }` table form with `$var` substitution (`_substitute_vars`). |
 | `cache-produce` | ✅ | Produce-or-load: the `@cached` decorator with canonical-JSON→SHA-256 param-hash keying, optional `version=` segment (path + `config.toml` entry, not in hash), `config.toml`/`metadata.toml` sidecars; spec-v3 artifact path `<cache>/cached/<project-id>/<cachetype>/[<version>/]<hash>`. See [Produce-or-load cache layer](#produce-or-load-cache-layer). |
-| `inspect` | ✅ | The `cached.toml` produced-dataset index and `datamanifest list` maintenance surface: `--kind`/`--scope`/`--orphan`/`--older-than`/`--format`/`--fields` filters + `--delete`/`--move` actions (dry run by default; `--yes` to apply). `last-access` updated on read (best-effort advisory). |
+| `inspect` | ✅ | The `cached.toml` produced-dataset index and `datamanifest list` maintenance surface: `--kind`/`--scope`/`--orphan`/`--older-than`/`--format`/`--fields` filters + `--delete`/`--move` actions (dry run by default; `--yes` to apply). `last-access` is read-derived from the filesystem access time at inspect time — never written on read (best-effort, advisory). |
 | `sync` | ❌ | Cross-machine push/pull of cached artifacts is not yet implemented (deferred to a separate follow-up). |
 | `delegation` | ❌ | Peer-CLI delegation (fetch-ladder rung 3) is not implemented; the ladder skips straight to `uri` download. No `datamanifest fetch` subcommand yet. |
 
@@ -134,6 +134,15 @@ selected set (dry run by default; `--yes` to apply). The `list` command is the c
 root — the only place that imports both the fetch and cache layers. It never touches
 `$data`/`$repo`, and identifies produced artifacts by their `config.toml` sidecar (so
 fetched `$cache` datasets are never selected by `--kind cached`).
+
+`last-access` is read-time-derived: at inspect time the tool `stat`s the artifact and
+reports `st_atime` (falling back to mtime, or *unknown* when the path can't be stat-ed).
+Reads **never write** — no `utime`, and no sidecar/index TOML is rewritten on read; a
+`@cached` hit bumps atime only because the OS does so when it opens the data file. The
+signal is coarse (atime is daily-granular under `relatime`, tracks mtime under `noatime`,
+and may be absent on network/read-only mounts), so it is advisory — a filter input, never a
+deletion authority. `created` (written once at produce time) answers most staleness
+questions on its own.
 
 ### Canonical serialization
 
