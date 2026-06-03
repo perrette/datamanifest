@@ -1520,7 +1520,13 @@ def migrate_v0_to_v1(db: "Database") -> None:
     Moves each dataset's ``python=`` to ``[<ds>._LANG.python].fetcher`` and
     ``loader=`` to ``[<ds>._LANG.python].loader``.  Moves the ``[_LOADERS]``
     format→ref map to ``[_LANG.python.loaders]``.  Sets ``_META.schema = 1``.
-    ``shell=`` and all foreign keys are left verbatim.
+
+    For the shell fetcher (spec-v3.5) the migration runs the *other* way: the
+    bare ``shell`` field is the canonical form, so a legacy
+    ``[<ds>._LANG.shell].fetcher`` is **demoted** into a bare ``shell`` (when no
+    bare ``shell`` is already set) and the now-empty ``_LANG.shell`` block is
+    dropped. An existing bare ``shell`` is left bare. All other foreign keys are
+    left verbatim.
     """
     for _name, entry in db.datasets.items():
         if entry.python and not entry.lang_python_fetcher:
@@ -1529,18 +1535,27 @@ def migrate_v0_to_v1(db: "Database") -> None:
         if entry.loader and not entry.lang_python_loader:
             entry.lang_python_loader = entry.loader
             entry.loader = ""
-        if entry.shell:
-            lang = entry.extra.setdefault("_LANG", {})
-            shell_block = lang.setdefault("shell", {})
-            if not isinstance(shell_block, dict):
-                shell_block = {}
-                lang["shell"] = shell_block
-            if not shell_block.get("fetcher"):
-                shell_block["fetcher"] = entry.shell
-                entry.shell = ""
+        # spec-v3.5: demote legacy [<ds>._LANG.shell].fetcher → bare `shell`.
+        lang = entry.extra.get("_LANG")
+        if isinstance(lang, dict):
+            shell_block = lang.get("shell")
+            if isinstance(shell_block, dict):
+                legacy_shell = shell_block.get("fetcher")
+                if isinstance(legacy_shell, str) and legacy_shell:
+                    if not entry.shell:
+                        entry.shell = legacy_shell
+                    shell_block.pop("fetcher", None)
+                    if not shell_block:
+                        lang.pop("shell", None)
+                        if not lang:
+                            entry.extra.pop("_LANG", None)
     if db.loaders and not db.lang_python_loaders:
         db.lang_python_loaders = dict(db.loaders)
+        db.lang_python_loaders_args = dict(db.loaders_args)
+        db.lang_python_loaders_kwargs = dict(db.loaders_kwargs)
         db.loaders = {}
+        db.loaders_args = {}
+        db.loaders_kwargs = {}
     db.schema_version = 1
 
 
