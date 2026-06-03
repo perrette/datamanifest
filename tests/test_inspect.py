@@ -26,7 +26,7 @@ from datamanifest.cache import (
 )
 from datamanifest.cache._inspect import CacheObject
 from datamanifest.cache._sidecars import write_config
-from datamanifest.cache._usage import iso_from_mtime, last_access, touch_last_access
+from datamanifest.cache._usage import iso_from_mtime, last_access
 from datamanifest.store.locations import project_id
 
 
@@ -172,26 +172,22 @@ def test_cached_hit_does_not_duplicate_or_restamp(cache_root, usage_log, tmp_pat
 
 # ----- last-access stamp (best-effort, advisory) -----------------------------
 
-def test_last_access_round_trip(tmp_path):
+def test_last_access_is_read_only_stat(tmp_path):
     d = tmp_path / "artifact"
     d.mkdir()
-    # A bare new dir reports *some* access stamp (the OS access time).
-    assert last_access(str(d))  # non-empty RFC-3339 string
-    # Backdate, then touch -> the reported stamp advances.
-    old = d.stat().st_mtime - 10_000
-    os.utime(d, (old, old))
-    before = last_access(str(d))
-    touch_last_access(str(d))
-    after = last_access(str(d))
-    assert after >= before
-    # iso_from_mtime is independent of the access bump (mtime preserved).
+    # Reports *some* access stamp, derived from stat (non-empty RFC-3339).
+    assert last_access(str(d))
+    # It is purely read-derived: calling it never mutates the artifact's times.
+    before = (d.stat().st_atime, d.stat().st_mtime)
+    last_access(str(d))
+    after = (d.stat().st_atime, d.stat().st_mtime)
+    assert before == after
+    # iso_from_mtime is the independent modification stamp.
     assert iso_from_mtime(str(d))
 
 
 def test_last_access_missing_path_is_empty(tmp_path):
     assert last_access(str(tmp_path / "nope")) == ""
-    # touch on a missing path is a silent no-op (advisory).
-    touch_last_access(str(tmp_path / "nope"))
 
 
 # ----- inspect: enumerate produced artifacts ---------------------------------

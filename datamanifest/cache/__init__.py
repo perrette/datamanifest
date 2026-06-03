@@ -38,7 +38,6 @@ from ._usage import (
     prune_missing,
     read_usage,
     record_path,
-    touch_last_access,
     usage_log_path,
 )
 
@@ -65,5 +64,4 @@ __all__ = [
     "known_paths",
     "prune_missing",
     "last_access",
-    "touch_last_access",
 ]
