@@ -59,7 +59,7 @@ Behavior in this package beyond — or looser than — the normative spec:
   convenience, not part of the spec's CLI surface.
 - **Legacy read-only location probe.** When a dataset isn't in any configured store,
   this package also probes the pre-v1.1 default `~/.cache/Datasets` (read-only, never
-  written, one-time warning). A back-compat affordance on top of the spec's read
+  written, silent). A back-compat affordance on top of the spec's read
   resolution, suppressed once `DATAMANIFEST_DATA_DIR` is set.
 - **Built-in loader set.** The spec only requires "the tool's built-in default loader
   for `<format>`"; the concrete Python format→library map is
@@ -98,6 +98,7 @@ format → implementation map (in `datamanifest/default_loaders.py`):
 | `toml` | `tomllib.load` | stdlib (`tomli` on 3.10) |
 | `yaml` / `yml` | `yaml.safe_load` | pyyaml |
 | `md` / `txt` | `open().read()` | stdlib |
+| `pickle` / `pkl` | `pickle.load` | stdlib |
 | `zip` / `tar` / `tar.gz` | archive extraction loaders | stdlib |
 
 Each third-party dependency is imported lazily, so the package installs without
@@ -126,6 +127,16 @@ once under `$cache` at `<cache>/cached/<project-id>/<cachetype>/[<version>/]<has
 beside a `config.toml` (re-hashable key table + `[_META]`) and a write-if-absent
 `metadata.toml` (provenance + an `[origin].cached_toml` back-pointer); subsequent calls
 load and return it. A `cached=False` call argument forces a recompute.
+
+When no `format=` is given, the artifact self-saves with **pickle** (`data.pickle`),
+so a bare return value (`return 42`) round-trips without choosing a format; an explicit
+`format=` (`txt`, `json`, `nc`, …) overrides it. A hit additionally requires the data
+file for that format to be present, so two recipes that share a `cachetype` and hash to
+the same key recompute rather than misread each other's bytes — use a distinct
+`cachetype=` (or `version=`) to keep unrelated recipes apart. The `<project-id>` scope
+defaults to the project's `pyproject.toml` `[project].name`, discovered by walking up
+from the working directory for a `datasets.toml` / `pyproject.toml` (falling back to a
+path hash); it is recorded in each `cached.toml` entry under the `scope` field.
 
 An optional `version=` string (e.g. `@cached(cachetype="t", version="v2")`) inserts a
 path segment before `<hash>` and is recorded in `config.toml` and `cached.toml`. It is
