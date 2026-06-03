@@ -27,6 +27,25 @@ def _get_db():
         sys.exit(1)
 
 
+def _add_delegate_flags(group):
+    """Add the mutually-exclusive ``--delegate`` / ``--no-delegate`` pair.
+
+    Toggles the cross-language fetch rung (fetch-ladder rung 3) for the run.
+    Stored on ``args.delegate``: ``None`` (no flag, keep each entry's own
+    setting), ``True`` (``--delegate``), or ``False`` (``--no-delegate``).
+    """
+    excl = group.add_mutually_exclusive_group()
+    excl.add_argument(
+        "--delegate", dest="delegate", action="store_true", default=None,
+        help="Force the cross-language fetch rung on (run a foreign-language "
+             "fetcher via the local Julia DataManifest env when present)",
+    )
+    excl.add_argument(
+        "--no-delegate", dest="delegate", action="store_false",
+        help="Disable the cross-language fetch rung for this run",
+    )
+
+
 # ----- subcommand implementations -----
 
 # Fields a maintenance object exposes, in display order. ``key``/``hash`` and
@@ -321,10 +340,24 @@ def _cmd_pull(args):
     _do_transfer(db, objects, args.host, "pull", args)
 
 
+def _apply_delegate_override(db, delegate):
+    """Apply a run-level --delegate / --no-delegate override to every entry.
+
+    ``delegate`` is ``None`` (no flag — keep each entry's own setting), ``True``
+    (force the cross-language fetch rung on), or ``False`` (force it off). The
+    override is in-memory only; it is never persisted to the manifest.
+    """
+    if delegate is None:
+        return
+    for entry in db.datasets.values():
+        entry.delegate = delegate
+
+
 def _cmd_download(args):
     db = _get_db()
     from .pipelines import download_dataset, download_datasets
 
+    _apply_delegate_override(db, args.delegate)
     overwrite = args.overwrite
     if args.all or not args.name:
         download_datasets(db, overwrite=overwrite)
@@ -350,10 +383,12 @@ def _cmd_add(args):
     if args.extract:
         kwargs["extract"] = True
 
-    name, _entry = db.register_dataset(args.uri, overwrite=args.overwrite, **kwargs)
+    name, entry = db.register_dataset(args.uri, overwrite=args.overwrite, **kwargs)
 
     if not args.no_download:
         from .pipelines import download_dataset
+        if args.delegate is not None:
+            entry.delegate = args.delegate
         download_dataset(db, name)
 
 
@@ -649,6 +684,7 @@ def main():
     dl_opts.add_argument(
         "--overwrite", action="store_true", help="Re-download and overwrite existing files"
     )
+    _add_delegate_flags(dl_opts)
     p_dl.set_defaults(func=_cmd_download)
 
     # path
@@ -672,6 +708,7 @@ def main():
     add_opts.add_argument(
         "--overwrite", action="store_true", help="Overwrite an existing duplicate entry"
     )
+    _add_delegate_flags(add_opts)
     p_add.set_defaults(func=_cmd_add)
 
     # remove

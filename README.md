@@ -85,9 +85,9 @@ datamanifest COMMAND [OPTIONS]
 | Command | Description |
 |---|---|
 | `list [--present\|--missing\|--all] [--kind K] [--scope S] [--orphan] [--older-than AGE] [--format F] [--fields ...] [--delete\|--move DIR] [--yes]` | List datasets and cached artifacts; with `--delete`/`--move` becomes the maintenance command (dry run by default; `--yes` to apply) |
-| `download [NAME ...] [--all] [--overwrite]` | Download specific datasets or all of them |
+| `download [NAME ...] [--all] [--overwrite] [--delegate\|--no-delegate]` | Download specific datasets or all of them; `--no-delegate` disables the cross-language fetch rung for the run |
 | `path NAME` | Print the resolved on-disk path (composable in shell) |
-| `add URI [--name N] [--no-download] [--extract]` | Register and (by default) download a dataset |
+| `add URI [--name N] [--no-download] [--extract] [--delegate\|--no-delegate]` | Register and (by default) download a dataset |
 | `remove NAME [--keep-cache]` | Delete an entry, optionally preserving cached files |
 | `show NAME` | Print full entry detail in TOML style |
 | `verify [NAME ...]` | Re-check sha256 checksums; exits nonzero on any mismatch |
@@ -152,7 +152,7 @@ datamanifest list --kind cached --push user@hpc     # bulk: push the filtered se
 | Project-root auto-discovery (`pyproject.toml` walk, env vars) | yes |
 | CLI (`list/download/path/add/remove/show/verify/update-checksums/init/where/migrate/format`) | yes |
 | `_LANG` namespace for per-language bindings (read + write) | yes |
-| Fetch ladder: own Python fetcher → shell template → URI | yes |
+| Fetch ladder: own Python fetcher → shell template → cross-language fetch → URI | yes |
 | Load ladder: own Python loader → manifest default → built-in | yes |
 | Lossless round-trip of foreign `_LANG.*` subtrees | yes |
 | Manifest migration (`datamanifest migrate`) | yes |
@@ -273,8 +273,9 @@ fetcher = "MyPkg.fetch_mydata"            # preserved verbatim; Python never tou
 **Fetch ladder** (per dataset, in order):
 1. Own `_LANG.python.fetcher` entry-point
 2. Own `_LANG.shell.fetcher` template
-3. Plain `uri` download
-4. Error — no source available
+3. Cross-language fetch (rung 3) — run a fetcher defined in another language
+4. Plain `uri` download
+5. Error — no source available
 
 **Load ladder** (per dataset, in order):
 1. Own `_LANG.python.loader` entry-point
@@ -282,7 +283,21 @@ fetcher = "MyPkg.fetch_mydata"            # preserved verbatim; Python never tou
 3. Built-in format default (csv, parquet, nc, …)
 4. Error
 
-Delegation to peer CLIs is **not yet implemented** — the ladder stops at built-ins.
+**Cross-language fetch (rung 3).** The rare case: a dataset whose only fetcher is
+defined in another language (e.g. `[<ds>._LANG.julia].fetcher`), with no native
+Python fetcher, no `_LANG.shell` fetcher, and no `uri`. Python materializes it by
+invoking the **local Julia `DataManifest` environment** directly —
+`julia --project=<env> -e 'using DataManifest; download_dataset(Database("<datasets.toml>"), "<name>")'` —
+which writes the bytes into the shared store; Python then reads them from disk
+(load never crosses languages, only bytes do). The Julia env is discovered by
+walking up from the manifest directory (or `$JULIA_PROJECT`) for a `Project.toml`
+whose `[deps]` lists `DataManifest`, and the rung is gated on `julia` being on
+`PATH`. When the toolchain is absent the rung is **skipped silently** and the
+ladder advances to the `uri` download. Cross-language fetch applies to fetched
+datasets only (never `@cached` produced datasets); it is **on by default** and
+probe-gated (a no-op unless a foreign fetcher and a usable Julia env are both
+present). Toggle it per file with `delegate = false`, or per run with the
+`--delegate` / `--no-delegate` flags on `datamanifest download` / `add`.
 
 ### Parameterized bindings
 

@@ -81,6 +81,11 @@ class DatasetEntry:
     # selector defined in [_STORAGE]. Empty string selects the project default
     # and is elided on write.
     store: str = ""
+    # Cross-language fetch (fetch-ladder rung 3) opt-out. Delegation is on by
+    # default (probe-gated: it no-ops silently unless a foreign-language fetcher
+    # and a usable foreign toolchain are actually present). Set to False to opt
+    # this dataset out. Only the non-default `delegate = false` is written.
+    delegate: bool = True
     # Passthrough for fields this port does not model — other tools' / other
     # languages' extension keys (e.g. Julia's `julia` / `julia_modules`). Kept
     # verbatim so they round-trip instead of being dropped on write. Per the
@@ -197,6 +202,14 @@ def to_dict(entry: DatasetEntry) -> dict:
             "lang_python_loader_args",
             "lang_python_loader_kwargs",
         }:
+            continue
+        # `delegate` defaults to True (delegation on); only the non-default
+        # opt-out (`delegate = false`) is written, so the common case stays
+        # absent from the manifest.
+        if name == "delegate":
+            if value:
+                continue
+            output[name] = value
             continue
         if _is_empty(value):
             continue
