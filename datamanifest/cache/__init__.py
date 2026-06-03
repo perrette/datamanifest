@@ -15,7 +15,9 @@ the fetch layer never sees a produced dataset.
 """
 
 from ._decorator import cached
+from ._gc import collect
 from ._hash import key_table_from_kwargs, param_hash
+from ._index import CACHED_INDEX_NAME, CachedIndex
 from ._sidecars import (
     config_is_valid,
     config_key_table,
@@ -24,6 +26,7 @@ from ._sidecars import (
     write_config,
     write_metadata,
 )
+from ._usage import known_paths, prune_missing, read_usage, record_path, usage_log_path
 
 __all__ = [
     "cached",
@@ -35,4 +38,12 @@ __all__ = [
     "config_is_valid",
     "write_metadata",
     "read_metadata",
+    "CachedIndex",
+    "CACHED_INDEX_NAME",
+    "collect",
+    "usage_log_path",
+    "record_path",
+    "read_usage",
+    "known_paths",
+    "prune_missing",
 ]
