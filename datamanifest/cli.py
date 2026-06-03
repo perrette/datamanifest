@@ -239,6 +239,136 @@ def _cmd_format(args):
         sys.stdout.write(out)
 
 
+_DURATION_UNITS = {
+    "s": 1, "sec": 1, "secs": 1, "second": 1, "seconds": 1,
+    "m": 60, "min": 60, "mins": 60, "minute": 60, "minutes": 60,
+    "h": 3600, "hr": 3600, "hrs": 3600, "hour": 3600, "hours": 3600,
+    "d": 86400, "day": 86400, "days": 86400,
+    "w": 604800, "wk": 604800, "week": 604800, "weeks": 604800,
+}
+
+# GC default grace age — produced artifacts younger than this are kept even when
+# unreferenced, so an in-flight produce is never reclaimed out from under a
+# concurrent reader. Seven days mirrors Julia's depot GC default sensibility.
+_GC_DEFAULT_GRACE = "7d"
+
+
+def _parse_duration(text: str) -> float:
+    """Parse a human duration (``"7d"``, ``"36h"``, ``"3600"``, ``"90 s"``) into
+    seconds. A bare number is seconds. Raises ``ValueError`` on a bad unit."""
+    s = str(text).strip().lower()
+    if not s:
+        raise ValueError("empty duration")
+    try:
+        return float(s)  # bare seconds
+    except ValueError:
+        pass
+    num = s
+    unit = ""
+    for i, ch in enumerate(s):
+        if ch.isalpha():
+            num, unit = s[:i].strip(), s[i:].strip()
+            break
+    if unit not in _DURATION_UNITS:
+        raise ValueError(
+            f"unrecognized duration {text!r}: use seconds or a unit "
+            "(s/m/h/d/w), e.g. '7d', '36h', '3600'"
+        )
+    return float(num) * _DURATION_UNITS[unit]
+
+
+def _cmd_gc(args):
+    """Reclaim unreferenced produced (@cached) artifacts under the $cache folder.
+
+    Composition root (the one place that bridges both layers): it gathers the
+    live root set from the cache layer's usage log plus the active
+    datasets.toml / cached.toml, computes the union of produced live keys (every
+    cached.toml) and fetched $cache live keys (every datasets.toml, via the fetch
+    layer's Database), then hands that to the cache-layer GC collector, which
+    walks only the resolved $cache folder.
+    """
+    from . import storage
+    from .cache import CachedIndex, collect, known_paths, prune_missing, record_path
+    from .cache._index import CACHED_INDEX_NAME
+    from .database import Database
+
+    try:
+        grace = _parse_duration(args.grace)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # 1. Discover root files: the usage log, plus the active project's
+    #    datasets.toml / cached.toml (recorded so future runs find them too).
+    prune_missing()
+    root_paths = set(known_paths())
+
+    active_toml = ""
+    try:
+        from .config import get_default_toml
+        active_toml = get_default_toml() or ""
+    except Exception:  # noqa: BLE001 - no active project is fine
+        active_toml = ""
+    if active_toml and os.path.isfile(active_toml):
+        root_paths.add(os.path.abspath(active_toml))
+        sibling = os.path.join(os.path.dirname(active_toml), CACHED_INDEX_NAME)
+        if os.path.isfile(sibling):
+            root_paths.add(os.path.abspath(sibling))
+            record_path(sibling)
+
+    # 2/3. Build the live key set from every still-existing root.
+    live_keys = set()
+    cached_indexes = []
+    datasets_tomls = []
+    for path in sorted(root_paths):
+        if not os.path.isfile(path):
+            continue
+        base = os.path.basename(path)
+        if base == CACHED_INDEX_NAME:
+            cached_indexes.append(path)
+        else:
+            datasets_tomls.append(path)
+
+    # Produced live keys: every still-existing cached.toml (cache layer only).
+    for path in cached_indexes:
+        try:
+            live_keys |= CachedIndex.read(path).keys()
+        except Exception as e:  # noqa: BLE001 - skip an unreadable index
+            print(f"Warning: skipping {path}: {e}", file=sys.stderr)
+
+    # Fetched $cache live keys: every still-existing datasets.toml (fetch layer).
+    # A fetched entry whose resolved store selector is $cache is a root, keyed by
+    # its entry.key, so it is never collected.
+    for path in datasets_tomls:
+        try:
+            db = Database(datasets_toml=path, persist=False)
+        except Exception as e:  # noqa: BLE001 - skip an unreadable manifest
+            print(f"Warning: skipping {path}: {e}", file=sys.stderr)
+            continue
+        proj = db.get_project_root()
+        for entry in db.datasets.values():
+            selector = entry.store or storage.project_default(db.storage_config)
+            name, _, _sub = selector.lstrip("$").partition("/")
+            if name == "cache" and entry.key:
+                live_keys.add(entry.key)
+
+    # 4. Resolve the single $cache root and collect.
+    cache_root = storage.resolve_selector("$cache")
+    candidates = collect(
+        cache_root, live_keys,
+        grace_seconds=grace, dry_run=args.dry_run,
+    )
+
+    verb = "Would collect" if args.dry_run else "Collected"
+    if not candidates:
+        kept = "(nothing unreferenced past the grace age)"
+        print(f"{verb}: 0 produced artifacts {kept}")
+        return
+    for cand in candidates:
+        print(f"{verb}: {cand.key}  {cand.path}")
+    print(f"{verb}: {len(candidates)} produced artifact(s) under {cache_root}")
+
+
 def _cmd_migrate(args):
     from .database import Database, migrate_v0_to_v1, migrate_v1_to_v2
 
@@ -403,6 +533,27 @@ def main():
         help="Rewrite FILE in place instead of writing to stdout",
     )
     p_format.set_defaults(func=_cmd_format)
+
+    # gc
+    p_gc = subparsers.add_parser(
+        "gc",
+        help="Reclaim unreferenced produced (@cached) artifacts under $cache",
+    )
+    gc_opts = p_gc.add_argument_group("options")
+    gc_opts.add_argument(
+        "--dry-run", action="store_true",
+        help="Show what would be collected without deleting anything",
+    )
+    gc_opts.add_argument(
+        "--grace", "--min-age", dest="grace", metavar="AGE",
+        default=_GC_DEFAULT_GRACE,
+        help=(
+            "Keep artifacts younger than AGE even when unreferenced "
+            "(seconds, or a unit: 7d, 36h, 90m, 3600). Default: "
+            f"{_GC_DEFAULT_GRACE}."
+        ),
+    )
+    p_gc.set_defaults(func=_cmd_gc)
 
     args = parser.parse_args()
     try:
