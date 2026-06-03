@@ -280,3 +280,71 @@ def test_cached_cache_dir_is_verbatim(cache_root, tmp_path):
     assert (explicit / "t" / "v2" / h / "data.txt").read_text() == "q"
     # nothing landed under the composed $cache root.
     assert not (cache_root / "cached").exists()
+
+
+# ----- invalidation: a stale/corrupt sidecar is not a hit --------------------
+
+def test_cached_recomputes_on_invalid_config(cache_root, scope_base):
+    import tomli_w
+
+    calls = {"n": 0}
+
+    @cached(cachetype="g", format="txt")
+    def produce(*, name):
+        calls["n"] += 1
+        return f"{name}-{calls['n']}"
+
+    produce(name="q")
+    assert calls["n"] == 1
+    h = param_hash({"name": "q"})
+    artifact_dir = scope_base / "g" / h
+    assert config_is_valid(str(artifact_dir))
+
+    # Tamper the recorded hash so config_is_valid() no longer matches the key
+    # table (a stale artifact from a different code/branch, or a corrupt write).
+    config = read_config(str(artifact_dir))
+    config["_META"]["hash"] = "0" * 64
+    with open(artifact_dir / "config.toml", "wb") as f:
+        tomli_w.dump(config, f)
+    assert not config_is_valid(str(artifact_dir))
+
+    # The invalid sidecar must NOT count as a hit: the body re-runs and the
+    # artifact is rewritten with a valid sidecar.
+    again = produce(name="q")
+    assert calls["n"] == 2
+    assert again == "q-2"
+    assert config_is_valid(str(artifact_dir))
+
+
+# ----- real-format round-trips (writer <-> loader ladder), optional deps -----
+
+def test_cached_round_trip_csv(cache_root, scope_base):
+    pd = pytest.importorskip("pandas")
+    from pandas.testing import assert_frame_equal
+
+    @cached(cachetype="frame", format="csv")
+    def produce(*, n):
+        return pd.DataFrame({"a": list(range(n)), "b": ["x"] * n})
+
+    df_miss = produce(n=3)          # miss: returns the produced frame, writes CSV
+    df_hit = produce(n=3)           # hit: loads via pandas.read_csv(comment="#")
+    assert_frame_equal(df_miss, df_hit)
+    assert (scope_base / "frame" / param_hash({"n": 3}) / "data.csv").exists()
+
+
+def test_cached_round_trip_nc(cache_root, scope_base):
+    xr = pytest.importorskip("xarray")
+    pytest.importorskip("netCDF4")
+    import numpy as np
+
+    @cached(cachetype="grid", format="nc")
+    def produce(*, n):
+        return xr.Dataset({"t": ("x", np.arange(n, dtype="float64"))})
+
+    produce(n=4)                    # miss: writes NetCDF
+    ds_hit = produce(n=4)           # hit: xarray.open_dataset
+    try:
+        assert list(ds_hit["t"].values) == [0.0, 1.0, 2.0, 3.0]
+    finally:
+        ds_hit.close()
+    assert (scope_base / "grid" / param_hash({"n": 4}) / "data.nc").exists()
