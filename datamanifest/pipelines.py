@@ -552,32 +552,25 @@ def _fetch_into_path(
     # Effective fetch binding via the v1 ladder (design §6): own in-process
     # Python fetcher → shell template → plain uri. Delegation is deferred.
     #
-    # Fetch rung 1 (spec-v3.4): explicit [<ds>._LANG.python].fetcher wins over
-    # the bare `fetcher`, which wins over legacy `python=`. A failing *bare* or
-    # legacy fetcher is tolerated (warn + fall through to shell/uri); a failing
-    # *explicit* _LANG.python fetcher is a hard error (the author asked for it).
-    py_ref, py_args, py_kwargs, py_explicit = resolve_python_fetcher(dataset)
+    # Fetch rung 1: explicit [<ds>._LANG.python].fetcher wins over the bare
+    # `fetcher`, which wins over legacy `python=`. A Python fetcher that is
+    # *present* (bare or explicit — both are bindings for the running language)
+    # is **fail-loud** (spec-v3.6): a failure to resolve or run propagates,
+    # never a silent fall-through to shell/uri. The ladder only advances when the
+    # rung is *absent* (no Python fetcher at all).
+    py_ref, py_args, py_kwargs, _py_explicit = resolve_python_fetcher(dataset)
     if py_ref:
-        try:
-            _run_python_hook(
-                dataset,
-                download_path,
-                project_root,
-                required_paths_ordered=required_paths_ordered,
-                python_includes=python_includes,
-                ref=py_ref,
-                args=py_args,
-                kwargs=py_kwargs,
-            )
-            return
-        except Exception as exc:  # noqa: BLE001
-            if py_explicit:
-                raise
-            logger.warning(
-                "Bare fetcher %r for dataset %r did not resolve/run in Python "
-                "(%s); falling through the fetch ladder.",
-                py_ref, dataset.key, exc,
-            )
+        _run_python_hook(
+            dataset,
+            download_path,
+            project_root,
+            required_paths_ordered=required_paths_ordered,
+            python_includes=python_includes,
+            ref=py_ref,
+            args=py_args,
+            kwargs=py_kwargs,
+        )
+        return
 
     # Remaining rungs once any Python fetcher has been tried/skipped: shell, uri.
     kind, value = resolve_shell_or_uri(dataset)
@@ -852,32 +845,25 @@ def load_dataset(db, dataset, loader=None, **kwargs):
                     )
         return loader(path)
 
-    # v1 load ladder (design §6, spec-v3.4): rung 1 own loader
-    # (explicit _LANG.python.loader, else bare `loader`) → rung 2 manifest
-    # format-default (explicit [_LANG.python.loaders][fmt], else bare
-    # [_LOADERS][fmt]) → rung 3 built-in default loader. A resolved ref is run
-    # in-process (loaders never delegate). A *bare* rung that fails to resolve
-    # or call in Python warns and falls through to the next rung; an *explicit*
-    # _LANG.python rung that fails is a hard error (the author asked for it).
-    for loader_ref, loader_args, loader_kwargs, explicit in resolve_loader_rungs(db, entry):
-        try:
-            fn = _get_loader_function(db, loader_ref)
-            if loader_args or loader_kwargs:
-                variables = _binding_variables(
-                    entry, path=path, project_root=db.get_project_root()
-                )
-                call_args = _substitute_vars(list(loader_args), variables)
-                call_kwargs = _substitute_vars(dict(loader_kwargs), variables)
-                return fn(*call_args, **call_kwargs)
-            return fn(path)
-        except Exception as exc:  # noqa: BLE001
-            if explicit:
-                raise
-            logger.warning(
-                "Bare loader %r for dataset %r did not resolve/run in Python "
-                "(%s); falling through the load ladder.",
-                loader_ref, entry.key, exc,
+    # v1 load ladder (design §6): rung 1 own loader (explicit _LANG.python.loader,
+    # else bare `loader`) → rung 2 manifest format-default (explicit
+    # [_LANG.python.loaders][fmt], else bare [_LOADERS][fmt]) → rung 3 built-in.
+    # The highest-priority *present* rung is this dataset's binding; spec-v3.6
+    # fail-loud: it is run in-process (loaders never delegate) and a failure to
+    # resolve or call **propagates** — never papered over by a different loader.
+    # The ladder only advances past a rung that is *absent*.
+    rungs = resolve_loader_rungs(db, entry)
+    if rungs:
+        loader_ref, loader_args, loader_kwargs, _explicit = rungs[0]
+        fn = _get_loader_function(db, loader_ref)
+        if loader_args or loader_kwargs:
+            variables = _binding_variables(
+                entry, path=path, project_root=db.get_project_root()
             )
+            call_args = _substitute_vars(list(loader_args), variables)
+            call_kwargs = _substitute_vars(dict(loader_kwargs), variables)
+            return fn(*call_args, **call_kwargs)
+        return fn(path)
 
     # For an extracted archive the resolved path is a directory and there is no
     # single-file format to load; return the directory path directly
@@ -885,9 +871,9 @@ def load_dataset(db, dataset, loader=None, **kwargs):
     if entry.extract and entry.format in COMPRESSED_FORMATS:
         return path
 
-    # Rung 3: built-in default loader for the format. The manifest-configured
-    # format defaults ([_LANG.python.loaders] / [_LOADERS]) were already tried
-    # (and tolerated) above, so go straight to the built-in here.
+    # Rung 3: built-in default loader for the format — reached only when no own
+    # loader and no manifest format-default ([_LANG.python.loaders] / [_LOADERS])
+    # is present for this dataset (an absent rung, not a failed one).
     fmt = (entry.format or "").strip().lower()
     if not fmt:
         raise ValueError(

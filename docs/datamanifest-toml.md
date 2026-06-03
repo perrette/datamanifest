@@ -32,7 +32,7 @@ and runs only the fixtures tagged for them. This package's status:
 
 | Capability | Status | Notes |
 |---|---|---|
-| `lang-read` | ✅ | Parses `[<ds>._LANG.python]` / `[_LANG.python.loaders]` **and** the language-implicit ("bare") forms — a per-dataset `fetcher`/`loader` and the top-level `[_LOADERS]` format→binding map, read as Python (spec-v3.4) — then applies the fetch/load ladders. An explicit `_LANG.python` binding wins over the bare one; a bare binding that fails to resolve/run in Python warns and falls through (it is not a hard error). |
+| `lang-read` | ✅ | Parses `[<ds>._LANG.python]` / `[_LANG.python.loaders]` **and** the language-implicit ("bare") forms — a per-dataset `fetcher`/`loader` and the top-level `[_LOADERS]` format→binding map, read as Python (spec-v3.4) — then applies the fetch/load ladders. An explicit `_LANG.python` binding wins over the bare one; a binding present for the running language (bare or explicit) that fails is an error — fail-loud, no silent fall-through (spec-v3.6). |
 | `lang-write` | ✅ | Regenerates `_LANG.python` only from explicit bindings, keeps bare `fetcher`/`loader`/`shell` and `[_LOADERS]` **bare** (never promoted into `_LANG.python`), and preserves foreign `_LANG.*` + unknown `_*` tables verbatim (lossless round-trip). |
 | `shell-fetch` | ✅ | Executes the dataset's bare `shell` command template (spec-v3.5 canonical, language-agnostic), else the legacy `[<ds>._LANG.shell].fetcher` (`expand_shell_template`). |
 | `storage` | ✅ | spec-v3 storage model: **bare roots** (`$data`/`$cache` resolve to `platformdirs` dirs without `/Datasets` suffix; `$repo` = project root); content composed as `<root>/datasets/<key>` (fetch) or `<root>/cached/<project-id>/<cachetype>/[<version>/]<hash>` (produced); `DATAMANIFEST_DIR` application base; folder variables (`$data`, `$cache`, `$repo` built-in; user-defined via `[_STORAGE]`), `$folder[/subpath]` selectors, `[_STORAGE].default` project default, path-expression interpolation, env-var/`_HOST` precedence ladder (no `_PROFILE` rung), `repo→data→cache` built-in probe order under `datasets/` prefix, atomic publish + `.complete` markers. Bare (non-`$`) `store` values are rejected with a migration hint. |
@@ -82,7 +82,9 @@ The load ladder is, in order: (1) the dataset's own loader — explicit
 format-default — `[_LANG.python.loaders][format]`, else the language-implicit
 bare `[_LOADERS][format]` map; (3) the built-in loader for the format. (The
 explicit `_LANG.python` rung always wins over the bare counterpart at the same
-level, and a failing bare rung warns and falls through.) When a dataset's
+level, and a *present* rung — bare or explicit — that fails to resolve/run is an
+error, fail-loud, not a fall-through (spec-v3.6); the ladder only advances past an
+*absent* rung.) When a dataset's
 `format` reaches rung 3, Python uses a built-in loader. The
 format → implementation map (in `datamanifest/default_loaders.py`):
 

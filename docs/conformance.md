@@ -22,7 +22,7 @@ This release targets **spec-v3** of the shared format.
 
 | Capability | Status | Notes |
 |---|---|---|
-| `lang-read` | ✅ | Parse the `_LANG` namespace and the language-implicit ("bare") forms — a per-dataset `fetcher`/`loader` and the top-level `[_LOADERS]` format→binding map, read as Python (spec-v3.4) — then apply the fetch/load ladders. Explicit `_LANG.python` wins over the bare counterpart; a bare binding that fails to resolve/run in Python warns and falls through (never a hard error). |
+| `lang-read` | ✅ | Parse the `_LANG` namespace and the language-implicit ("bare") forms — a per-dataset `fetcher`/`loader` and the top-level `[_LOADERS]` format→binding map, read as Python (spec-v3.4) — then apply the fetch/load ladders. Explicit `_LANG.python` wins over the bare counterpart; a binding present for the running language (bare or explicit) that fails is an error — fail-loud, no silent fall-through (spec-v3.6). |
 | `lang-write` | ✅ | Regenerate `_LANG.python` from explicit bindings only; keep bare `fetcher`/`loader`/`shell` and `[_LOADERS]` bare (never promoted); preserve foreign `_LANG.*` and unknown `_*` tables verbatim (lossless round-trip). |
 | `shell-fetch` | ✅ | Run the dataset's bare `shell` command template (spec-v3.5 canonical, language-agnostic) in the fetch ladder, else the legacy `_LANG.shell.fetcher` fallback. |
 | `storage` | ✅ | Folder variables (`$data`/`$cache`/`$repo` + user-defined), `$`-selectors, `[_STORAGE]` with per-host overrides, content prefixes + scope, `DATAMANIFEST_DIR`, bare roots over `platformdirs`. |

@@ -5,7 +5,7 @@ The resolution assertions mirror the authoritative conformance fixture
 ``lang_implicit.toml`` / ``lang_implicit.expected.json`` (the ``python`` view):
 each dataset's effective fetcher/loader rung + ref must match the fixture. The
 remaining tests cover the string/table binding forms, explicit-over-bare
-precedence, tolerant warn-and-fall-through, round-trip (bare stays bare), and
+precedence, fail-loud for present bindings (spec-v3.6), round-trip (bare stays bare), and
 the shell precedence flip + migrate inversion.
 """
 
@@ -234,10 +234,12 @@ local_path = "%s"
     assert L.param_loader.last_call["scale"] == 3
 
 
-# ----- Tolerance: bare fails -> warn + fall through; explicit fails -> raise -----
+# ----- Fail-loud (spec-v3.6): a present binding that fails is an error -----
 
-def test_bare_loader_failure_falls_through(tmp_path, caplog):
-    """A bare loader whose ref can't import warns and falls through to built-in."""
+def test_bare_loader_failure_raises(tmp_path):
+    """spec-v3.6: a bare loader is *present* for the running language, so a ref
+    that can't resolve is an error — never a silent fall-through to the format
+    default (a shared bare binding must use [_LANG.<lang>] instead)."""
     f = tmp_path / "d.json"
     f.write_text('{"k": 1}')
     text = """
@@ -253,15 +255,13 @@ loader = "MyJulia:load_it"
 local_path = "%s"
 """ % str(f)
     db = _db(tmp_path, text)
-    with caplog.at_level("WARNING"):
-        result = load_dataset(db, "d")
-    # Built-in json loader ran (fell through), no exception.
-    assert result == {"k": 1}
-    assert any("falling through the load ladder" in r.message for r in caplog.records)
+    with pytest.raises(Exception):
+        load_dataset(db, "d")
 
 
 def test_explicit_python_loader_failure_raises(tmp_path):
-    """An explicit _LANG.python.loader that can't import still hard-errors."""
+    """An explicit _LANG.python.loader that can't import hard-errors (as does a
+    bare one — both are present for the running language)."""
     f = tmp_path / "d.json"
     f.write_text('{"k": 1}')
     text = """

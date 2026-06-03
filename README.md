@@ -147,7 +147,7 @@ datamanifest list --kind cached --push user@hpc     # bulk: push the filtered se
 | `requires=` dependency graph (topological order) | yes |
 | Shell template hook (bare `shell`, language-agnostic) | yes |
 | Python entry-point hook (`_LANG.python.fetcher` / bare `fetcher` / legacy `python=`) | yes |
-| Language-implicit (bare) `fetcher`/`loader` + `[_LOADERS]` map, with tolerant fall-through | yes |
+| Language-implicit (bare) `fetcher`/`loader` + `[_LOADERS]` map (fail-loud for present bindings) | yes |
 | Named + default loaders (csv, parquet, nc, json, yaml, toml, zip, tar) | yes |
 | TOML manifest round-trip (read `tomllib`, write `tomli_w`) | yes |
 | Project-root auto-discovery (`pyproject.toml` walk, env vars) | yes |
@@ -286,9 +286,13 @@ fetcher = "MyPkg.fetch_mydata"            # preserved verbatim; Python never tou
 4. Error
 
 At every own-language rung the explicit `_LANG.python` binding wins over the bare
-one; a **bare** binding that fails to resolve or run in Python (e.g. a Julia ref a
-Python tool can't import) logs a warning and falls through to the next rung, never
-a hard error. An explicit `_LANG.python` binding that fails *is* a hard error.
+one. A binding that is **present** for the running language — bare *or* explicit
+`_LANG.python` — is **fail-loud** (spec-v3.6): if it fails to resolve it is an
+error, and if it resolves and then raises the error propagates — never a silent
+fall-through to a different loader/fetcher. The ladder falls through only to skip
+rungs that are **absent** (another language's `_LANG.<other>` binding, or no own
+loader). A manifest meant for more than one language uses explicit
+`[<ds>._LANG.<lang>]` bindings (absent, and so correctly skipped, in the others).
 
 ### Language-implicit (bare) bindings
 
