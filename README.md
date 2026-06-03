@@ -8,16 +8,6 @@ Keep track of datasets used in a scientific project.
 
 `datamanifest` provides a simple way to declare data dependencies — URLs, git repositories, checksums, formats — in a `datasets.toml` file, and handles download, verification, extraction, and loading. It is a Python port of [`DataManifest.jl`](https://github.com/awi-esc/DataManifest.jl) (same author), with the same manifest format and feature surface.
 
-### How it compares to Pooch
-
-If you know [Pooch](https://www.fatiando.org/pooch/), think *"Pooch, but with a richer manifest that also loads the data and works across languages."* Pooch is the established, widely-used tool for the fetch-verify-extract layer (it backs SciPy, scikit-image, and many others), and `datamanifest` covers that same ground — HTTP/Zenodo downloads, SHA-256 verification, unzip/untar. Pooch already has a *registry file* (flat lines of `filename  sha256  [url]`); the three things `datamanifest` adds on top:
-
-1. **A structured manifest that fetches *and* loads.** Beyond filename+hash, one `datasets.toml` carries format, extraction, per-language hooks, and how to turn each dataset into a `pandas`/`xarray` object (the loader ladder) — where Pooch deliberately stops at "here's the verified path."
-2. **A dependency graph.** `requires=` resolves datasets in topological order, so derived datasets can be built from others.
-3. **A cross-language manifest.** This is the core differentiator: `datamanifest` is one member of a multi-language *DataManifest family* built on a [shared TOML schema](https://github.com/perrette/datamanifest.toml). The same `datasets.toml` is consumed by sibling implementations in other languages (today [`DataManifest.jl`](https://github.com/awi-esc/DataManifest.jl) for Julia) via the `_LANG` namespace, so projects in different languages share one declaration without stepping on each other. None of the Python tools below target this.
-
-If you only need download-and-checksum in pure Python, Pooch is the more mature choice. `datamanifest` is aimed at multi-dataset, multi-language scientific projects that want the whole dependency declaration in one file.
-
 ## Installation
 
 ```bash
@@ -72,12 +62,12 @@ def load_anomaly(*, grid="5x5", skip_models=()):
     ...  # expensive; returns an xarray.Dataset
     return ds
 
-ds = load_anomaly(grid="5x5")          # computes, materializes under $cache, registers in cached.toml
+ds = load_anomaly(grid="5x5")          # computes, materializes, registers it
 ds = load_anomaly(grid="5x5")          # cache hit: loads and returns
 ds = load_anomaly(grid="5x5", cached=False)  # force recompute
 ```
 
-The keyword arguments (minus `_`-prefixed runtime knobs) are hashed (canonical JSON → SHA-256) into a portable `<hash>` key; the artifact and its `config.toml` / `metadata.toml` sidecars land at `<cache>/cached/<project-id>/<cachetype>/[<version>/]<hash>` (spec-v3 layout). An optional `version=` string is a path segment recorded in `config.toml` and `cached.toml` but **not** in the param hash. Produced datasets are **not** written into `datasets.toml` — they are indexed in a sibling `cached.toml`; `datamanifest list --orphan --delete` (with `--yes` to apply, default dry run) is the maintenance command. The cache layer (`datamanifest.cache`) is an in-repo layer over the shared `datamanifest.store` substrate and never touches the fetch path.
+The keyword arguments (minus `_`-prefixed runtime knobs) are hashed into a portable key; the artifact and its `config.toml` / `metadata.toml` sidecars land under your cache directory at `<cache>/cached/<project-id>/<cachetype>/[<version>/]<hash>`. An optional `version=` string adds a path segment — recorded in the sidecars but **not** part of the key hash — so a change to a function's *logic* (same parameters) can't read a stale result. Produced datasets are **not** written into `datasets.toml`; they are indexed in a sibling `cached.toml`, and `datamanifest list --orphan --delete` (dry run by default, `--yes` to apply) is the maintenance command. The cache layer (`datamanifest.cache`) sits over the shared `datamanifest.store` substrate and never touches the fetch path.
 
 ## CLI usage
 
@@ -94,9 +84,10 @@ datamanifest COMMAND [OPTIONS]
 | `remove NAME [--keep-cache]` | Delete an entry, optionally preserving cached files |
 | `show NAME` | Print full entry detail in TOML style |
 | `verify [NAME ...]` | Re-check sha256 checksums; exits nonzero on any mismatch |
+| `update-checksums [NAME ...] [--dry-run]` | Recompute stored checksums from what's on disk |
 | `init [--folder PATH] [--force]` | Create a fresh `datasets.toml` in the current directory |
 | `where` | Print active `datasets_toml` and `datasets_folder` paths |
-| `migrate FILE` | Rewrite a manifest to the current schema in-place (v0→v1 `_LANG` form; v1.1→v2 bare-store `"x"` → `"$x"`) |
+| `migrate FILE` | Update an older manifest in place (move legacy flat fields into `_LANG`; rewrite bare `store = "x"` to `$`-selectors) |
 
 Examples:
 
@@ -144,30 +135,28 @@ datamanifest where
 | Named + default loaders (csv, parquet, nc, json, yaml, toml, zip, tar) | yes |
 | TOML manifest round-trip (read `tomllib`, write `tomli_w`) | yes |
 | Project-root auto-discovery (`pyproject.toml` walk, env vars) | yes |
-| CLI (`datamanifest list/download/path/add/remove/show/verify/update-checksums/init/where/migrate/format`) | yes |
-| Schema v1 `_LANG` namespace (read + write) | yes |
+| CLI (`list/download/path/add/remove/show/verify/update-checksums/init/where/migrate/format`) | yes |
+| `_LANG` namespace for per-language bindings (read + write) | yes |
 | Fetch ladder: own Python fetcher → shell template → URI | yes |
 | Load ladder: own Python loader → manifest default → built-in | yes |
 | Lossless round-trip of foreign `_LANG.*` subtrees | yes |
-| v0 → v1 migration (`datamanifest migrate`) | yes |
-| Portable storage model (spec-v3: bare roots, `datasets/`/`cached/` content prefixes, `$`-selectors, folder variables, `[_STORAGE]` + platformdirs roots, `DATAMANIFEST_DIR`) | yes |
+| Manifest migration (`datamanifest migrate`) | yes |
+| Portable storage model (folder variables, `$`-selectors, `[_STORAGE]` with per-host overrides, `platformdirs` roots) | yes |
 | Parameterized bindings (`{ ref, args, kwargs }` + `$var` substitution) | yes |
 | Safe concurrent materialization (`.tmp` → atomic publish → `.complete` marker) | yes |
 | Verify-once integrity (checksum only at fetch; `.complete` entry skips re-hash) | yes |
-| Recursive canonical key ordering / byte-identity (normative reference) | yes |
-| Produce-or-load cache (`@cached`: param-hash keying, optional `version=` segment, `config.toml`/`metadata.toml` sidecars; spec-v3 path `<cache>/cached/<project-id>/<cachetype>/[<version>/]<hash>`) | yes |
+| Canonical key ordering (stable, cross-tool byte-identical output) | yes |
+| Produce-or-load cache (`@cached`: parameter-hash keying, optional `version=`, `config.toml`/`metadata.toml` sidecars) | yes |
 | `cached.toml` index + `datamanifest list` inspect/maintenance (`--orphan`, `--delete`, `--move`) | yes |
 
-## Storage model (spec-v3)
+## Storage model
 
-> **Behavior change from earlier releases.** Prior releases stored all datasets
-> under a `/Datasets`-suffixed root (e.g. `~/.local/share/datamanifest/Datasets`).
-> As of **spec-v3 (v0.6.0)**, folder variables resolve to **bare** roots: `$data` is
-> `platformdirs.user_data_dir("datamanifest")` (typically `~/.local/share/datamanifest`
-> on Linux) and content is composed as `<root>/datasets/<key>` (fetch) or
-> `<root>/cached/<project-id>/<cachetype>/[<version>/]<hash>` (produced artifacts).
-> A legacy read-only probe still finds datasets at old `/Datasets`-suffixed locations
-> unless `DATAMANIFEST_DATA_DIR` or `DATAMANIFEST_DIR` is set.
+> **Behavior change from earlier releases.** Earlier versions stored datasets under a
+> `/Datasets`-suffixed root (e.g. `~/.local/share/datamanifest/Datasets`). Now folder
+> variables resolve to **bare** roots, and content is composed as `<root>/datasets/<key>`
+> (downloads) or `<root>/cached/<project-id>/<cachetype>/[<version>/]<hash>` (produced
+> artifacts). A legacy read-only probe still finds datasets at the old `/Datasets`-suffixed
+> locations unless `DATAMANIFEST_DATA_DIR` or `DATAMANIFEST_DIR` is set.
 
 Each dataset entry carries an optional `store` field — a **`$`-selector**
 (`$folder` or `$folder/subpath`) referencing a named **folder variable**. The
@@ -211,21 +200,21 @@ format = "nc"
 4. Built-in: `$data`/`$cache` = `DATAMANIFEST_DIR` if set, else `platformdirs.user_{data,cache}_dir("datamanifest")`; `$repo` = `<project_root>`.
    User-defined folders with no definition on any rung are an error.
 
-`_PROFILE` is a preserved structural key (round-tripped verbatim) but **no longer applied** during resolution as of spec-v3.
+`_PROFILE` is accepted and round-tripped verbatim but is not applied during resolution.
 
-**Content path composition** (consuming layer, not the selector):
+**Content path composition** (added by the consuming layer, not the selector):
 - Fetched datasets: `<root>[/subpath]/datasets/<key>`
 - Produced artifacts: `<root>/cached/<project-id>/<cachetype>/[<version>/]<hash>`
 
-**Read resolution** probes built-in roots under their `datasets/` prefix (`$repo → $data → $cache`), then a legacy read-only probe for pre-v3 locations (skipped when `DATAMANIFEST_DATA_DIR`/`DATAMANIFEST_DIR` is set).
+**Read resolution** probes built-in roots under their `datasets/` prefix (`$repo → $data → $cache`), then a legacy read-only probe for old locations (skipped when `DATAMANIFEST_DATA_DIR`/`DATAMANIFEST_DIR` is set).
 
-**v1.1 → v2 migration:** If you have existing manifests with bare `store = "cache"`
-entries, run `datamanifest migrate datasets.toml` to rewrite them to `store = "$cache"`
-(and similar for other stores). The `$data` default is elided on write.
+**Migrating older manifests:** if you have manifests with bare `store = "cache"` entries,
+run `datamanifest migrate datasets.toml` to rewrite them to `store = "$cache"` (and similar
+for other stores). The `$data` default is elided on write.
 
-## Schema v1 — `_LANG` namespace
+## Per-language bindings (`_LANG`)
 
-Schema v1 separates language-specific bindings into a dedicated `_LANG` namespace so that a single manifest can serve multiple language implementations without conflicts.
+Language-specific bindings live in a dedicated `_LANG` namespace, so a single manifest can serve multiple language implementations without conflicts.
 
 ```toml
 [_META]
@@ -256,7 +245,7 @@ fetcher = "MyPkg.fetch_mydata"            # preserved verbatim; Python never tou
 
 Delegation to peer CLIs is **not yet implemented** — the ladder stops at built-ins.
 
-### Parameterized bindings (spec-v1.1)
+### Parameterized bindings
 
 Python `fetcher`/`loader` values may be a `{ ref, args, kwargs }` table instead
 of a plain string, allowing the same entry-point to be reused across datasets
@@ -276,8 +265,7 @@ String values in `args` and `kwargs` undergo `$var` substitution before the
 call. Available variables: `$download_path` (fetcher), `$path` (loader),
 `$key`, `$version`, `$doi`, `$format`, `$branch`, `$uri`, `$project_root`.
 
-A bare string `fetcher`/`loader` keeps the conventional keyword-argument call
-and requires no capability upgrade.
+A bare string `fetcher`/`loader` keeps the conventional keyword-argument call.
 
 Foreign `_LANG.<other>` subtrees (e.g. `_LANG.julia`) are preserved verbatim on every read→write cycle; Python never modifies them. Unknown structural tables (any `_*` key that Python does not recognise) are similarly passed through.
 
@@ -287,61 +275,51 @@ Foreign `_LANG.<other>` subtrees (e.g. `_LANG.julia`) are preserved verbatim on 
 datamanifest migrate datasets.toml
 ```
 
-Rewrites a manifest in-place through all outstanding migration steps:
+Updates a manifest in place through all outstanding steps:
 
-- **v0 → v1:** moves per-dataset `python=`/`callable=`/`loader=` into `[<ds>._LANG.python]`, moves `[_LOADERS]` into `[_LANG.python.loaders]`, and adds `[_META] schema = 1`. Foreign keys are left verbatim.
-- **v1.1 → v2 (storage):** rewrites bare `store = "x"` entries to `store = "$x"` (`"data"`/`""` are elided, leaving the project default). `[_STORAGE]` folder *definitions* (bare keys like `data = "…"`) are left untouched.
+- **Legacy flat fields:** moves per-dataset `python=`/`callable=`/`loader=` into `[<ds>._LANG.python]`, moves `[_LOADERS]` into `[_LANG.python.loaders]`, and adds the `[_META]` header. Foreign keys are left verbatim.
+- **Storage selectors:** rewrites bare `store = "x"` entries to `store = "$x"` (`"data"`/`""` are elided, leaving the project default). `[_STORAGE]` folder *definitions* (bare keys like `data = "…"`) are left untouched.
 
-Reading a v0 or v1.1 file without migrating still works for most operations, but a v1.1 manifest with bare `store` values will error on resolution (per spec-v2). A one-time deprecation warning is logged for v0 forms.
+Reading an older manifest without migrating still works for most operations, but a manifest with bare `store` values will error on resolution. A one-time deprecation warning is logged for legacy flat fields.
 
 ## Python adaptations
 
-The Python port uses the same manifest format as `DataManifest.jl`. Schema v1 is the preferred form; schema v0 (flat fields) is still accepted for backwards compatibility.
+The Python port uses the same manifest format as `DataManifest.jl`. The `_LANG` namespace is the preferred form; legacy flat fields are still accepted for backwards compatibility.
 
-**v0 / legacy fields** (still accepted on read):
+**Legacy fields** (still accepted on read):
 
 - **`python=`** (or **`callable=`**) — entry-point reference (`"pkg.mod:func"`) resolved via `importlib`. The callable receives keyword arguments `(download_path, project_root, entry, uri, key, version, doi, format, branch, requires_paths)`. No inline code execution (`exec`/`eval`) anywhere.
 - **`loader=`** — format→ref mapping for the dataset's loader.
 - **`python_includes=`** — list of directory paths prepended to `sys.path` during ref resolution.
 - **`[_LOADERS]`** — manifest-wide format→ref loader defaults.
 
-In schema v1 all of the above move into `_LANG.python` / `_LANG.python.loaders`. The `datamanifest migrate` command performs the conversion.
+These all move into `_LANG.python` / `_LANG.python.loaders`; `datamanifest migrate` performs the conversion.
 
-A single `datasets.toml` can be consumed by both tools: each reads the common fields and ignores the other's extension keys. The shared schema is documented at [perrette/datamanifest.toml](https://github.com/perrette/datamanifest.toml).
-
-## Conformance
-
-This release targets **spec-v3** of the shared [datamanifest.toml schema](https://github.com/perrette/datamanifest.toml).
-
-Implemented capabilities:
-
-| Capability | Status |
-|---|---|
-| `lang-read` — parse `_LANG` namespace on read | yes |
-| `lang-write` — regenerate `_LANG.python`, preserve foreign `_LANG.*` verbatim | yes |
-| `shell-fetch` — `_LANG.shell.fetcher` template in the fetch ladder | yes |
-| `storage` — spec-v3: bare roots, `datasets/`/`cached/` content prefixes, `$`-selectors, folder variables (`$data`/`$cache`/`$repo` + user-defined), `[_STORAGE].default`, `DATAMANIFEST_DIR`, path-expression interpolation, platformdirs roots, read-order resolution | yes |
-| `binding-args` — `{ ref, args, kwargs }` table form with `$var` substitution | yes |
-| `byte-identity` — recursive canonical key ordering (normative reference) | yes |
-| `cache-produce` — `@cached` produce-or-load: param-hash keying, optional `version=`, `config.toml`/`metadata.toml` sidecars; spec-v3 path `<cache>/cached/<project-id>/<cachetype>/[<version>/]<hash>` | yes |
-| `inspect` — `cached.toml` index + `datamanifest list` maintenance surface (`--orphan`/`--older-than`/`--delete`/`--move`) | yes |
-| `sync` — cross-machine push/pull of cached artifacts | not yet |
-| `delegation` — peer-CLI runtime (delegate fetch/load to another tool) | not yet |
-
-The conformance test suite (`tests/test_conformance.py`) downloads the pinned spec fixture tarball, verifies every file against a recorded per-file SHA-256 hash (`tests/conformance_pin.toml`), and runs only the fixtures whose `capabilities` are a subset of the above set, skipping the rest with a reason. Re-pinning the fixture suite to the `spec-v3` tag is a manual post-merge step (requires network access).
+A single `datasets.toml` can be consumed by both tools: each reads the common fields and ignores the other's extension keys. See [docs/conformance.md](docs/conformance.md) for the shared manifest format and what this implementation supports.
 
 ## Related projects
 
-**The DataManifest family (one manifest, many languages):**
+**The DataManifest family (one manifest, many languages).** `datamanifest` shares its `datasets.toml` format with sibling implementations in other languages, so a project in any of them reads the same declaration:
 
-- [`perrette/datamanifest.toml`](https://github.com/perrette/datamanifest.toml) — the shared TOML schema spec; the common contract every implementation reads.
 - [`awi-esc/DataManifest.jl`](https://github.com/awi-esc/DataManifest.jl) — the Julia implementation this port is based on, sharing the same `datasets.toml` via the `_LANG` namespace.
+
+(See [docs/conformance.md](docs/conformance.md) for the shared format and the supported feature set.)
 
 **Python alternatives** (single-language; closest established tools for parts of what `datamanifest` does):
 
 - [`fatiando/pooch`](https://www.fatiando.org/pooch/) — the closest established tool; covers the download / SHA-256 verification / unzip layer in pure Python (see [How it compares to Pooch](#how-it-compares-to-pooch)). `datamanifest` adds a load layer, a `requires=` dependency graph, and the cross-language manifest above.
 - [`intake`](https://intake.readthedocs.io) — catalog of data sources with drivers that load into pandas/xarray/dask; overlaps with the loader half of `datamanifest`.
 - [`cthoyt/pystow`](https://github.com/cthoyt/pystow) — lightweight reproducible download + cached storage with an OS-appropriate data dir; code-driven rather than manifest-driven.
+
+## How it compares to Pooch
+
+If you know [Pooch](https://www.fatiando.org/pooch/), think *"Pooch, but with a richer manifest that also loads the data and works across languages."* Pooch is the established, widely-used tool for the fetch-verify-extract layer (it backs SciPy, scikit-image, and many others), and `datamanifest` covers that same ground — HTTP/Zenodo downloads, SHA-256 verification, unzip/untar. Pooch already has a *registry file* (flat lines of `filename  sha256  [url]`); the three things `datamanifest` adds on top:
+
+1. **A structured manifest that fetches *and* loads.** Beyond filename+hash, one `datasets.toml` carries format, extraction, per-language hooks, and how to turn each dataset into a `pandas`/`xarray` object (the loader ladder) — where Pooch deliberately stops at "here's the verified path."
+2. **A dependency graph.** `requires=` resolves datasets in topological order, so derived datasets can be built from others.
+3. **A cross-language manifest.** This is the core differentiator: the same `datasets.toml` is consumed by sibling implementations in other languages (today [`DataManifest.jl`](https://github.com/awi-esc/DataManifest.jl) for Julia) via the `_LANG` namespace, so projects in different languages share one declaration without stepping on each other. None of the Python tools above target this.
+
+If you only need download-and-checksum in pure Python, Pooch is the more mature choice. `datamanifest` is aimed at multi-dataset, multi-language scientific projects that want the whole dependency declaration in one file.
 
 ## Acknowledgments
 
