@@ -66,6 +66,20 @@ class DatasetEntry:
     shell: str = ""
     python: str = ""
     loader: str = ""
+    # Bare per-dataset bindings (spec-v3.4, language-implicit): read as the
+    # running tool's OWN language, equivalent to [<ds>._LANG.<self>].fetcher /
+    # .loader but without the wrapper. Each accepts the bare-ref string or the
+    # parameterized { ref, args, kwargs } table form (the ref lives in the
+    # field, args/kwargs in the paired fields). `loader` (above) is the bare
+    # loader ref; `loader_args`/`loader_kwargs` carry its table form. An explicit
+    # [<ds>._LANG.python] binding overrides the bare one (see resolve_fetcher /
+    # resolve_loader_binding). A bare binding that fails to resolve in Python
+    # warns and falls through the ladder (tolerant); an explicit one hard-errors.
+    fetcher: str = ""
+    fetcher_args: list = field(default_factory=list)
+    fetcher_kwargs: dict = field(default_factory=dict)
+    loader_args: list = field(default_factory=list)
+    loader_kwargs: dict = field(default_factory=dict)
     requires: list = field(default_factory=list)
     # v1 _LANG.python bindings (read via _LANG namespace; written back in Item 4).
     # Each binding may be a bare ref string or a parameterized
@@ -341,6 +355,23 @@ def init_dataset_entry(uri=None, uris=None, ref: str = "", downloads=None, **kwa
                 raise ValueError("Cannot provide both `callable` and `python`")
             kwargs["python"] = callable_ref
 
+    # Bare per-dataset bindings (spec-v3.4): `fetcher` / `loader` may each be a
+    # bare ref string or a parameterized { ref, args, kwargs } table. Split a
+    # table form into the ref field + the paired args/kwargs fields, so the
+    # dataclass fields always hold scalar ref + list args + dict kwargs.
+    for binding_key, args_field, kwargs_field in (
+        ("fetcher", "fetcher_args", "fetcher_kwargs"),
+        ("loader", "loader_args", "loader_kwargs"),
+    ):
+        bv = kwargs.get(binding_key)
+        if isinstance(bv, dict):
+            ref_v, args_v, kwargs_v = _split_python_binding(bv)
+            kwargs[binding_key] = ref_v
+            if args_v and args_field not in kwargs:
+                kwargs[args_field] = args_v
+            if kwargs_v and kwargs_field not in kwargs:
+                kwargs[kwargs_field] = kwargs_v
+
     # Normalize: uri can be a list (same as uris).
     if isinstance(uri, (list, tuple)):
         if uris:
@@ -446,7 +477,7 @@ def init_dataset_entry(uri=None, uris=None, ref: str = "", downloads=None, **kwa
         elif not entry.version:
             entry.version = ref
     else:
-        if entry.shell == "" and entry.python == "":
+        if entry.shell == "" and entry.python == "" and entry.fetcher == "":
             entry.uri = build_uri(entry)
 
     entry.key = entry.key if entry.key else get_dataset_key(entry)
@@ -1112,8 +1143,15 @@ class Database:
         self.datasets_folder = datasets_folder
         self.skip_checksum = skip_checksum
         self.skip_checksum_folders = skip_checksum_folders
-        # Loader registry (behaviour filled in by a later item).
+        # Loader registry (behaviour filled in by a later item). `loaders` is the
+        # bare, language-implicit [_LOADERS] format→binding map (spec-v3.4); a
+        # value may be a bare ref or a { ref, args, kwargs } table — the ref
+        # lives here, any args/kwargs in the parallel maps. It is the
+        # language-implicit counterpart of [_LANG.python.loaders] and is the
+        # lower-precedence rung (explicit wins).
         self.loaders: dict = {}
+        self.loaders_args: dict = {}
+        self.loaders_kwargs: dict = {}
         self.loaders_python_includes: list = []
         self.loader_cache: dict = {}
         # v1 _LANG.python.loaders: format→ref map from [_LANG.python.loaders].
@@ -1276,7 +1314,20 @@ class Database:
                     "julia_modules",
                 ):
                     continue
-                self.loaders[str(k)] = v if isinstance(v, str) else repr(v)
+                # [_LOADERS] is a language-implicit format→binding map
+                # (spec-v3.4): each value is a bare ref string or a
+                # { ref, args, kwargs } table. Split it across the parallel maps.
+                if isinstance(v, dict):
+                    ref, a, kw = _split_python_binding(v)
+                    if not ref:
+                        continue
+                    self.loaders[str(k)] = ref
+                    if a:
+                        self.loaders_args[str(k)] = a
+                    if kw:
+                        self.loaders_kwargs[str(k)] = kw
+                else:
+                    self.loaders[str(k)] = v if isinstance(v, str) else repr(v)
 
         meta_section = datasets.get("_META")
         if isinstance(meta_section, dict):
@@ -1353,10 +1404,21 @@ class Database:
         the registry clears the resolution cache.
         """
         if loaders is not None:
-            self.loaders = {
-                str(k): (v if isinstance(v, str) else repr(v))
-                for k, v in loaders.items()
-            }
+            self.loaders = {}
+            self.loaders_args = {}
+            self.loaders_kwargs = {}
+            for k, v in loaders.items():
+                if isinstance(v, dict):
+                    ref, a, kw = _split_python_binding(v)
+                    if not ref:
+                        continue
+                    self.loaders[str(k)] = ref
+                    if a:
+                        self.loaders_args[str(k)] = a
+                    if kw:
+                        self.loaders_kwargs[str(k)] = kw
+                else:
+                    self.loaders[str(k)] = v if isinstance(v, str) else repr(v)
         if python_includes is not None:
             self.loaders_python_includes = [str(x) for x in python_includes]
         self.loader_cache.clear()
