@@ -36,8 +36,10 @@ and runs only the fixtures tagged for them. This package's status:
 | `lang-write` | ✅ | Regenerates `_LANG.python`, preserves foreign `_LANG.*` and unknown `_*` tables verbatim (lossless round-trip). |
 | `shell-fetch` | ✅ | Executes the `[<ds>._LANG.shell].fetcher` command template (`expand_shell_template`). |
 | `storage` | ✅ | spec-v2 storage model: folder variables (`$data`, `$cache`, `$repo` built-in; user-defined via `[_STORAGE]`), `$folder[/subpath]` selectors, `[_STORAGE].default` project default, path-expression interpolation (`$folder`/`$ENV`/`~`) in `local_path` and `[_STORAGE]` values, env-var/`_HOST`/`_PROFILE` precedence ladder, `repo→data→cache` built-in probe order, atomic publish + `.complete` markers. Bare (non-`$`) `store` values are rejected with a migration hint. |
-| `byte-identity` | ✅ | Canonical lexicographic key ordering; this package is the **normative reference** (`_sort_recursive`). |
+| `byte-identity` | ✅ | Canonical lexicographic key ordering; this package is the **normative reference** (`sort_recursive` in the `datamanifest.store` substrate). |
 | `binding-args` | ✅ | Executes the `{ ref, args, kwargs }` table form with `$var` substitution (`_substitute_vars`). |
+| `cache-produce` | ✅ | Produce-or-load: the `@cached` decorator with canonical-JSON→SHA-256 param-hash keying, `config.toml`/`metadata.toml` sidecars, and `store="$cache"` default (`datamanifest.cache`). See [Produce-or-load cache layer](#produce-or-load-cache-layer). |
+| `cache-gc` | ✅ | The `cached.toml` produced-dataset index, a depot usage log, and `datamanifest gc` (root-reachability collector). |
 | `delegation` | ❌ | Peer-CLI delegation (fetch-ladder rung 3) is not implemented; the ladder skips straight to `uri` download. No `datamanifest fetch` subcommand yet. |
 
 ### What differs / is added on top
@@ -94,13 +96,48 @@ Each third-party dependency is imported lazily, so the package installs without
 pandas/xarray/pyyaml and only errors (with an install hint) when such a loader is
 actually invoked.
 
+### Produce-or-load cache layer
+
+spec-v2.1 reframes produce-or-load as an **in-repo layer**, not a separate package
+(no `[cache]` extra). The code is organised in three layers with a one-way import
+arrow — the substrate is consumed by both feature layers, and neither feature layer
+imports the other:
+
+```
+datamanifest.store   (Layer 0 substrate)  — location resolution, safe-materialize, loaders, canonical sort
+        ▲ consumes                 ▲ consumes
+datamanifest.database/pipelines    datamanifest.cache
+   (Layer 1a: fetch)                  (Layer 1b: @cached) — imports store only, never the fetch layer
+```
+
+`@cached` (`from datamanifest.cache import cached`) wraps a **keyword-only** producing
+function: its keyword arguments (minus `_`-prefixed runtime knobs) form the key table,
+which is hashed (canonical JSON → SHA-256) into a `<cachetype>/<hash>` key. The result
+is materialized once under `$cache` as `<cache_root>/<cachetype>/<hash>/<basename>.<ext>`
+beside a `config.toml` (re-hashable key table + `[_META]`) and a write-if-absent
+`metadata.toml` (provenance + an `[origin].cached_toml` back-pointer); subsequent calls
+load and return it. A `cached=False` call argument forces a recompute.
+
+Each produce registers the artifact in a sibling **`cached.toml`** (the `Manifest.toml`
+analogue — gitignored per-machine state by default). **`datamanifest gc`** is a
+root-reachability collector: it reclaims produced artifacts under `$cache` that no
+still-existing root (`cached.toml` produced keys + `datasets.toml` `$cache` fetched keys)
+references and that are older than `--grace` (default `7d`); `--dry-run` previews. Roots
+are discovered via a depot usage log at `platformdirs.user_state_dir("datamanifest")/usage.toml`
+(override with `DATAMANIFEST_USAGE_LOG`). It never touches `$data`/`$repo`, and
+identifies produced artifacts by their `config.toml` sidecar (so fetched `$cache`
+datasets are never collected). The `gc` command is the composition root — the only place
+that imports both the fetch and cache layers.
+
 ### Canonical serialization
 
 This Python implementation is the **normative reference** for canonical key
 ordering: `Database.write()` sorts every dict key by Unicode code point at every
-nesting level (top-level tables, within-entry fields, and inside inline `{ }`
-tables) via `_sort_recursive()` in `datamanifest.database`, with no
-`_META`/`_LOADERS`-first special case. Output is byte-identical to Julia's
+nesting level, with no
+`_META`/`_LOADERS`-first special case. The sort lives in the Layer 0 substrate
+(`sort_recursive` in `datamanifest.store`); `Database.write()`, the `cached.toml`
+index, and `datamanifest format` all share that single normative
+implementation. Output is byte-identical to Julia's
 `TOML.print(sorted=true)`. The same helper backs `datamanifest format`, which
 peer tools pipe their output through to obtain byte-identical files.
 

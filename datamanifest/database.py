@@ -282,6 +282,11 @@ def get_dataset_key(entry: DatasetEntry) -> str:
 def build_uri(meta: DatasetEntry) -> str:
     uri = meta.uri if meta.uri else ""
     if uri == "":
+        # Nothing to reconstruct from: a binding-only / local_path / skip_download
+        # entry has no scheme/host/path, so return "" (elided on write) rather
+        # than the degenerate "://".
+        if not (meta.scheme or meta.host or meta.path):
+            return ""
         uri = f"{meta.scheme}://{meta.host}"
         if meta.path:
             uri += "/" + meta.path.strip("/")
