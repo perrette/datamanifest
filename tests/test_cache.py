@@ -6,6 +6,7 @@ trivial ``txt`` / ``json`` formats.
 
 import json
 import os
+import sys
 
 import pytest
 
@@ -266,35 +267,141 @@ def test_cached_bare_value_round_trips(cache_root, scope_base):
     assert produce() == 42  # reload via pickle
 
 
-# ----- decoration-time recipe registry (in-memory, no disk writes) -----------
+# ----- default cachetype = fully-qualified importable name -------------------
 
-def test_registered_recipes_records_at_decoration(tmp_path):
-    """Decorating a @cached function records its recipe in-process (no call, no
-    disk write needed), keyed by ref and exposed on the wrapper as .recipe."""
-    from datamanifest.cache import Recipe, cached, registered_recipes
+def test_default_cachetype_is_qualified_name():
+    """With no explicit cachetype, it defaults to the function's module.qualname."""
+    @cached(format="txt")
+    def produce(*, x):
+        return x
 
-    @cached(cachetype="rt", format="nc", version="v2")
-    def my_recipe(*, grid):
-        return grid
-
-    assert isinstance(my_recipe.recipe, Recipe)
-    assert my_recipe.recipe.cachetype == "rt"
-    assert my_recipe.recipe.format == "nc"
-    assert my_recipe.recipe.version == "v2"
-    assert my_recipe.recipe.ref.endswith(":test_registered_recipes_records_at_decoration.<locals>.my_recipe")
-    assert my_recipe.recipe in registered_recipes()
-    # No call was made, so nothing was written to disk.
-    assert not (tmp_path / "cached.toml").exists()
+    ct = produce.recipe.cachetype
+    assert ct.endswith(".produce")
+    assert produce.__module__ in ct  # the module path is the prefix
 
 
-def test_registered_recipes_default_format_is_pickle():
-    from datamanifest.cache import cached
+def test_explicit_cachetype_overrides_default():
+    @cached(cachetype="my.semantic.name", format="txt")
+    def produce(*, x):
+        return x
 
-    @cached(cachetype="rt2")
-    def no_format(*, a):
-        return a
+    assert produce.recipe.cachetype == "my.semantic.name"
 
-    assert no_format.recipe.format == "pickle"
+
+def test_bare_cached_decorator_uses_all_defaults():
+    @cached  # no parentheses
+    def produce(*, x):
+        return x
+
+    assert produce.recipe.format == "pickle"
+    assert produce.recipe.cachetype.endswith(".produce")
+
+
+def test_main_with_spec_resolves_to_module_name(monkeypatch):
+    """A __main__ function launched via `python -m pkg.mod` resolves to
+    pkg.mod.<qualname> via __main__.__spec__.name."""
+    import types
+
+    from datamanifest.cache._decorator import _resolve_cachetype
+
+    def fn(*, x):
+        return x
+    fn.__module__ = "__main__"
+    fn.__qualname__ = "produce"
+
+    fake_main = types.SimpleNamespace(__spec__=types.SimpleNamespace(name="pkg.mod"))
+    monkeypatch.setitem(sys.modules, "__main__", fake_main)
+    assert _resolve_cachetype(fn, None) == "pkg.mod.produce"
+
+
+def test_main_without_spec_requires_explicit_cachetype(monkeypatch):
+    """A __main__ function with no __spec__ (loose script / REPL / notebook) has
+    no importable identity, so an explicit cachetype is required."""
+    import types
+
+    from datamanifest.cache._decorator import _resolve_cachetype
+
+    def fn(*, x):
+        return x
+    fn.__module__ = "__main__"
+    fn.__qualname__ = "produce"
+
+    fake_main = types.SimpleNamespace(__spec__=None)
+    monkeypatch.setitem(sys.modules, "__main__", fake_main)
+    with pytest.raises(ValueError, match="explicit cachetype"):
+        _resolve_cachetype(fn, None)
+    # An explicit cachetype sidesteps the requirement.
+    assert _resolve_cachetype(fn, "calibration") == "calibration"
+
+
+# ----- decoration-time recipe registry + conflict detection ------------------
+
+# A module-level @cached participates in the in-process registry; locals do not.
+@cached(cachetype="_module_level_fixture_ct", format="txt")
+def _module_level_recipe(*, x):
+    return x
+
+
+def test_registered_recipes_lists_module_level():
+    from datamanifest.cache import registered_recipes
+
+    refs = [r.ref for r in registered_recipes()]
+    assert any(r.endswith(":_module_level_recipe") for r in refs)
+    assert _module_level_recipe.recipe.cachetype == "_module_level_fixture_ct"
+
+
+def test_local_cached_has_recipe_but_is_unregistered():
+    from datamanifest.cache import registered_recipes
+
+    @cached(cachetype="local_only_ct", format="txt")
+    def produce(*, x):
+        return x
+
+    # .recipe is attached for introspection, but a local fn is not registered
+    # (and so is exempt from the conflict check).
+    assert produce.recipe.cachetype == "local_only_ct"
+    assert produce.recipe not in registered_recipes()
+
+
+@pytest.fixture
+def clean_registry():
+    """Snapshot/restore the process-global recipe registry around a test."""
+    from datamanifest.cache import _decorator as d
+
+    recipes, owners = dict(d._RECIPES), dict(d._CACHETYPE_OWNERS)
+    yield
+    d._RECIPES.clear(); d._RECIPES.update(recipes)
+    d._CACHETYPE_OWNERS.clear(); d._CACHETYPE_OWNERS.update(owners)
+
+
+def _decorate_as(module, qualname, *, cachetype, version=""):
+    """Decorate a synthetic module-level function (given module/qualname) so the
+    registry/conflict path treats it as non-local."""
+    def raw(*, x):
+        return x
+    raw.__module__ = module
+    raw.__qualname__ = qualname
+    return cached(cachetype=cachetype, version=version, format="txt")(raw)
+
+
+def test_cachetype_conflict_raises_for_distinct_functions(clean_registry):
+    from datamanifest.cache import CacheTypeConflict
+
+    _decorate_as("pkga.mod", "produce", cachetype="shared_ct")
+    with pytest.raises(CacheTypeConflict):
+        _decorate_as("pkgb.mod", "produce", cachetype="shared_ct")
+
+
+def test_cachetype_conflict_allows_different_version(clean_registry):
+    # Same cachetype, different version, two functions — valid, must coexist.
+    _decorate_as("pkga.mod", "calib_v1", cachetype="calibration", version="1")
+    _decorate_as("pkgb.mod", "calib_v2", cachetype="calibration", version="2")
+
+
+def test_cachetype_redecoration_same_ref_is_not_a_conflict(clean_registry):
+    _decorate_as("pkga.mod", "produce", cachetype="ct_x")
+    # Same ref (module:qualname) re-decorating overwrites, not a conflict.
+    _decorate_as("pkga.mod", "produce", cachetype="ct_x")
 
 
 # ----- hit requires the data file on disk ------------------------------------

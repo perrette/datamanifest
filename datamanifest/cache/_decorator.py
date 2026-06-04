@@ -23,6 +23,7 @@ import functools
 import importlib
 import json
 import os
+import sys
 from typing import NamedTuple
 
 try:
@@ -37,7 +38,7 @@ from ._index import CACHED_INDEX_NAME, CachedIndex
 from ._sidecars import config_is_valid, write_config, write_metadata
 from ._usage import record_path
 
-__all__ = ["cached", "Recipe", "registered_recipes"]
+__all__ = ["cached", "Recipe", "registered_recipes", "CacheTypeConflict"]
 
 
 class Recipe(NamedTuple):
@@ -57,19 +58,91 @@ class Recipe(NamedTuple):
     store: str
 
 
-# Process-local registry of decorated ``@cached`` recipes, keyed by ``ref`` so
-# functions from different submodules never blur together (and a re-import
-# overwrites rather than duplicates). Populated at decoration time with **no
-# disk writes**: importing a module records its recipes here only. A CLI that
-# does not import user code won't see them, and two projects run as separate
+# Process-local registry of decorated module-level ``@cached`` recipes, keyed by
+# ``ref`` so functions from different submodules never blur together (and a
+# re-import overwrites rather than duplicates). Populated at decoration time with
+# **no disk writes**: importing a module records its recipes here only. A CLI
+# that does not import user code won't see them, and two projects run as separate
 # processes keep separate registries — so this never entangles caches.
+#
+# ``_CACHETYPE_OWNERS`` maps each live ``(cachetype, version)`` to the ``ref`` that
+# claimed it, for load-time conflict detection (see :func:`_register_recipe`).
+# Nested/local functions (``<locals>`` in the qualname) are transient and dynamic,
+# so they are exempt from both the registry and the conflict check.
 _RECIPES = {}
+_CACHETYPE_OWNERS = {}
 
 
 def registered_recipes():
-    """Return the :class:`Recipe` for every ``@cached`` function decorated in
-    this process (introspection only — never written to disk)."""
+    """Return the :class:`Recipe` for every module-level ``@cached`` function
+    decorated in this process (introspection only — never written to disk)."""
     return list(_RECIPES.values())
+
+
+def _is_local(qualname: str) -> bool:
+    """Whether *qualname* names a nested/locally-defined function (a closure or a
+    function defined inside another) — exempt from the registry / conflict check."""
+    return "<locals>" in qualname
+
+
+class CacheTypeConflict(ValueError):
+    """Two distinct ``@cached`` functions claim the same ``(cachetype, version)``
+    while simultaneously live in one process."""
+
+
+def _resolve_cachetype(fn, explicit):
+    """Resolve a function's ``cachetype``: *explicit* when given, else its
+    fully-qualified importable name (``module.qualname``).
+
+    A function defined in ``__main__`` has no ``__module__`` identity, but the
+    launch may still carry one: ``python -m pkg.mod`` records ``pkg.mod`` on
+    ``__main__.__spec__.name`` (so it resolves like ``import pkg.mod`` and shares
+    the cache), whereas a loose script (``python path/mod.py``), ``python -c``,
+    the REPL and notebooks leave ``__spec__`` ``None``. In that latter,
+    identity-less case we refuse to guess and require an explicit *cachetype*.
+    """
+    if explicit:
+        return explicit
+    module = fn.__module__
+    if module == "__main__":
+        spec = getattr(sys.modules.get("__main__"), "__spec__", None)
+        name = getattr(spec, "name", None)
+        if not name:
+            raise ValueError(
+                f"@cached function {fn.__qualname__!r} is defined in __main__ "
+                "with no importable module identity (a loose script, python -c, "
+                "the REPL, or a notebook), so its cachetype cannot be derived. "
+                "Pass an explicit cachetype=, or move it into an importable "
+                "module (recommended) — running via 'python -m pkg.module' also "
+                "resolves it."
+            )
+        module = name
+    return f"{module}.{fn.__qualname__}"
+
+
+def _register_recipe(recipe):
+    """Record *recipe* at decoration time and enforce cachetype uniqueness.
+
+    Conflict rule (load-time, in-process): if a **different** function (distinct
+    ``ref``) already holds this ``(cachetype, version)``, raise
+    :class:`CacheTypeConflict`. Re-decorating the same ``ref`` overwrites. The
+    same ``cachetype`` with a different ``version`` is allowed (e.g. v1/v2 of one
+    recipe). Local/nested functions are skipped. ``scope`` never participates —
+    a cachetype must be unique regardless of which project owns the copy.
+    """
+    if _is_local(recipe.ref.split(":", 1)[-1]):
+        return
+    key = (recipe.cachetype, recipe.version)
+    owner = _CACHETYPE_OWNERS.get(key)
+    if owner is not None and owner != recipe.ref:
+        ver = f" version={recipe.version!r}" if recipe.version else ""
+        raise CacheTypeConflict(
+            f"cachetype {recipe.cachetype!r}{ver} is already used by {owner!r}; "
+            f"{recipe.ref!r} cannot also claim it. Give one an explicit, distinct "
+            "cachetype= (or version=)."
+        )
+    _CACHETYPE_OWNERS[key] = recipe.ref
+    _RECIPES[recipe.ref] = recipe
 
 
 DATA_NAME_STEM = "data"
@@ -309,8 +382,9 @@ def _register_produced(
 
 
 def cached(
+    _fn=None,
     *,
-    cachetype,
+    cachetype=None,
     format=None,
     key=None,
     basename="",
@@ -322,6 +396,8 @@ def cached(
     name="",
 ):
     """Produce-or-load decorator for a function that returns a cacheable value.
+
+    Usable bare (``@cached``, all defaults) or configured (``@cached(...)``).
 
     The wrapped function is **keyword-only** (the spec's produced-dataset rule):
     its keyword arguments are the hash inputs. On each call the key table is
@@ -345,7 +421,16 @@ def cached(
     ----------
     cachetype:
         Namespace for the produced artifact (the first path component under the
-        cache root). Appears in the on-disk path and ``config.toml`` ``[_META]``.
+        cache scope). Appears in the on-disk path and ``config.toml`` ``[_META]``.
+        **Defaults to the function's fully-qualified importable name**
+        (``module.qualname``) so distinct functions never collide; an explicit
+        value overrides it (a stable hand-picked name, or to group several
+        functions). Auto and explicit cachetypes share one namespace, and two
+        *distinct* functions claiming the same ``(cachetype, version)`` while live
+        in one process raise :class:`CacheTypeConflict` at decoration. A function
+        defined in ``__main__`` resolves via ``python -m pkg.mod`` (→
+        ``pkg.mod.func``); a loose script / ``python -c`` / REPL / notebook has no
+        importable identity, so an explicit *cachetype* is **required** there.
     format:
         Serialization format (e.g. ``"txt"``, ``"json"``, ``"nc"``) — drives the
         default writer and the matching default loader.
@@ -389,6 +474,11 @@ def cached(
     fmt = format if format is not None else DEFAULT_FORMAT
 
     def decorator(fn):
+        # Resolve the cachetype once, at decoration time (raises for an
+        # identity-less __main__ function), so it is stable across calls and
+        # available for the recipe registry + conflict check.
+        ct = _resolve_cachetype(fn, cachetype)
+
         @functools.wraps(fn)
         def wrapper(*args, cached=True, cache_dir="", **kwargs):
             if args:
@@ -402,7 +492,7 @@ def cached(
             hash_ = param_hash(key_table)
             root = _resolve_project_root(project_root)
             artifact_dir = _artifact_dir(
-                cache_dir=cache_dir, store=store, cachetype=cachetype,
+                cache_dir=cache_dir, store=store, cachetype=ct,
                 version=version, hash_=hash_, project_root=root,
                 storage_config=storage_config,
             )
@@ -432,12 +522,12 @@ def cached(
                 # written), re-register it so the index rebuilds itself just by
                 # re-running. A read-only index must never break a hit.
                 if not _is_registered(
-                    index_path, reg_name, cachetype=cachetype, hash_=hash_,
+                    index_path, reg_name, cachetype=ct, hash_=hash_,
                     scope=scope, version=version,
                 ):
                     try:
                         _register_produced(
-                            index_path, reg_name, cachetype=cachetype,
+                            index_path, reg_name, cachetype=ct,
                             hash_=hash_, ref=ref, format=fmt, scope=scope,
                             version=version,
                         )
@@ -453,14 +543,14 @@ def cached(
             # liveness root for GC) and record that index in the depot usage log.
             written_index = _register_produced(
                 index_path, reg_name,
-                cachetype=cachetype, hash_=hash_, ref=ref, format=fmt,
+                cachetype=ct, hash_=hash_, ref=ref, format=fmt,
                 scope=scope, version=version,
             )
 
             def write_fn(tmp: str) -> None:
                 os.makedirs(tmp, exist_ok=True)
                 write_value(os.path.join(tmp, data_filename), result)
-                write_config(tmp, cachetype, hash_, key_table, version=version)
+                write_config(tmp, ct, hash_, key_table, version=version)
                 # [origin].cached_toml back-pointer (audit only) → the index.
                 write_metadata(
                     tmp, project_root=root,
@@ -470,15 +560,16 @@ def cached(
             materialize.materialize(artifact_dir, write_fn)
             return result
 
-        # Record the recipe at decoration time (no disk writes), keyed by ref,
-        # and expose it on the wrapper as ``.recipe`` for direct introspection.
+        # Record the recipe at decoration time (no disk writes) and enforce
+        # cachetype uniqueness, then expose it on the wrapper as ``.recipe``.
         recipe = Recipe(
             ref=f"{fn.__module__}:{fn.__qualname__}",
             name=name or fn.__name__,
-            cachetype=cachetype, format=fmt, version=version, store=store,
+            cachetype=ct, format=fmt, version=version, store=store,
         )
-        _RECIPES[recipe.ref] = recipe
+        _register_recipe(recipe)
         wrapper.recipe = recipe
         return wrapper
 
-    return decorator
+    # Support both bare ``@cached`` (defaults) and ``@cached(...)`` (configured).
+    return decorator(_fn) if _fn is not None else decorator
