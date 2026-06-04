@@ -76,6 +76,40 @@ two distinct jobs, and they should be kept conceptually separate:
   set explicit cachetypes to keep them apart. There is no static cross-process
   check, and none is wanted: "at the same time" is exactly the boundary.
 
+### 4. `cached.toml` records every variation (schema 2, nested)
+
+A recipe called with different parameters produces several artifacts (one per
+parameter `hash`). The index must record **all** of them, or the unrecorded ones
+read as orphans and risk deletion. Schema 2 is therefore **nested**:
+
+```toml
+[_META]
+schema = 2
+
+[[produced]]                       # one per (scope, cachetype, version)
+cachetype = "mypkg.mod.produce"
+scope = "proj"
+ref = "mypkg.mod:produce"
+format = "txt"
+store = "$cache"
+
+  [[produced.instances]]           # one per produced variation
+  hash = "4413…"
+  [produced.instances.params]      # the key table that produced it (omitted if empty)
+  grid = "5x5"
+```
+
+- The recipe is keyed by `(scope, cachetype, version)` (an array-of-tables, so the
+  dotted cachetype needs no key-quoting); each instance records its parameter
+  `hash` and the `params`. Registering **accumulates** instances rather than
+  overwriting, so reachability (`scope, cachetype, version, hash`) spans them all.
+- Recipe-level metadata (`ref`/`format`/`store`) is refreshed on each register, so
+  `ref` tracks the producing function across a refactor (no invalidation, since it
+  is not in the hash). The `ref`-refresh also happens on a cache *hit* when it
+  drifted; an absent variation is re-registered on hit (self-healing).
+- Schema 1 (a flat table per registry *name*, single `hash`, no params) is still
+  **read** — each becomes a one-instance recipe — but always rewritten as schema 2.
+
 ## Recent deviations already shipped (to reconcile)
 
 - **Default serialization format is `pickle`.** A format-less `@cached`

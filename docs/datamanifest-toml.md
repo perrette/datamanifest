@@ -39,7 +39,7 @@ and runs only the fixtures tagged for them. This package's status:
 | `byte-identity` | ✅ | Canonical lexicographic key ordering; this package is the **normative reference** (`sort_recursive` in the `datamanifest.store` substrate). |
 | `binding-args` | ✅ | Executes the `{ ref, args, kwargs }` table form with `$var` substitution (`_substitute_vars`). |
 | `cache-produce` | ✅ | Produce-or-load: the `@cached` decorator with canonical-JSON→SHA-256 param-hash keying, `cachetype` defaulting to the function's qualified name (with load-time `(cachetype, version)` conflict detection), optional `version=` segment (path + `config.toml` entry, not in hash), `config.toml`/`metadata.toml` sidecars; spec-v3 artifact path `<cache>/cached/<project-id>/<cachetype>/[<version>/]<hash>`. See [Produce-or-load cache layer](#produce-or-load-cache-layer) and [design notes](design-notes.md). |
-| `inspect` | ✅ | The `cached.toml` produced-dataset index and `datamanifest list` maintenance surface: `--kind`/`--scope`/`--orphan`/`--older-than`/`--format`/`--fields` filters + `--delete`/`--move` actions (dry run by default; `--yes` to apply). `last-access` is read-derived from the filesystem access time at inspect time — never written on read (best-effort, advisory). |
+| `inspect` | ✅ | The `cached.toml` produced-dataset index (schema 2: nested `[[produced]]` recipes keyed by `(scope, cachetype, version)`, each with per-variation `[[produced.instances]]` recording `hash` + `params`) and the `datamanifest list` maintenance surface: `--kind`/`--scope`/`--orphan`/`--older-than`/`--format`/`--fields` filters + `--delete`/`--move` actions (dry run by default; `--yes` to apply). The default `list` view is nested (recipe → its parameter variations); `--bare` is one name per recipe. `last-access` is read-derived from the filesystem access time at inspect time — never written on read (best-effort, advisory). |
 | `sync` | ✅ | Cross-machine `push`/`pull` of a stored object over rsync+ssh (`datamanifest push/pull <id> <ssh-host>`, plus bulk `list --push/--pull <host>`), addressed by its machine-independent id (fetched by `name`/`alias`/`doi`; produced by `cachetype[/version]/hash`, full or an unambiguous hash prefix). The remote store root is resolved best-effort from the remote env (`ssh <host> 'source ~/.bashrc; env'`, parsing `DATAMANIFEST_*`) then the deterministic `[_STORAGE._HOST]` overrides then the shared `platformdirs` default — all via the existing `folder_base` ladder. Writes no manifest (bytes only; received object lands as an orphan), integrity is rsync's, idempotent. `$repo`-stored datasets are refused (project-relative, out of scope). |
 | `delegation` | ✅ | Cross-language fetch (fetch-ladder rung 3): when a dataset has no native Python fetcher, no `_LANG.shell` fetcher, and no `uri`, and a foreign `[<ds>._LANG.<other>].fetcher` is present, the foreign runtime is invoked to materialize the bytes into the shared store. The Python mechanism runs the local Julia `DataManifest` env directly (`julia --project=<env> -e 'using DataManifest; download_dataset(Database("<abs datasets.toml>"), "<name>")'`) — discovered by walking up from the manifest dir (or `$JULIA_PROJECT`) for a `Project.toml` whose `[deps]` lists `DataManifest`, gated on `shutil.which("julia")`. The subprocess inherits `os.environ`, so `DATAMANIFEST_*` store overrides keep both ends on the same path. On a missing toolchain (no `julia`, or no `Project.toml` depending on `DataManifest`) the rung logs a warning and falls through to `uri`. Fetched datasets only (never `@cached`); on by default and probe-gated; the per-file `delegate` field and the `--delegate` / `--no-delegate` flags toggle it. |
 
@@ -159,10 +159,16 @@ path without invalidating the hash for callers with other versions. A per-call `
 argument bypasses folder/prefix/scope and uses the supplied directory verbatim.
 
 Each produce registers the artifact in a sibling **`cached.toml`** (gitignored per-machine
-state by default). The registry is **self-healing**: if `cached.toml` is deleted by hand
-(or never written), the next cache *hit* re-registers the on-disk artifact, so the index
-rebuilds itself simply by re-running — this is the one write a hit may perform (it still
-never re-stamps `metadata.toml`). **`datamanifest list`** is the maintenance command: `--kind cached`
+state by default). The index is **schema 2 (nested)**: one `[[produced]]` recipe table per
+`(scope, cachetype, version)` carrying `ref`/`format`/`store`, with one `[[produced.instances]]`
+per produced **variation** recording its parameter `hash` and the `params` (the key table)
+that produced it. Calling a recipe with different parameters **accumulates** instances (every
+variation stays referenced — none is a false orphan); recipe-level `ref` is refreshed across
+refactors. Schema 1 (a flat table per name with a single `hash`) is still read. The registry
+is **self-healing**: if `cached.toml` is deleted by hand (or never written), the next cache
+*hit* re-registers the on-disk variation, so the index rebuilds itself simply by re-running —
+this is the one write a hit may perform (it still never re-stamps `metadata.toml`).
+**`datamanifest list`** is the maintenance command: `--kind cached`
 selects produced artifacts; `--orphan` flags those with no `cached.toml` root reference;
 `--older-than AGE` filters by last-access time. `--delete` / `--move DIR` act on the
 selected set (dry run by default; `--yes` to apply). The `list` command is the composition

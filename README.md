@@ -80,7 +80,7 @@ The keyword arguments (minus `_`-prefixed runtime knobs) are hashed into a porta
 - **`<scope>`** (ownership) defaults to your `pyproject.toml` `[project].name` (discovered by walking up for a `datasets.toml`/`pyproject.toml`, else a path hash) — it isolates each project's cache for clean-up, and is not part of disambiguation.
 - **`version=`** adds a path segment — recorded in the sidecars but **not** part of the key hash — so a change to a function's *logic* (same parameters) can't read a stale result.
 
-Produced datasets are **not** written into `datasets.toml`; they are indexed in a sibling `cached.toml` (self-healing — a hit re-registers a hand-deleted entry), and `datamanifest list --orphan --delete` (dry run by default, `--yes` to apply) is the maintenance command. The cache layer (`datamanifest.cache`) sits over the shared `datamanifest.store` substrate and never touches the fetch path.
+Produced datasets are **not** written into `datasets.toml`; they are indexed in a sibling `cached.toml` that records **every** parameter variation (one `[[produced.instances]]` per call signature, with its `params`) under its recipe, and is self-healing — a hit re-registers a hand-deleted entry. `datamanifest list` shows recipes with their variations nested (`--bare` for a plain name list); `datamanifest list --orphan --delete` (dry run by default, `--yes` to apply) is the maintenance command. The cache layer (`datamanifest.cache`) sits over the shared `datamanifest.store` substrate and never touches the fetch path.
 
 ## CLI usage
 
