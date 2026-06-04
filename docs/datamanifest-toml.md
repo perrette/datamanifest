@@ -123,6 +123,12 @@ datamanifest.database/pipelines    datamanifest.cache
    (Layer 1a: fetch)                  (Layer 1b: @cached) — imports store only, never the fetch layer
 ```
 
+Storage is configured **once**: `@cached` loads the manifest's `[_STORAGE]` table
+(folder roots, `_HOST`/`_PROFILE`/`_SCOPE`/`_PREFIX`) from the nearest discovered
+`datasets.toml` (a plain TOML read — it stays Database-free), so `$cache` and all
+folder resolution match the fetch side. Env vars override; an explicit
+`storage_config=` wins over the manifest.
+
 `@cached` (`from datamanifest.cache import cached`) wraps a **keyword-only** producing
 function: its keyword arguments (minus `_`-prefixed runtime knobs) form the key table,
 which is hashed (canonical JSON → SHA-256) into a `<hash>` key. Hash-input values are

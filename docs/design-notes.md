@@ -115,6 +115,19 @@ store = "$cache"
 - Schema 1 (a flat table per registry *name*, single `hash`, no params) is still
   **read** — each becomes a one-instance recipe — but always rewritten as schema 2.
 
+### 5. Centralized storage config applies to `@cached`
+
+The storage backend (where `$cache`/`$data`/`$repo` and custom `$folder`s live,
+plus `_HOST`/`_PROFILE` per-machine overrides and `_SCOPE`/`_PREFIX`) is defined
+once in the manifest's `[_STORAGE]` table and must apply to **both** fetched
+datasets and produced artifacts. `@cached` therefore loads `[_STORAGE]` from the
+nearest discovered manifest (the same upward walk it uses for `project_root`)
+when no `storage_config` is passed — a plain TOML read, no `Database`/fetch layer,
+so the cache layer stays Database-free. Without this, produced artifacts would
+resolve `$cache` from only env vars + the platformdirs default and diverge from
+where the manifest puts fetched data (e.g. a cluster scratch partition). Env vars
+still override at the top; an explicit `storage_config=` wins over the manifest.
+
 ## Recent deviations already shipped (to reconcile)
 
 - **Default serialization format is `pickle`.** A format-less `@cached`
