@@ -64,25 +64,23 @@ Cache the result of an expensive computation, keyed by its keyword arguments:
 ```python
 from datamanifest.cache import cached
 
-@cached  # or @cached(format="nc", version="v2", cachetype="...")
-def load_anomaly(*, grid="5x5", skip_models=()):
-    ...  # expensive; returns an xarray.Dataset
+@cached
+def load_anomaly(*, grid="5x5"):
+    ...        # expensive; returns e.g. an xarray.Dataset
     return ds
 
-ds = load_anomaly(grid="5x5")          # computes, materializes, registers it
-ds = load_anomaly(grid="5x5")          # cache hit: loads and returns
+ds = load_anomaly(grid="5x5")          # first call: computes and stores
+ds = load_anomaly(grid="5x5")          # later calls: loads and returns
 ds = load_anomaly(grid="5x5", cached=False)  # force recompute
 ```
 
-The keyword arguments (minus `_`-prefixed runtime knobs) are hashed into a portable key — values may be strings, integers, finite floats, booleans, or nested lists/dicts of those (`None` and non-finite floats are rejected). `format=` selects how the value is serialized; omit it and the result self-saves with **pickle**, so a bare `return 42` round-trips without picking a format. The artifact and its `config.toml` / `metadata.toml` sidecars land under your cache directory at `<cache>/cached/<scope>/<cachetype>/[<version>/]<hash>`.
+The keyword arguments are the cache key — each distinct combination is stored separately. By default the result is saved with `pickle`; pass `format="nc"`/`"csv"`/… to pick a serialization, and `version="v2"` to invalidate when the function's *logic* changes.
 
-- **`cachetype`** (the recipe identity) defaults to the function's fully-qualified importable name (`mypkg.analysis.load_anomaly`), so distinct functions never collide; pass an explicit `cachetype=` to override (a stable name, or to group). Two distinct functions claiming the same `cachetype` (same `version`) while imported together raise `CacheTypeConflict`. A function defined in `__main__` resolves via `python -m pkg.mod`; a loose `python script.py`, `-c`, REPL or notebook has no importable identity and **requires** an explicit `cachetype=`.
-- **`<scope>`** (ownership) defaults to your `pyproject.toml` `[project].name` (discovered by walking up for a `datasets.toml`/`pyproject.toml`, else a path hash) — it isolates each project's cache for clean-up, and is not part of disambiguation. Override it with `@cached(scope=...)` (highest priority — e.g. `scope="shared"` to dedup a cache across projects, or `scope=""` for one global store), or globally via `DATAMANIFEST_SCOPE_CACHED` / `[_STORAGE._SCOPE].cached`. The same resolved scope drives both the on-disk path and the `cached.toml` entry, so they never diverge.
-- **`version=`** adds a path segment — recorded in the sidecars but **not** part of the key hash — so a change to a function's *logic* (same parameters) can't read a stale result.
+Where things live is configured **once** in `datamanifest.toml` ([Storage model](#storage-model)) and applies to both downloaded and cached data — point `$cache` at a scratch partition and produced artifacts follow. Each project's cache is isolated by default; `@cached(scope="shared")` lets projects share one.
 
-The storage backend is **defined once** in your `datamanifest.toml` `[_STORAGE]` table (folder roots, per-machine `_HOST`/`_PROFILE` overrides, …) and applies to both fetched data and `@cached` artifacts — `@cached` reads `[_STORAGE]` from the nearest manifest, so e.g. pointing `$cache` at a cluster scratch partition redirects produced artifacts too (env vars still override).
+`datamanifest list` shows cached results grouped by function with their parameters; `datamanifest list --orphan --delete` cleans up.
 
-Produced datasets are **not** written into `datasets.toml`; they are indexed in a sibling `cached.toml` that records **every** parameter variation (one `[[produced.instances]]` per call signature, with its `params`) under its recipe, and is self-healing — a hit re-registers a hand-deleted entry. `datamanifest list` shows recipes with their variations nested (`--bare` for a plain name list); `datamanifest list --orphan --delete` (dry run by default, `--yes` to apply) is the maintenance command. The cache layer (`datamanifest.cache`) sits over the shared `datamanifest.store` substrate and never touches the fetch path.
+Advanced details — how the cache identity (`cachetype`) is derived, conflict detection, and the `cached.toml` index format — are in the [design notes](docs/design-notes.md).
 
 ## CLI usage
 
@@ -184,7 +182,7 @@ datamanifest list --kind cached --push user@hpc     # bulk: push the filtered se
 > **Behavior change from earlier releases.** Earlier versions stored datasets under a
 > `/Datasets`-suffixed root (e.g. `~/.local/share/datamanifest/Datasets`). Now folder
 > variables resolve to **bare** roots, and content is composed as `<root>/datasets/<key>`
-> (downloads) or `<root>/cached/<project-id>/<cachetype>/[<version>/]<hash>` (produced
+> (downloads) or `<root>/cached/<scope>/<cachetype>/[<version>/]<hash>` (produced
 > artifacts). A legacy read-only probe still finds datasets at the old `/Datasets`-suffixed
 > locations unless `DATAMANIFEST_DATA_DIR` or `DATAMANIFEST_DIR` is set.
 
@@ -234,7 +232,7 @@ format = "nc"
 
 **Content path composition** (added by the consuming layer, not the selector):
 - Fetched datasets: `<root>[/subpath]/datasets/<key>`
-- Produced artifacts: `<root>/cached/<project-id>/<cachetype>/[<version>/]<hash>`
+- Produced artifacts: `<root>/cached/<scope>/<cachetype>/[<version>/]<hash>`
 
 **Read resolution** probes built-in roots under their `datasets/` prefix (`$repo → $data → $cache`), then a legacy read-only probe for old locations (skipped when `DATAMANIFEST_DATA_DIR`/`DATAMANIFEST_DIR` is set).
 
