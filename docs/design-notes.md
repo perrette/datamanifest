@@ -56,9 +56,14 @@ two distinct jobs, and they should be kept conceptually separate:
   that. The cost of isolation is redundancy (two projects computing identical data
   store it twice).
 - **Default-on, override to share**: isolation is the default — sharing is never
-  implicit. A user may share/dedup across projects by pointing at a common
-  `project_root` (today's lever); an explicit `scope=` override is the natural
-  next step but is **not yet exposed**.
+  implicit. The scope ladder is: an explicit **`@cached(scope=...)`** (highest) →
+  `DATAMANIFEST_SCOPE_CACHED` → `[_STORAGE._SCOPE].cached` → the project id.
+  `scope="shared"` dedups across projects; `scope=""` is one global, unscoped
+  store. **The same resolved scope drives both the on-disk path and the recorded
+  `cached.toml` entry** (resolved once via `content_scope`), so they can never
+  diverge — important because reachability is scope-aware
+  (`(scope, cachetype, version, hash)`): a path/entry mismatch would make an
+  artifact a false orphan.
 
 ### 3. Conflict detection (load-time, in-process)
 

@@ -146,11 +146,14 @@ value overrides (and `@cached` is usable bare). A function in `__main__` resolve
 script / `-c` / REPL / notebook has no importable identity and **requires** an explicit
 `cachetype=`. At decoration time the recipe is indexed in-process (no disk writes) and
 **conflict-checked**: two distinct live functions claiming the same `(cachetype, version)`
-raise `CacheTypeConflict` (same cachetype, different version → allowed). The `<project-id>`
-scope defaults to the project's `pyproject.toml` `[project].name`, discovered by walking up
-from the working directory for a `datasets.toml` / `pyproject.toml` (falling back to a
-path hash); it is recorded in each `cached.toml` entry under the `scope` field. See the
-[design notes](design-notes.md) for the full model.
+raise `CacheTypeConflict` (same cachetype, different version → allowed). The `<scope>`
+(ownership) is resolved by the ladder `@cached(scope=…)` (highest) →
+`DATAMANIFEST_SCOPE_CACHED` → `[_STORAGE._SCOPE].cached` → the project's
+`pyproject.toml` `[project].name` (discovered by walking up for a `datasets.toml` /
+`pyproject.toml`, else a path hash). The **same** resolved value drives both the on-disk
+path and the `cached.toml` `scope` field, so they cannot diverge (a mismatch would break
+scope-aware reachability). `scope="shared"` dedups across projects; `scope=""` is one
+global store. See the [design notes](design-notes.md) for the full model.
 
 An optional `version=` string (e.g. `@cached(cachetype="t", version="v2")`) inserts a
 path segment before `<hash>` and is recorded in `config.toml` and `cached.toml`. It is
