@@ -64,7 +64,7 @@ Cache the result of an expensive computation, keyed by its keyword arguments:
 ```python
 from datamanifest.cache import cached
 
-@cached(cachetype="esm_anomaly", format="nc")
+@cached  # or @cached(format="nc", version="v2", cachetype="...")
 def load_anomaly(*, grid="5x5", skip_models=()):
     ...  # expensive; returns an xarray.Dataset
     return ds
@@ -74,7 +74,13 @@ ds = load_anomaly(grid="5x5")          # cache hit: loads and returns
 ds = load_anomaly(grid="5x5", cached=False)  # force recompute
 ```
 
-The keyword arguments (minus `_`-prefixed runtime knobs) are hashed into a portable key — values may be strings, integers, finite floats, booleans, or nested lists/dicts of those (`None` and non-finite floats are rejected). `format=` selects how the value is serialized; omit it and the result self-saves with **pickle**, so a bare `return 42` round-trips without picking a format. The artifact and its `config.toml` / `metadata.toml` sidecars land under your cache directory at `<cache>/cached/<project-id>/<cachetype>/[<version>/]<hash>`, where `<project-id>` defaults to your `pyproject.toml` `[project].name` (discovered by walking up for a `datasets.toml`/`pyproject.toml`). An optional `version=` string adds a path segment — recorded in the sidecars but **not** part of the key hash — so a change to a function's *logic* (same parameters) can't read a stale result. Produced datasets are **not** written into `datasets.toml`; they are indexed in a sibling `cached.toml`, and `datamanifest list --orphan --delete` (dry run by default, `--yes` to apply) is the maintenance command. The cache layer (`datamanifest.cache`) sits over the shared `datamanifest.store` substrate and never touches the fetch path.
+The keyword arguments (minus `_`-prefixed runtime knobs) are hashed into a portable key — values may be strings, integers, finite floats, booleans, or nested lists/dicts of those (`None` and non-finite floats are rejected). `format=` selects how the value is serialized; omit it and the result self-saves with **pickle**, so a bare `return 42` round-trips without picking a format. The artifact and its `config.toml` / `metadata.toml` sidecars land under your cache directory at `<cache>/cached/<scope>/<cachetype>/[<version>/]<hash>`.
+
+- **`cachetype`** (the recipe identity) defaults to the function's fully-qualified importable name (`mypkg.analysis.load_anomaly`), so distinct functions never collide; pass an explicit `cachetype=` to override (a stable name, or to group). Two distinct functions claiming the same `cachetype` (same `version`) while imported together raise `CacheTypeConflict`. A function defined in `__main__` resolves via `python -m pkg.mod`; a loose `python script.py`, `-c`, REPL or notebook has no importable identity and **requires** an explicit `cachetype=`.
+- **`<scope>`** (ownership) defaults to your `pyproject.toml` `[project].name` (discovered by walking up for a `datasets.toml`/`pyproject.toml`, else a path hash) — it isolates each project's cache for clean-up, and is not part of disambiguation.
+- **`version=`** adds a path segment — recorded in the sidecars but **not** part of the key hash — so a change to a function's *logic* (same parameters) can't read a stale result.
+
+Produced datasets are **not** written into `datasets.toml`; they are indexed in a sibling `cached.toml` (self-healing — a hit re-registers a hand-deleted entry), and `datamanifest list --orphan --delete` (dry run by default, `--yes` to apply) is the maintenance command. The cache layer (`datamanifest.cache`) sits over the shared `datamanifest.store` substrate and never touches the fetch path.
 
 ## CLI usage
 

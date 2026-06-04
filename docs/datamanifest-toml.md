@@ -38,7 +38,7 @@ and runs only the fixtures tagged for them. This package's status:
 | `storage` | ✅ | spec-v3 storage model: **bare roots** (`$data`/`$cache` resolve to `platformdirs` dirs without `/Datasets` suffix; `$repo` = project root); content composed as `<root>/datasets/<key>` (fetch) or `<root>/cached/<project-id>/<cachetype>/[<version>/]<hash>` (produced); `DATAMANIFEST_DIR` application base; folder variables (`$data`, `$cache`, `$repo` built-in; user-defined via `[_STORAGE]`), `$folder[/subpath]` selectors, `[_STORAGE].default` project default, path-expression interpolation, env-var/`_HOST` precedence ladder (no `_PROFILE` rung), `repo→data→cache` built-in probe order under `datasets/` prefix, atomic publish + `.complete` markers. Bare (non-`$`) `store` values are rejected with a migration hint. |
 | `byte-identity` | ✅ | Canonical lexicographic key ordering; this package is the **normative reference** (`sort_recursive` in the `datamanifest.store` substrate). |
 | `binding-args` | ✅ | Executes the `{ ref, args, kwargs }` table form with `$var` substitution (`_substitute_vars`). |
-| `cache-produce` | ✅ | Produce-or-load: the `@cached` decorator with canonical-JSON→SHA-256 param-hash keying, optional `version=` segment (path + `config.toml` entry, not in hash), `config.toml`/`metadata.toml` sidecars; spec-v3 artifact path `<cache>/cached/<project-id>/<cachetype>/[<version>/]<hash>`. See [Produce-or-load cache layer](#produce-or-load-cache-layer). |
+| `cache-produce` | ✅ | Produce-or-load: the `@cached` decorator with canonical-JSON→SHA-256 param-hash keying, `cachetype` defaulting to the function's qualified name (with load-time `(cachetype, version)` conflict detection), optional `version=` segment (path + `config.toml` entry, not in hash), `config.toml`/`metadata.toml` sidecars; spec-v3 artifact path `<cache>/cached/<project-id>/<cachetype>/[<version>/]<hash>`. See [Produce-or-load cache layer](#produce-or-load-cache-layer) and [design notes](design-notes.md). |
 | `inspect` | ✅ | The `cached.toml` produced-dataset index and `datamanifest list` maintenance surface: `--kind`/`--scope`/`--orphan`/`--older-than`/`--format`/`--fields` filters + `--delete`/`--move` actions (dry run by default; `--yes` to apply). `last-access` is read-derived from the filesystem access time at inspect time — never written on read (best-effort, advisory). |
 | `sync` | ✅ | Cross-machine `push`/`pull` of a stored object over rsync+ssh (`datamanifest push/pull <id> <ssh-host>`, plus bulk `list --push/--pull <host>`), addressed by its machine-independent id (fetched by `name`/`alias`/`doi`; produced by `cachetype[/version]/hash`, full or an unambiguous hash prefix). The remote store root is resolved best-effort from the remote env (`ssh <host> 'source ~/.bashrc; env'`, parsing `DATAMANIFEST_*`) then the deterministic `[_STORAGE._HOST]` overrides then the shared `platformdirs` default — all via the existing `folder_base` ladder. Writes no manifest (bytes only; received object lands as an orphan), integrity is rsync's, idempotent. `$repo`-stored datasets are refused (project-relative, out of scope). |
 | `delegation` | ✅ | Cross-language fetch (fetch-ladder rung 3): when a dataset has no native Python fetcher, no `_LANG.shell` fetcher, and no `uri`, and a foreign `[<ds>._LANG.<other>].fetcher` is present, the foreign runtime is invoked to materialize the bytes into the shared store. The Python mechanism runs the local Julia `DataManifest` env directly (`julia --project=<env> -e 'using DataManifest; download_dataset(Database("<abs datasets.toml>"), "<name>")'`) — discovered by walking up from the manifest dir (or `$JULIA_PROJECT`) for a `Project.toml` whose `[deps]` lists `DataManifest`, gated on `shutil.which("julia")`. The subprocess inherits `os.environ`, so `DATAMANIFEST_*` store overrides keep both ends on the same path. On a missing toolchain (no `julia`, or no `Project.toml` depending on `DataManifest`) the rung logs a warning and falls through to `uri`. Fetched datasets only (never `@cached`); on by default and probe-gated; the per-file `delegate` field and the `--delegate` / `--no-delegate` flags toggle it. |
@@ -137,11 +137,20 @@ When no `format=` is given, the artifact self-saves with **pickle** (`data.pickl
 so a bare return value (`return 42`) round-trips without choosing a format; an explicit
 `format=` (`txt`, `json`, `nc`, …) overrides it. A hit additionally requires the data
 file for that format to be present, so two recipes that share a `cachetype` and hash to
-the same key recompute rather than misread each other's bytes — use a distinct
-`cachetype=` (or `version=`) to keep unrelated recipes apart. The `<project-id>` scope
-defaults to the project's `pyproject.toml` `[project].name`, discovered by walking up
+the same key recompute rather than misread each other's bytes.
+
+`cachetype` is **optional**: it defaults to the producing function's fully-qualified
+importable name (`module.qualname`), so distinct functions never collide; an explicit
+value overrides (and `@cached` is usable bare). A function in `__main__` resolves via
+`python -m pkg.mod` (→ `pkg.mod.func`, sharing the cache with `import pkg.mod`); a loose
+script / `-c` / REPL / notebook has no importable identity and **requires** an explicit
+`cachetype=`. At decoration time the recipe is indexed in-process (no disk writes) and
+**conflict-checked**: two distinct live functions claiming the same `(cachetype, version)`
+raise `CacheTypeConflict` (same cachetype, different version → allowed). The `<project-id>`
+scope defaults to the project's `pyproject.toml` `[project].name`, discovered by walking up
 from the working directory for a `datasets.toml` / `pyproject.toml` (falling back to a
-path hash); it is recorded in each `cached.toml` entry under the `scope` field.
+path hash); it is recorded in each `cached.toml` entry under the `scope` field. See the
+[design notes](design-notes.md) for the full model.
 
 An optional `version=` string (e.g. `@cached(cachetype="t", version="v2")`) inserts a
 path segment before `<hash>` and is recorded in `config.toml` and `cached.toml`. It is

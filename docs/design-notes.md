@@ -1,12 +1,11 @@
 # Design notes
 
-Forward-looking design decisions and recent deviations from the normative
-`datamanifest.toml` spec, written from the Python implementation but intended to
-be **reformulated cross-language** by the spec. "Proposed" items are agreed but
-not yet implemented; "Shipped" items are already in this package and need
-reconciling into the spec.
+Design decisions and recent deviations from the normative `datamanifest.toml`
+spec, written from the Python implementation but intended to be **reformulated
+cross-language** by the spec. Everything below is **implemented** in this package
+and needs reconciling into the spec.
 
-## Produced-dataset identity, scope, and conflict detection (proposed)
+## Produced-dataset identity, scope, and conflict detection
 
 A produced artifact lives at
 `<cache>/cached/<scope>/<cachetype>/[<version>/]<hash>`. Two of those segments do
@@ -56,9 +55,10 @@ two distinct jobs, and they should be kept conceptually separate:
   It does **not** participate in disambiguation — `cachetype` + `hash` already do
   that. The cost of isolation is redundancy (two projects computing identical data
   store it twice).
-- **Default-on, override to share**: a user may set an explicit shared `scope` to
-  deduplicate across projects (opt-in); isolation is the default — sharing is
-  never implicit.
+- **Default-on, override to share**: isolation is the default — sharing is never
+  implicit. A user may share/dedup across projects by pointing at a common
+  `project_root` (today's lever); an explicit `scope=` override is the natural
+  next step but is **not yet exposed**.
 
 ### 3. Conflict detection (load-time, in-process)
 
