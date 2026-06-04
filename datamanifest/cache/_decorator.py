@@ -264,7 +264,7 @@ def _produced_key(cachetype, version, hash_) -> str:
 
 
 def _artifact_dir(*, cache_dir, store, cachetype, version, hash_,
-                  project_root, storage_config) -> str:
+                  project_root, storage_config, scope=None) -> str:
     """Resolve a produced artifact's directory (spec-v3).
 
     Default composition (:func:`datamanifest.store.locations.composed_path` with
@@ -282,7 +282,7 @@ def _artifact_dir(*, cache_dir, store, cachetype, version, hash_,
     if cache_dir:
         return os.path.join(cache_dir, key_path)
     return locations.composed_path(
-        store or DEFAULT_STORE, key_path, kind="cached",
+        store or DEFAULT_STORE, key_path, kind="cached", scope=scope,
         project_root=project_root, storage_config=storage_config,
     )
 
@@ -394,6 +394,7 @@ def cached(
     key=None,
     basename="",
     version="",
+    scope=None,
     store=DEFAULT_STORE,
     project_root="",
     storage_config=None,
@@ -451,6 +452,15 @@ def cached(
         is **never** part of the parameter hash — same kwargs hash to the same
         ``<hash>`` with or without a version. Bumping it isolates artifacts
         across recipe revisions (e.g. preventing stale cross-branch hits).
+    scope:
+        The ownership segment the artifact lands under
+        (``<cache>/cached/<scope>/…``). ``None`` (default) resolves it via the
+        ladder ``DATAMANIFEST_SCOPE_CACHED`` → ``[_STORAGE._SCOPE].cached`` →
+        the project id (``pyproject.toml`` ``[project].name``, else a path hash).
+        An explicit value wins (highest priority) — e.g. ``scope="shared"`` to
+        deliberately share/dedup a cache across projects, or ``scope=""`` for a
+        single global, unscoped store. The same resolved value drives both the
+        on-disk path and the ``cached.toml`` entry, so they cannot diverge.
     store:
         Storage selector the artifact lands under (default ``"$cache"``). An
         explicit override wins.
@@ -496,17 +506,24 @@ def cached(
             key_table = _key_table_for_call(key, kwargs)
             hash_ = param_hash(key_table)
             root = _resolve_project_root(project_root)
+            # Resolve the scope **once** (explicit @cached(scope=...) wins, else
+            # the env / [_STORAGE._SCOPE] / project-id ladder) and use the same
+            # value for both the on-disk path and the recorded entry, so they can
+            # never disagree.
+            art_scope = locations.content_scope(
+                "cached", scope=scope, project_root=root,
+                storage_config=storage_config,
+            )
             artifact_dir = _artifact_dir(
                 cache_dir=cache_dir, store=store, cachetype=ct,
                 version=version, hash_=hash_, project_root=root,
-                storage_config=storage_config,
+                storage_config=storage_config, scope=art_scope,
             )
             data_path = os.path.join(artifact_dir, _data_name(basename, fmt))
 
             # The portable registry coordinates (shared by the hit self-heal and
             # the miss registration).
             ref = f"{fn.__module__}:{fn.__qualname__}"
-            scope = locations.project_id(root)
             index_path = _locate_cached_toml(cached_toml, root)
 
             # A hit requires not just a complete, hash-valid artifact but the
@@ -525,7 +542,7 @@ def cached(
                 # lost it, or refresh a drifted recipe ref. Never breaks a hit.
                 _heal_on_hit(
                     index_path, cachetype=ct, hash_=hash_, params=key_table,
-                    ref=ref, format=fmt, scope=scope, version=version,
+                    ref=ref, format=fmt, scope=art_scope, version=version,
                 )
                 return _load_value(data_path, fmt)
 
@@ -538,7 +555,7 @@ def cached(
             written_index = _register_produced(
                 index_path,
                 cachetype=ct, hash_=hash_, params=key_table, ref=ref,
-                format=fmt, scope=scope, version=version,
+                format=fmt, scope=art_scope, version=version,
             )
 
             def write_fn(tmp: str) -> None:

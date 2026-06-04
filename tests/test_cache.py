@@ -517,6 +517,45 @@ def test_cached_discovers_project_root_for_scope(cache_root, tmp_path, monkeypat
     assert {r["scope"] for r in index.recipe_records()} == {"myproj"}
 
 
+def test_cached_scope_override_param(cache_root, scope_base):
+    """An explicit @cached(scope=...) drives BOTH the on-disk path and the
+    recorded entry — they cannot diverge (the highest-priority scope)."""
+    from datamanifest.cache import CachedIndex
+
+    @cached(cachetype="t", format="txt", scope="shared")
+    def produce(*, name):
+        return name
+
+    produce(name="v")
+    h = param_hash({"name": "v"})
+    # Path lands under the explicit scope.
+    assert (cache_root / "cached" / "shared" / "t" / h / "data.txt").exists()
+    # Entry records the SAME scope (path and entry agree).
+    index = CachedIndex.read(os.path.join(os.getcwd(), "cached.toml"))
+    assert {r["scope"] for r in index.recipe_records()} == {"shared"}
+    assert index.has_instance(scope="shared", cachetype="t", version="", hash=h)
+
+
+def test_cached_scope_env_override_path_and_entry_agree(cache_root, scope_base,
+                                                        monkeypatch):
+    """A DATAMANIFEST_SCOPE_CACHED override reaches the entry too (the bug:
+    previously only the path honored it, the entry kept the project id)."""
+    from datamanifest.cache import CachedIndex
+
+    monkeypatch.setenv("DATAMANIFEST_SCOPE_CACHED", "envscope")
+
+    @cached(cachetype="t", format="txt")
+    def produce(*, name):
+        return name
+
+    produce(name="v")
+    h = param_hash({"name": "v"})
+    assert (cache_root / "cached" / "envscope" / "t" / h / "data.txt").exists()
+    index = CachedIndex.read(os.path.join(os.getcwd(), "cached.toml"))
+    # The recorded scope matches the path's scope — reachability stays consistent.
+    assert index.has_instance(scope="envscope", cachetype="t", version="", hash=h)
+
+
 # ----- spec-v3 recipe version ------------------------------------------------
 
 def test_cached_version_adds_path_segment_not_in_hash(cache_root, scope_base):

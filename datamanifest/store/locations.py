@@ -463,15 +463,19 @@ def content_prefix(kind, *, storage_config=None, env=os.environ):
     return raw
 
 
-def content_scope(kind, *, project_root="", storage_config=None, meta=None,
-                  env=os.environ):
+def content_scope(kind, *, scope=None, project_root="", storage_config=None,
+                  meta=None, env=os.environ):
     """Resolve the content scope segment for *kind*.
 
-    Ladder: ``DATAMANIFEST_SCOPE_<KIND>`` → ``[_STORAGE._SCOPE].<kind>`` →
-    built-in. The built-in default is empty for ``datasets`` (no scope segment)
-    and :func:`project_id` for ``cached`` (project isolation). An empty value
-    yields no scope segment.
+    Ladder: an explicit *scope* (highest — e.g. ``@cached(scope=...)``) →
+    ``DATAMANIFEST_SCOPE_<KIND>`` → ``[_STORAGE._SCOPE].<kind>`` → built-in. The
+    built-in default is empty for ``datasets`` (no scope segment) and
+    :func:`project_id` for ``cached`` (project isolation). An empty string at any
+    rung is a valid value meaning *no scope segment* (a global, shared store);
+    ``scope=None`` means "not provided — fall through to the ladder".
     """
+    if scope is not None:
+        return scope
     if storage_config is None:
         storage_config = {}
 
@@ -535,8 +539,8 @@ def project_id(project_root="", meta=None):
     return hashlib.sha256(abspath.encode("utf-8")).hexdigest()[:16]
 
 
-def composed_path(selector, key, *, kind, project_root="", storage_config=None,
-                  meta=None, env=os.environ, host=None):
+def composed_path(selector, key, *, kind, scope=None, project_root="",
+                  storage_config=None, meta=None, env=os.environ, host=None):
     """Compose a spec-v3 content path: ``<root>[/subpath]/<prefix>/[<scope>/]<key>``.
 
     *selector* is ``$folder[/subpath]`` (the bare root resolved via
@@ -544,7 +548,8 @@ def composed_path(selector, key, *, kind, project_root="", storage_config=None,
     (``"datasets"`` or ``"cached"``). For ``kind="cached"`` the default scope is
     :func:`project_id` (using *project_root* / *meta*); for ``"datasets"`` it is
     empty. Prefix and scope are each overridable / suppressible via
-    :func:`content_prefix` / :func:`content_scope`.
+    :func:`content_prefix` / :func:`content_scope`; an explicit *scope* (e.g. a
+    pre-resolved value) takes precedence over the scope ladder.
     """
     if not selector:
         raise ValueError("composed_path requires a non-empty selector")
@@ -573,8 +578,8 @@ def composed_path(selector, key, *, kind, project_root="", storage_config=None,
     if prefix:
         parts.append(prefix)
     scope = content_scope(
-        kind, project_root=project_root, storage_config=storage_config,
-        meta=meta, env=env,
+        kind, scope=scope, project_root=project_root,
+        storage_config=storage_config, meta=meta, env=env,
     )
     if scope:
         parts.append(scope)
