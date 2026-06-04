@@ -536,6 +536,30 @@ def test_cached_scope_override_param(cache_root, scope_base):
     assert index.has_instance(scope="shared", cachetype="t", version="", hash=h)
 
 
+def test_cached_honors_manifest_storage_config(tmp_path, monkeypatch):
+    """@cached resolves $cache from the nearest manifest's [_STORAGE] — the same
+    centralized storage config the fetch side uses — with no env var needed."""
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    scratch = tmp_path / "scratch"
+    (proj / "datasets.toml").write_text(f'[_STORAGE]\ncache = "{scratch}"\n')
+    for var in ("DATAMANIFEST_CACHE_DIR", "DATAMANIFEST_DIR", "DATAMANIFEST_DATA_DIR"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("DATAMANIFEST_USAGE_LOG", str(tmp_path / "usage.toml"))
+    monkeypatch.chdir(proj)
+
+    @cached(cachetype="t", format="txt")
+    def produce(*, name):
+        return name
+
+    produce(name="v")
+    h = param_hash({"name": "v"})
+    # Artifact landed under the manifest's [_STORAGE] cache (scope is a path hash
+    # here — no pyproject name), not the platformdirs default.
+    assert list(scratch.glob(f"cached/*/t/{h}/data.txt")), \
+        f"expected the produced artifact under {scratch}"
+
+
 def test_cached_scope_env_override_path_and_entry_agree(cache_root, scope_base,
                                                         monkeypatch):
     """A DATAMANIFEST_SCOPE_CACHED override reaches the entry too (the bug:

@@ -287,22 +287,43 @@ def _artifact_dir(*, cache_dir, store, cachetype, version, hash_,
     )
 
 
-def _resolve_project_root(project_root) -> str:
-    """Resolve the project root used for scope / artifact-path / index placement.
+def _discover_manifest(project_root):
+    """Resolve ``(project_root, manifest_toml)`` for scope / artifact-path / index
+    placement and storage configuration.
 
-    An explicit *project_root* is honored verbatim. Otherwise it is discovered
-    the way the rest of the tool resolves a default manifest: walk up from the
-    current directory for a ``datasets.toml`` / ``Datasets.toml`` /
-    ``datamanifest.toml`` (or a ``pyproject.toml``-bearing root) and use that
-    directory (:func:`datamanifest.config._find_default_toml`). This makes the
-    scope resolve to the project's ``pyproject.toml`` ``[project].name`` — a
-    stable, human-readable id — instead of a path hash of whatever directory the
-    call happened to run from. Falls back to ``""`` when nothing is found.
+    An explicit *project_root* is honored; the manifest is then the nearest
+    ``datasets.toml`` / ``Datasets.toml`` / ``datamanifest.toml`` at or above it.
+    Otherwise both are discovered by walking up from the current directory
+    (:func:`datamanifest.config._find_default_toml`) — the same resolution the
+    rest of the tool uses, so the scope resolves to the project's
+    ``pyproject.toml`` ``[project].name`` rather than a path hash. The manifest
+    path is ``""`` when none is found.
     """
-    if project_root:
-        return project_root
     from ..config import _find_default_toml, project_root_from_paths
-    return project_root_from_paths(_find_default_toml(os.getcwd()))
+    if project_root:
+        return project_root, _find_default_toml(project_root)
+    toml = _find_default_toml(os.getcwd())
+    return project_root_from_paths(toml), toml
+
+
+def _load_storage_config(manifest_toml) -> dict:
+    """The ``[_STORAGE]`` table from *manifest_toml* (empty when absent/unreadable).
+
+    Reading the table is a plain TOML load — **no** ``Database`` / fetch layer —
+    so the same centralized storage settings that drive fetched datasets (folder
+    roots, ``_HOST`` / ``_PROFILE`` per-machine overrides, ``_SCOPE`` / ``_PREFIX``)
+    also drive produced artifacts: ``$cache`` and friends resolve identically for
+    cache and fetch. Mirrors ``Database.storage_config`` (``dict(extra["_STORAGE"])``).
+    """
+    if not manifest_toml or not os.path.isfile(manifest_toml):
+        return {}
+    try:
+        with open(manifest_toml, "rb") as f:
+            data = tomllib.load(f)
+    except Exception:  # noqa: BLE001 - a malformed manifest contributes no config
+        return {}
+    table = data.get("_STORAGE", {})
+    return dict(table) if isinstance(table, dict) else {}
 
 
 def _locate_cached_toml(cached_toml, project_root) -> str:
@@ -505,19 +526,26 @@ def cached(
 
             key_table = _key_table_for_call(key, kwargs)
             hash_ = param_hash(key_table)
-            root = _resolve_project_root(project_root)
+            root, manifest_toml = _discover_manifest(project_root)
+            # Storage resolution is centralized in the manifest's [_STORAGE]: when
+            # the caller passes no storage_config, load it from the discovered
+            # manifest (folder roots, _HOST/_PROFILE/_SCOPE/_PREFIX), so $cache and
+            # friends resolve the same for produced artifacts as for fetched data.
+            sconf = (
+                storage_config if storage_config is not None
+                else _load_storage_config(manifest_toml)
+            )
             # Resolve the scope **once** (explicit @cached(scope=...) wins, else
             # the env / [_STORAGE._SCOPE] / project-id ladder) and use the same
             # value for both the on-disk path and the recorded entry, so they can
             # never disagree.
             art_scope = locations.content_scope(
-                "cached", scope=scope, project_root=root,
-                storage_config=storage_config,
+                "cached", scope=scope, project_root=root, storage_config=sconf,
             )
             artifact_dir = _artifact_dir(
                 cache_dir=cache_dir, store=store, cachetype=ct,
                 version=version, hash_=hash_, project_root=root,
-                storage_config=storage_config, scope=art_scope,
+                storage_config=sconf, scope=art_scope,
             )
             data_path = os.path.join(artifact_dir, _data_name(basename, fmt))
 
