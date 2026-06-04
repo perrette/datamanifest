@@ -6,6 +6,7 @@ trivial ``txt`` / ``json`` formats.
 
 import json
 import os
+import sys
 
 import pytest
 
@@ -226,6 +227,357 @@ def test_cached_produce_lands_under_cached_project_scope(cache_root, scope_base)
     # the cached/ prefix and the project-id scope are real path segments
     assert scope_base.parent.name == "cached"
     assert scope_base.parent.parent == cache_root
+
+
+# ----- default format: pickle ------------------------------------------------
+
+def test_cached_default_format_is_pickle(cache_root, scope_base):
+    """A format-less @cached self-saves with pickle, so any picklable value
+    (here a bare int — the original failing case) round-trips."""
+    calls = {"n": 0}
+
+    @cached(cachetype="memory")
+    def produce(*, name):
+        calls["n"] += 1
+        return {"n": 42, "items": [1, 2, 3], "label": name}
+
+    first = produce(name="x")
+    assert first == {"n": 42, "items": [1, 2, 3], "label": "x"}
+    assert calls["n"] == 1
+
+    h = param_hash({"name": "x"})
+    artifact_dir = scope_base / "memory" / h
+    # The serialized value is a pickle next to the sidecars.
+    assert (artifact_dir / "data.pickle").exists()
+    config = read_config(str(artifact_dir))
+    assert config["_META"]["cachetype"] == "memory"
+
+    # Second call hits the cache and unpickles the value (body not re-run).
+    second = produce(name="x")
+    assert second == first
+    assert calls["n"] == 1
+
+
+def test_cached_bare_value_round_trips(cache_root, scope_base):
+    @cached(cachetype="memory")
+    def produce():
+        return 42
+
+    assert produce() == 42
+    assert produce() == 42  # reload via pickle
+
+
+# ----- default cachetype = fully-qualified importable name -------------------
+
+def test_default_cachetype_is_qualified_name():
+    """With no explicit cachetype, it defaults to the function's module.qualname."""
+    @cached(format="txt")
+    def produce(*, x):
+        return x
+
+    ct = produce.recipe.cachetype
+    assert ct.endswith(".produce")
+    assert produce.__module__ in ct  # the module path is the prefix
+
+
+def test_explicit_cachetype_overrides_default():
+    @cached(cachetype="my.semantic.name", format="txt")
+    def produce(*, x):
+        return x
+
+    assert produce.recipe.cachetype == "my.semantic.name"
+
+
+def test_bare_cached_decorator_uses_all_defaults():
+    @cached  # no parentheses
+    def produce(*, x):
+        return x
+
+    assert produce.recipe.format == "pickle"
+    assert produce.recipe.cachetype.endswith(".produce")
+
+
+def test_main_with_spec_resolves_to_module_name(monkeypatch):
+    """A __main__ function launched via `python -m pkg.mod` resolves to
+    pkg.mod.<qualname> via __main__.__spec__.name."""
+    import types
+
+    from datamanifest.cache._decorator import _resolve_cachetype
+
+    def fn(*, x):
+        return x
+    fn.__module__ = "__main__"
+    fn.__qualname__ = "produce"
+
+    fake_main = types.SimpleNamespace(__spec__=types.SimpleNamespace(name="pkg.mod"))
+    monkeypatch.setitem(sys.modules, "__main__", fake_main)
+    assert _resolve_cachetype(fn, None) == "pkg.mod.produce"
+
+
+def test_main_without_spec_requires_explicit_cachetype(monkeypatch):
+    """A __main__ function with no __spec__ (loose script / REPL / notebook) has
+    no importable identity, so an explicit cachetype is required."""
+    import types
+
+    from datamanifest.cache._decorator import _resolve_cachetype
+
+    def fn(*, x):
+        return x
+    fn.__module__ = "__main__"
+    fn.__qualname__ = "produce"
+
+    fake_main = types.SimpleNamespace(__spec__=None)
+    monkeypatch.setitem(sys.modules, "__main__", fake_main)
+    with pytest.raises(ValueError, match="explicit cachetype"):
+        _resolve_cachetype(fn, None)
+    # An explicit cachetype sidesteps the requirement.
+    assert _resolve_cachetype(fn, "calibration") == "calibration"
+
+
+# ----- decoration-time recipe registry + conflict detection ------------------
+
+# A module-level @cached participates in the in-process registry; locals do not.
+@cached(cachetype="_module_level_fixture_ct", format="txt")
+def _module_level_recipe(*, x):
+    return x
+
+
+def test_registered_recipes_lists_module_level():
+    from datamanifest.cache import registered_recipes
+
+    refs = [r.ref for r in registered_recipes()]
+    assert any(r.endswith(":_module_level_recipe") for r in refs)
+    assert _module_level_recipe.recipe.cachetype == "_module_level_fixture_ct"
+
+
+def test_local_cached_has_recipe_but_is_unregistered():
+    from datamanifest.cache import registered_recipes
+
+    @cached(cachetype="local_only_ct", format="txt")
+    def produce(*, x):
+        return x
+
+    # .recipe is attached for introspection, but a local fn is not registered
+    # (and so is exempt from the conflict check).
+    assert produce.recipe.cachetype == "local_only_ct"
+    assert produce.recipe not in registered_recipes()
+
+
+@pytest.fixture
+def clean_registry():
+    """Snapshot/restore the process-global recipe registry around a test."""
+    from datamanifest.cache import _decorator as d
+
+    recipes, owners = dict(d._RECIPES), dict(d._CACHETYPE_OWNERS)
+    yield
+    d._RECIPES.clear(); d._RECIPES.update(recipes)
+    d._CACHETYPE_OWNERS.clear(); d._CACHETYPE_OWNERS.update(owners)
+
+
+def _decorate_as(module, qualname, *, cachetype, version=""):
+    """Decorate a synthetic module-level function (given module/qualname) so the
+    registry/conflict path treats it as non-local."""
+    def raw(*, x):
+        return x
+    raw.__module__ = module
+    raw.__qualname__ = qualname
+    return cached(cachetype=cachetype, version=version, format="txt")(raw)
+
+
+def test_cachetype_conflict_raises_for_distinct_functions(clean_registry):
+    from datamanifest.cache import CacheTypeConflict
+
+    _decorate_as("pkga.mod", "produce", cachetype="shared_ct")
+    with pytest.raises(CacheTypeConflict):
+        _decorate_as("pkgb.mod", "produce", cachetype="shared_ct")
+
+
+def test_cachetype_conflict_allows_different_version(clean_registry):
+    # Same cachetype, different version, two functions — valid, must coexist.
+    _decorate_as("pkga.mod", "calib_v1", cachetype="calibration", version="1")
+    _decorate_as("pkgb.mod", "calib_v2", cachetype="calibration", version="2")
+
+
+def test_cachetype_redecoration_same_ref_is_not_a_conflict(clean_registry):
+    _decorate_as("pkga.mod", "produce", cachetype="ct_x")
+    # Same ref (module:qualname) re-decorating overwrites, not a conflict.
+    _decorate_as("pkga.mod", "produce", cachetype="ct_x")
+
+
+# ----- hit requires the data file on disk ------------------------------------
+
+def test_cached_recomputes_when_data_file_absent(cache_root, scope_base):
+    """A complete, hash-valid artifact whose data file for *this* format is
+    missing is not a hit — the recipe recomputes instead of failing to read.
+    Guards the collision case where two recipes share a cachetype + hash."""
+    calls = {"n": 0}
+
+    @cached(cachetype="g", format="txt")
+    def produce(*, name):
+        calls["n"] += 1
+        return f"v{calls['n']}"
+
+    assert produce(name="a") == "v1"
+    h = param_hash({"name": "a"})
+    artifact = scope_base / "g" / h
+    assert (artifact / "data.txt").exists()
+
+    # Drop the data file but leave the .complete marker + valid config.toml.
+    (artifact / "data.txt").unlink()
+    assert (artifact / ".complete").exists()
+    assert config_is_valid(str(artifact))
+
+    # Not a hit (data absent) -> recompute, no FileNotFoundError.
+    assert produce(name="a") == "v2"
+    assert calls["n"] == 2
+    assert (artifact / "data.txt").read_text() == "v2"
+
+
+# ----- registry self-heals on hit --------------------------------------------
+
+def test_cached_hit_reregisters_when_index_deleted(cache_root, scope_base):
+    """Deleting cached.toml by hand does not lose the registration: the next
+    cache hit re-adds the entry, so the index rebuilds itself by re-running."""
+    from datamanifest.cache import CachedIndex
+
+    @cached(cachetype="g", format="txt")
+    def produce(*, name):
+        return f"hi {name}"
+
+    produce(name="a")
+    index_path = os.path.join(os.getcwd(), "cached.toml")
+    assert CachedIndex.read(index_path).scoped_keys()
+
+    # Delete the index by hand; the artifact itself stays on disk.
+    os.remove(index_path)
+    h = param_hash({"name": "a"})
+    assert (scope_base / "g" / h / "data.txt").exists()
+
+    # A hit (artifact present + valid) self-heals the registry.
+    assert produce(name="a") == "hi a"
+    cts = {r["cachetype"] for r in CachedIndex.read(index_path).recipe_records()}
+    assert "g" in cts
+
+
+def test_cached_hit_does_not_rewrite_index_when_present(cache_root, scope_base):
+    """A hit whose entry is already registered does not rewrite the index."""
+    @cached(cachetype="g", format="txt")
+    def produce(*, name):
+        return name
+
+    produce(name="a")
+    index_path = os.path.join(os.getcwd(), "cached.toml")
+    mtime = os.stat(index_path).st_mtime_ns
+
+    produce(name="a")  # hit; entry already present -> no rewrite
+    assert os.stat(index_path).st_mtime_ns == mtime
+
+
+# ----- spec-v3 scope field ---------------------------------------------------
+
+def test_cached_registers_scope_and_params(cache_root, scope_base):
+    """The cached.toml recipe records the project ``scope`` and each variation's
+    ``params`` (the kwargs it was produced with)."""
+    from datamanifest.cache import CachedIndex
+    from datamanifest.store.locations import project_id
+
+    @cached(cachetype="t", format="txt")
+    def produce(*, name):
+        return name
+
+    produce(name="v")
+    index = CachedIndex.read(os.path.join(os.getcwd(), "cached.toml"))
+    rec = {r["cachetype"]: r for r in index.recipe_records()}["t"]
+    assert rec["scope"] == project_id("")
+    assert list(rec["instances"].values()) == [{"name": "v"}]
+
+
+def test_cached_discovers_project_root_for_scope(cache_root, tmp_path, monkeypatch):
+    """When no project_root is passed, it is discovered by walking up for a
+    pyproject.toml, so the scope resolves to ``[project].name`` instead of a
+    path hash."""
+    from datamanifest.cache import CachedIndex
+
+    proj = tmp_path / "proj"
+    sub = proj / "deep" / "nested"
+    sub.mkdir(parents=True)
+    (proj / "pyproject.toml").write_text('[project]\nname = "myproj"\n')
+    monkeypatch.chdir(sub)
+
+    @cached(cachetype="t", format="txt")
+    def produce(*, name):
+        return name
+
+    produce(name="v")
+    h = param_hash({"name": "v"})
+    # Scope segment in the on-disk path is the discovered project name.
+    assert (cache_root / "cached" / "myproj" / "t" / h / "data.txt").exists()
+    # cached.toml lands at the discovered project root and records scope=myproj.
+    index = CachedIndex.read(str(proj / "cached.toml"))
+    assert {r["scope"] for r in index.recipe_records()} == {"myproj"}
+
+
+def test_cached_scope_override_param(cache_root, scope_base):
+    """An explicit @cached(scope=...) drives BOTH the on-disk path and the
+    recorded entry — they cannot diverge (the highest-priority scope)."""
+    from datamanifest.cache import CachedIndex
+
+    @cached(cachetype="t", format="txt", scope="shared")
+    def produce(*, name):
+        return name
+
+    produce(name="v")
+    h = param_hash({"name": "v"})
+    # Path lands under the explicit scope.
+    assert (cache_root / "cached" / "shared" / "t" / h / "data.txt").exists()
+    # Entry records the SAME scope (path and entry agree).
+    index = CachedIndex.read(os.path.join(os.getcwd(), "cached.toml"))
+    assert {r["scope"] for r in index.recipe_records()} == {"shared"}
+    assert index.has_instance(scope="shared", cachetype="t", version="", hash=h)
+
+
+def test_cached_honors_manifest_storage_config(tmp_path, monkeypatch):
+    """@cached resolves $cache from the nearest manifest's [_STORAGE] — the same
+    centralized storage config the fetch side uses — with no env var needed."""
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    scratch = tmp_path / "scratch"
+    (proj / "datasets.toml").write_text(f'[_STORAGE]\ncache = "{scratch}"\n')
+    for var in ("DATAMANIFEST_CACHE_DIR", "DATAMANIFEST_DIR", "DATAMANIFEST_DATA_DIR"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("DATAMANIFEST_USAGE_LOG", str(tmp_path / "usage.toml"))
+    monkeypatch.chdir(proj)
+
+    @cached(cachetype="t", format="txt")
+    def produce(*, name):
+        return name
+
+    produce(name="v")
+    h = param_hash({"name": "v"})
+    # Artifact landed under the manifest's [_STORAGE] cache (scope is a path hash
+    # here — no pyproject name), not the platformdirs default.
+    assert list(scratch.glob(f"cached/*/t/{h}/data.txt")), \
+        f"expected the produced artifact under {scratch}"
+
+
+def test_cached_scope_env_override_path_and_entry_agree(cache_root, scope_base,
+                                                        monkeypatch):
+    """A DATAMANIFEST_SCOPE_CACHED override reaches the entry too (the bug:
+    previously only the path honored it, the entry kept the project id)."""
+    from datamanifest.cache import CachedIndex
+
+    monkeypatch.setenv("DATAMANIFEST_SCOPE_CACHED", "envscope")
+
+    @cached(cachetype="t", format="txt")
+    def produce(*, name):
+        return name
+
+    produce(name="v")
+    h = param_hash({"name": "v"})
+    assert (cache_root / "cached" / "envscope" / "t" / h / "data.txt").exists()
+    index = CachedIndex.read(os.path.join(os.getcwd(), "cached.toml"))
+    # The recorded scope matches the path's scope — reachability stays consistent.
+    assert index.has_instance(scope="envscope", cachetype="t", version="", hash=h)
 
 
 # ----- spec-v3 recipe version ------------------------------------------------

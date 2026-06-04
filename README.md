@@ -64,17 +64,23 @@ Cache the result of an expensive computation, keyed by its keyword arguments:
 ```python
 from datamanifest.cache import cached
 
-@cached(cachetype="esm_anomaly", format="nc")
-def load_anomaly(*, grid="5x5", skip_models=()):
-    ...  # expensive; returns an xarray.Dataset
+@cached
+def load_anomaly(*, grid="5x5"):
+    ...        # expensive; returns e.g. an xarray.Dataset
     return ds
 
-ds = load_anomaly(grid="5x5")          # computes, materializes, registers it
-ds = load_anomaly(grid="5x5")          # cache hit: loads and returns
+ds = load_anomaly(grid="5x5")          # first call: computes and stores
+ds = load_anomaly(grid="5x5")          # later calls: loads and returns
 ds = load_anomaly(grid="5x5", cached=False)  # force recompute
 ```
 
-The keyword arguments (minus `_`-prefixed runtime knobs) are hashed into a portable key — values may be strings, integers, finite floats, booleans, or nested lists/dicts of those (`None` and non-finite floats are rejected). The artifact and its `config.toml` / `metadata.toml` sidecars land under your cache directory at `<cache>/cached/<project-id>/<cachetype>/[<version>/]<hash>`. An optional `version=` string adds a path segment — recorded in the sidecars but **not** part of the key hash — so a change to a function's *logic* (same parameters) can't read a stale result. Produced datasets are **not** written into `datasets.toml`; they are indexed in a sibling `cached.toml`, and `datamanifest list --orphan --delete` (dry run by default, `--yes` to apply) is the maintenance command. The cache layer (`datamanifest.cache`) sits over the shared `datamanifest.store` substrate and never touches the fetch path.
+The keyword arguments are the cache key — each distinct combination is stored separately. By default the result is saved with `pickle`; pass `format="nc"`/`"csv"`/… to pick a serialization, and `version="v2"` to invalidate when the function's *logic* changes.
+
+Where things live is configured **once** in `datamanifest.toml` ([Storage model](#storage-model)) and applies to both downloaded and cached data — point `$cache` at a scratch partition and produced artifacts follow. Each project's cache is isolated by default; `@cached(scope="shared")` lets projects share one.
+
+`datamanifest list` shows cached results grouped by function with their parameters; `datamanifest list --orphan --delete` cleans up.
+
+Advanced details — how the cache identity (`cachetype`) is derived, conflict detection, and the `cached.toml` index format — are in the [design notes](docs/design-notes.md).
 
 ## CLI usage
 
@@ -106,6 +112,11 @@ datamanifest init
 
 # Add and download a dataset
 datamanifest add "https://zenodo.org/record/.../file.zip" --extract
+
+# List this project's datasets and cached artifacts (one styled line each,
+# clickable file:// locations); --all also shows orphans / other projects'
+datamanifest list
+datamanifest list --all
 
 # Use the path in a shell pipeline
 python analysis.py --data "$(datamanifest path file)"
@@ -171,7 +182,7 @@ datamanifest list --kind cached --push user@hpc     # bulk: push the filtered se
 > **Behavior change from earlier releases.** Earlier versions stored datasets under a
 > `/Datasets`-suffixed root (e.g. `~/.local/share/datamanifest/Datasets`). Now folder
 > variables resolve to **bare** roots, and content is composed as `<root>/datasets/<key>`
-> (downloads) or `<root>/cached/<project-id>/<cachetype>/[<version>/]<hash>` (produced
+> (downloads) or `<root>/cached/<scope>/<cachetype>/[<version>/]<hash>` (produced
 > artifacts). A legacy read-only probe still finds datasets at the old `/Datasets`-suffixed
 > locations unless `DATAMANIFEST_DATA_DIR` or `DATAMANIFEST_DIR` is set.
 
@@ -221,7 +232,7 @@ format = "nc"
 
 **Content path composition** (added by the consuming layer, not the selector):
 - Fetched datasets: `<root>[/subpath]/datasets/<key>`
-- Produced artifacts: `<root>/cached/<project-id>/<cachetype>/[<version>/]<hash>`
+- Produced artifacts: `<root>/cached/<scope>/<cachetype>/[<version>/]<hash>`
 
 **Read resolution** probes built-in roots under their `datasets/` prefix (`$repo → $data → $cache`), then a legacy read-only probe for old locations (skipped when `DATAMANIFEST_DATA_DIR`/`DATAMANIFEST_DIR` is set).
 

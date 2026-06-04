@@ -54,6 +54,17 @@ def test_help_lists_all_subcommands():
         assert sub in result.stdout, f"subcommand {sub!r} missing from --help output"
 
 
+def test_bare_invocation_lists_commands():
+    # Running `datamanifest` with no subcommand lists the available commands
+    # (and the -h/--help hint) instead of erroring with a bare usage line.
+    result = _run()
+    assert result.returncode == 0, result.stderr
+    out = result.stdout + result.stderr
+    for sub in ["list", "download", "add", "verify", "where"]:
+        assert sub in out, f"command {sub!r} missing from bare-invocation output"
+    assert "--help" in out
+
+
 def test_gc_subcommand_removed():
     # spec-v3 retired the automatic collector: `gc` is gone (the maintenance
     # surface is `list --delete`). The subcommand must no longer parse.
@@ -249,6 +260,91 @@ def test_list_kind_data_lists_fetched_dataset(tmp_path):
     assert "mydata" in result.stdout
     assert "datasets" in result.stdout
     assert "mt/" not in result.stdout  # the cached orphan is filtered out
+
+
+def test_default_list_hides_unlisted_cached_unless_all(tmp_path):
+    # The bare `list` (no maintenance flags) renders a human view of fetched
+    # datasets, but cached artifacts this project's cached.toml does not root
+    # are hidden by default and only surface (flagged) under --all.
+    cache = tmp_path / "cache"
+    _orphan_artifact(cache, "mt", {"g": "5x5"})
+    data_file = tmp_path / "external.csv"
+    data_file.write_text("a,b\n1,2\n")
+    toml = tmp_path / "datasets.toml"
+    toml.write_text(f'[mydata]\nlocal_path = "{data_file}"\nformat = "csv"\n')
+    env = dict(os.environ)
+    env["DATAMANIFEST_CACHE_DIR"] = str(cache)
+    env["DATAMANIFEST_USAGE_LOG"] = str(tmp_path / "usage.toml")
+    env["DATAMANIFEST_TOML"] = str(toml)
+    env["NO_COLOR"] = "1"  # deterministic, escape-free output
+
+    # Default: the fetched dataset shows; the unlisted orphan does not.
+    default = _run("list", env=env)
+    assert default.returncode == 0, default.stderr
+    assert "Datasets" in default.stdout
+    assert "mydata" in default.stdout
+    assert "mt/" not in default.stdout
+
+    # --all surfaces the orphan, flagged (grouped under its recipe cachetype).
+    allruns = _run("list", "--all", env=env)
+    assert allruns.returncode == 0, allruns.stderr
+    assert "mydata" in allruns.stdout
+    assert "mt" in allruns.stdout              # the recipe (cachetype) header
+    assert "orphan" in allruns.stdout
+
+
+def test_list_filters_keep_the_styled_view(tmp_path):
+    # A filter flag narrows the set but does NOT switch to the tab-separated
+    # machine view — the grouped, styled headers remain.
+    cache = tmp_path / "cache"
+    _orphan_artifact(cache, "mt", {"g": "5x5"})
+    toml = tmp_path / "datasets.toml"
+    toml.write_text("[mydata]\nlocal_path = \"/nonexistent/x.csv\"\nformat = \"csv\"\n")
+    env = dict(os.environ)
+    env["DATAMANIFEST_CACHE_DIR"] = str(cache)
+    env["DATAMANIFEST_USAGE_LOG"] = str(tmp_path / "usage.toml")
+    env["DATAMANIFEST_TOML"] = str(toml)
+    env["NO_COLOR"] = "1"
+
+    # --orphan keeps the rich layout (the "Cached" header), not a bare table.
+    orphan = _run("list", "--orphan", env=env)
+    assert orphan.returncode == 0, orphan.stderr
+    assert "Cached" in orphan.stdout
+    assert "orphan" in orphan.stdout
+    assert "Datasets" not in orphan.stdout  # orphan filter drops datasets
+
+    # A not-yet-fetched dataset shows in the styled view as missing.
+    missing = _run("list", "--missing", env=env)
+    assert missing.returncode == 0, missing.stderr
+    assert "Datasets" in missing.stdout
+    assert "mydata" in missing.stdout
+    assert "missing" in missing.stdout
+
+
+def test_list_bare_prints_plain_names(tmp_path):
+    # --bare / --names prints a plain newline-separated name list (scriptable),
+    # regardless of the styled default.
+    cache = tmp_path / "cache"
+    artifact, _ = _orphan_artifact(cache, "mt", {"g": "5x5"})
+    data_file = tmp_path / "external.csv"
+    data_file.write_text("a,b\n1,2\n")
+    toml = tmp_path / "datasets.toml"
+    toml.write_text(f'[mydata]\nlocal_path = "{data_file}"\nformat = "csv"\n')
+    env = dict(os.environ)
+    env["DATAMANIFEST_CACHE_DIR"] = str(cache)
+    env["DATAMANIFEST_USAGE_LOG"] = str(tmp_path / "usage.toml")
+    env["DATAMANIFEST_TOML"] = str(toml)
+
+    result = _run("list", "--bare", env=env)
+    assert result.returncode == 0, result.stderr
+    lines = [ln for ln in result.stdout.splitlines() if ln.strip()]
+    assert lines == ["mydata"]  # no headers, no styling; orphan hidden by default
+
+    # --all --bare includes the orphan recipe's name (the cachetype), deduped.
+    allbare = _run("list", "--all", "--bare", env=env)
+    assert allbare.returncode == 0, allbare.stderr
+    assert "mt" in allbare.stdout.split()
+    assert "Cached" not in allbare.stdout
 
 
 # ----- init -----

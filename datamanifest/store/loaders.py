@@ -27,6 +27,8 @@ def default_loader(format: str):
         return _toml_loader
     if f in ("md", "txt"):
         return _text_io_loader
+    if f in ("pickle", "pkl"):
+        return _pickle_loader
     if f == "csv":
         return _csv_loader
     if f == "parquet":
@@ -71,6 +73,12 @@ def _toml_loader(path):
 
 def _text_io_loader(path):
     return open(path).read()
+
+
+def _pickle_loader(path):
+    import pickle
+    with open(path, "rb") as fh:
+        return pickle.load(fh)
 
 
 def _csv_loader(path):
