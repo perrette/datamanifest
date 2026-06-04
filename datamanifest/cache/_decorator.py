@@ -220,6 +220,32 @@ def _locate_cached_toml(cached_toml, project_root) -> str:
     return os.path.join(os.getcwd(), CACHED_INDEX_NAME)
 
 
+def _is_registered(
+    cached_toml_path, name, *, cachetype, hash_, scope, version,
+) -> bool:
+    """Whether *cached_toml_path* already lists *name* with a matching identity
+    (``cachetype`` / ``hash`` / ``scope`` / ``version``).
+
+    Used on a cache hit to decide whether the registry needs self-healing: a
+    hand-deleted index, a missing entry, or one pointing elsewhere returns
+    ``False`` so the hit re-registers it.
+    """
+    if not os.path.isfile(cached_toml_path):
+        return False
+    try:
+        entry = CachedIndex.read(cached_toml_path).entries.get(name)
+    except Exception:  # noqa: BLE001 - an unreadable index roots nothing
+        return False
+    if not entry:
+        return False
+    return (
+        entry.get("cachetype", "") == cachetype
+        and entry.get("hash", "") == hash_
+        and entry.get("scope", "") == scope
+        and entry.get("version", "") == version
+    )
+
+
 def _register_produced(
     cached_toml_path, name, *, cachetype, hash_, ref, format, scope="",
     version="",
@@ -320,7 +346,10 @@ def cached(
     ``format`` / ``store="$cache"`` / the ``scope`` / the ``version``
     when set), that index is recorded in the depot usage log, and
     ``metadata.toml``'s ``[origin].cached_toml`` back-pointer names it.
-    A cache **hit** re-registers nothing and re-stamps nothing.
+    A cache **hit** does not re-stamp ``metadata.toml``, but it **self-heals the
+    registry**: if the artifact is present yet its ``cached.toml`` entry is
+    missing (the index was deleted by hand, or never written), the hit
+    re-registers it, so the index rebuilds itself simply by re-running.
     """
 
     fmt = format if format is not None else DEFAULT_FORMAT
@@ -345,6 +374,13 @@ def cached(
             )
             data_path = os.path.join(artifact_dir, _data_name(basename, fmt))
 
+            # The portable registry coordinates (shared by the hit self-heal and
+            # the miss registration).
+            ref = f"{fn.__module__}:{fn.__qualname__}"
+            reg_name = name or fn.__name__
+            scope = locations.project_id(root)
+            index_path = _locate_cached_toml(cached_toml, root)
+
             # A hit requires not just a complete, hash-valid artifact but the
             # expected data file for *this* format on disk. Two recipes that
             # share a cachetype and hash to the same key (e.g. both take no
@@ -357,6 +393,22 @@ def cached(
                 and config_is_valid(artifact_dir)
                 and os.path.exists(data_path)
             ):
+                # Self-heal the registry: if the artifact is on disk but its
+                # cached.toml entry is gone (index deleted by hand, or never
+                # written), re-register it so the index rebuilds itself just by
+                # re-running. A read-only index must never break a hit.
+                if not _is_registered(
+                    index_path, reg_name, cachetype=cachetype, hash_=hash_,
+                    scope=scope, version=version,
+                ):
+                    try:
+                        _register_produced(
+                            index_path, reg_name, cachetype=cachetype,
+                            hash_=hash_, ref=ref, format=fmt, scope=scope,
+                            version=version,
+                        )
+                    except OSError:
+                        pass
                 return _load_value(data_path, fmt)
 
             result = fn(**kwargs)
@@ -365,10 +417,6 @@ def cached(
 
             # Register the produced artifact in the project's cached.toml (the
             # liveness root for GC) and record that index in the depot usage log.
-            ref = f"{fn.__module__}:{fn.__qualname__}"
-            reg_name = name or fn.__name__
-            scope = locations.project_id(root)
-            index_path = _locate_cached_toml(cached_toml, root)
             written_index = _register_produced(
                 index_path, reg_name,
                 cachetype=cachetype, hash_=hash_, ref=ref, format=fmt,

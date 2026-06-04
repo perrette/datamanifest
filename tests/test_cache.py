@@ -295,6 +295,45 @@ def test_cached_recomputes_when_data_file_absent(cache_root, scope_base):
     assert (artifact / "data.txt").read_text() == "v2"
 
 
+# ----- registry self-heals on hit --------------------------------------------
+
+def test_cached_hit_reregisters_when_index_deleted(cache_root, scope_base):
+    """Deleting cached.toml by hand does not lose the registration: the next
+    cache hit re-adds the entry, so the index rebuilds itself by re-running."""
+    from datamanifest.cache import CachedIndex
+
+    @cached(cachetype="g", format="txt")
+    def produce(*, name):
+        return f"hi {name}"
+
+    produce(name="a")
+    index_path = os.path.join(os.getcwd(), "cached.toml")
+    assert "produce" in CachedIndex.read(index_path).entries
+
+    # Delete the index by hand; the artifact itself stays on disk.
+    os.remove(index_path)
+    h = param_hash({"name": "a"})
+    assert (scope_base / "g" / h / "data.txt").exists()
+
+    # A hit (artifact present + valid) self-heals the registry.
+    assert produce(name="a") == "hi a"
+    assert "produce" in CachedIndex.read(index_path).entries
+
+
+def test_cached_hit_does_not_rewrite_index_when_present(cache_root, scope_base):
+    """A hit whose entry is already registered does not rewrite the index."""
+    @cached(cachetype="g", format="txt")
+    def produce(*, name):
+        return name
+
+    produce(name="a")
+    index_path = os.path.join(os.getcwd(), "cached.toml")
+    mtime = os.stat(index_path).st_mtime_ns
+
+    produce(name="a")  # hit; entry already present -> no rewrite
+    assert os.stat(index_path).st_mtime_ns == mtime
+
+
 # ----- spec-v3 scope field ---------------------------------------------------
 
 def test_cached_registers_scope_field(cache_root, scope_base):

@@ -145,7 +145,10 @@ path without invalidating the hash for callers with other versions. A per-call `
 argument bypasses folder/prefix/scope and uses the supplied directory verbatim.
 
 Each produce registers the artifact in a sibling **`cached.toml`** (gitignored per-machine
-state by default). **`datamanifest list`** is the maintenance command: `--kind cached`
+state by default). The registry is **self-healing**: if `cached.toml` is deleted by hand
+(or never written), the next cache *hit* re-registers the on-disk artifact, so the index
+rebuilds itself simply by re-running — this is the one write a hit may perform (it still
+never re-stamps `metadata.toml`). **`datamanifest list`** is the maintenance command: `--kind cached`
 selects produced artifacts; `--orphan` flags those with no `cached.toml` root reference;
 `--older-than AGE` filters by last-access time. `--delete` / `--move DIR` act on the
 selected set (dry run by default; `--yes` to apply). The `list` command is the composition
