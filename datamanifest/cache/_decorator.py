@@ -23,6 +23,7 @@ import functools
 import importlib
 import json
 import os
+from typing import NamedTuple
 
 try:
     import tomllib  # noqa: F401  (kept for symmetry; tomli_w used for writing)
@@ -36,7 +37,40 @@ from ._index import CACHED_INDEX_NAME, CachedIndex
 from ._sidecars import config_is_valid, write_config, write_metadata
 from ._usage import record_path
 
-__all__ = ["cached"]
+__all__ = ["cached", "Recipe", "registered_recipes"]
+
+
+class Recipe(NamedTuple):
+    """Decoration-time metadata for one ``@cached`` function.
+
+    Captures what is known the moment the decorator runs — the recipe, not an
+    instance. The parameter ``hash`` and the ``scope`` are deliberately absent:
+    they depend on the call's kwargs and the caller's working directory, so they
+    only exist once the function is actually called.
+    """
+
+    ref: str          # "module:qualname"
+    name: str         # registry name in cached.toml (defaults to __name__)
+    cachetype: str
+    format: str
+    version: str
+    store: str
+
+
+# Process-local registry of decorated ``@cached`` recipes, keyed by ``ref`` so
+# functions from different submodules never blur together (and a re-import
+# overwrites rather than duplicates). Populated at decoration time with **no
+# disk writes**: importing a module records its recipes here only. A CLI that
+# does not import user code won't see them, and two projects run as separate
+# processes keep separate registries — so this never entangles caches.
+_RECIPES = {}
+
+
+def registered_recipes():
+    """Return the :class:`Recipe` for every ``@cached`` function decorated in
+    this process (introspection only — never written to disk)."""
+    return list(_RECIPES.values())
+
 
 DATA_NAME_STEM = "data"
 
@@ -436,6 +470,15 @@ def cached(
             materialize.materialize(artifact_dir, write_fn)
             return result
 
+        # Record the recipe at decoration time (no disk writes), keyed by ref,
+        # and expose it on the wrapper as ``.recipe`` for direct introspection.
+        recipe = Recipe(
+            ref=f"{fn.__module__}:{fn.__qualname__}",
+            name=name or fn.__name__,
+            cachetype=cachetype, format=fmt, version=version, store=store,
+        )
+        _RECIPES[recipe.ref] = recipe
+        wrapper.recipe = recipe
         return wrapper
 
     return decorator

@@ -65,6 +65,11 @@ Behavior in this package beyond — or looser than — the normative spec:
   for `<format>`"; the concrete Python format→library map is
   [documented below](#built-in-default-loaders).
 
+See [Design notes](design-notes.md) for the proposed produced-dataset identity /
+scope / conflict-detection model and the full list of recently-shipped deviations
+(pickle default, `scope` field, scope auto-discovery, cache-hit self-heal, …),
+written for the spec to reformulate cross-language.
+
 ## Python-specific behavior
 
 ### Reference resolution (`importlib`)

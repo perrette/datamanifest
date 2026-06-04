@@ -266,6 +266,37 @@ def test_cached_bare_value_round_trips(cache_root, scope_base):
     assert produce() == 42  # reload via pickle
 
 
+# ----- decoration-time recipe registry (in-memory, no disk writes) -----------
+
+def test_registered_recipes_records_at_decoration(tmp_path):
+    """Decorating a @cached function records its recipe in-process (no call, no
+    disk write needed), keyed by ref and exposed on the wrapper as .recipe."""
+    from datamanifest.cache import Recipe, cached, registered_recipes
+
+    @cached(cachetype="rt", format="nc", version="v2")
+    def my_recipe(*, grid):
+        return grid
+
+    assert isinstance(my_recipe.recipe, Recipe)
+    assert my_recipe.recipe.cachetype == "rt"
+    assert my_recipe.recipe.format == "nc"
+    assert my_recipe.recipe.version == "v2"
+    assert my_recipe.recipe.ref.endswith(":test_registered_recipes_records_at_decoration.<locals>.my_recipe")
+    assert my_recipe.recipe in registered_recipes()
+    # No call was made, so nothing was written to disk.
+    assert not (tmp_path / "cached.toml").exists()
+
+
+def test_registered_recipes_default_format_is_pickle():
+    from datamanifest.cache import cached
+
+    @cached(cachetype="rt2")
+    def no_format(*, a):
+        return a
+
+    assert no_format.recipe.format == "pickle"
+
+
 # ----- hit requires the data file on disk ------------------------------------
 
 def test_cached_recomputes_when_data_file_absent(cache_root, scope_base):
