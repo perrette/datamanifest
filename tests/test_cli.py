@@ -282,6 +282,60 @@ def test_default_list_hides_unlisted_cached_unless_all(tmp_path):
     assert "orphan" in allruns.stdout
 
 
+def test_list_filters_keep_the_styled_view(tmp_path):
+    # A filter flag narrows the set but does NOT switch to the tab-separated
+    # machine view — the grouped, styled headers remain.
+    cache = tmp_path / "cache"
+    _orphan_artifact(cache, "mt", {"g": "5x5"})
+    toml = tmp_path / "datasets.toml"
+    toml.write_text("[mydata]\nlocal_path = \"/nonexistent/x.csv\"\nformat = \"csv\"\n")
+    env = dict(os.environ)
+    env["DATAMANIFEST_CACHE_DIR"] = str(cache)
+    env["DATAMANIFEST_USAGE_LOG"] = str(tmp_path / "usage.toml")
+    env["DATAMANIFEST_TOML"] = str(toml)
+    env["NO_COLOR"] = "1"
+
+    # --orphan keeps the rich layout (the "Cached" header), not a bare table.
+    orphan = _run("list", "--orphan", env=env)
+    assert orphan.returncode == 0, orphan.stderr
+    assert "Cached" in orphan.stdout
+    assert "orphan" in orphan.stdout
+    assert "Datasets" not in orphan.stdout  # orphan filter drops datasets
+
+    # A not-yet-fetched dataset shows in the styled view as missing.
+    missing = _run("list", "--missing", env=env)
+    assert missing.returncode == 0, missing.stderr
+    assert "Datasets" in missing.stdout
+    assert "mydata" in missing.stdout
+    assert "missing" in missing.stdout
+
+
+def test_list_bare_prints_plain_names(tmp_path):
+    # --bare / --names prints a plain newline-separated name list (scriptable),
+    # regardless of the styled default.
+    cache = tmp_path / "cache"
+    artifact, _ = _orphan_artifact(cache, "mt", {"g": "5x5"})
+    data_file = tmp_path / "external.csv"
+    data_file.write_text("a,b\n1,2\n")
+    toml = tmp_path / "datasets.toml"
+    toml.write_text(f'[mydata]\nlocal_path = "{data_file}"\nformat = "csv"\n')
+    env = dict(os.environ)
+    env["DATAMANIFEST_CACHE_DIR"] = str(cache)
+    env["DATAMANIFEST_USAGE_LOG"] = str(tmp_path / "usage.toml")
+    env["DATAMANIFEST_TOML"] = str(toml)
+
+    result = _run("list", "--bare", env=env)
+    assert result.returncode == 0, result.stderr
+    lines = [ln for ln in result.stdout.splitlines() if ln.strip()]
+    assert lines == ["mydata"]  # no headers, no styling; orphan hidden by default
+
+    # --all --bare includes the orphan's name (cachetype/short-hash).
+    allbare = _run("list", "--all", "--bare", env=env)
+    assert allbare.returncode == 0, allbare.stderr
+    assert any(ln.startswith("mt/") for ln in allbare.stdout.splitlines())
+    assert "Cached" not in allbare.stdout
+
+
 # ----- init -----
 
 def test_init_creates_file(tmp_path):

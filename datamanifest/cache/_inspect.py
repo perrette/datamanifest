@@ -73,17 +73,24 @@ class CacheObject:
     referenced:
         ``True`` / ``False`` once the composition root has resolved reachability,
         ``None`` while unknown.
+    name:
+        Friendly display label — a dataset name, or a produced artifact's
+        registry name (falls back to ``key``).
+    present:
+        Whether the object is materialized on disk. Always true for an
+        enumerated cached artifact; false for a manifest dataset not yet fetched.
     """
 
     __slots__ = (
         "kind", "location", "key", "hash", "cachetype", "version",
         "scope", "format", "size", "created", "last_access", "referenced",
+        "name", "present",
     )
 
     def __init__(
         self, *, kind, location, key="", hash="", cachetype="", version="",
         scope="", format="", size=0, created="", last_access="",
-        referenced=None,
+        referenced=None, name="", present=True,
     ):
         self.kind = kind
         self.location = location
@@ -97,6 +104,12 @@ class CacheObject:
         self.created = created
         self.last_access = last_access
         self.referenced = referenced
+        # *name* is the friendly display label (a dataset name, or a produced
+        # artifact's registry name); *present* is whether the object is
+        # materialized on disk (always true for enumerated cached artifacts;
+        # false for a manifest dataset not yet fetched).
+        self.name = name or key
+        self.present = present
 
     def __repr__(self):
         ref = {True: "referenced", False: "orphan", None: "?"}[self.referenced]

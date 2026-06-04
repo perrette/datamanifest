@@ -52,8 +52,8 @@ def _add_delegate_flags(group):
 # Fields a maintenance object exposes, in display order. ``key``/``hash`` and
 # the timestamps double as the spec-v3 ``datamanifest list`` object schema.
 _OBJECT_FIELDS = (
-    "kind", "key", "hash", "cachetype", "version", "scope", "format",
-    "size", "location", "referenced", "created", "last-access",
+    "kind", "name", "key", "hash", "cachetype", "version", "scope", "format",
+    "size", "location", "referenced", "present", "created", "last-access",
 )
 _DEFAULT_OBJECT_FIELDS = ("kind", "referenced", "key", "location")
 
@@ -76,6 +76,8 @@ def _get_field(obj, name: str) -> str:
     val = getattr(obj, attr, "")
     if name == "referenced":
         return {True: "true", False: "false", None: "?"}[val]
+    if name == "present":
+        return "true" if val else "false"
     return "" if val is None else str(val)
 
 
@@ -93,23 +95,16 @@ def _age_seconds(iso: str, now: float):
     return now - dt.timestamp()
 
 
-def _is_maintenance(args) -> bool:
-    """True when any object-view / maintenance flag is set on ``list``."""
-    return any((
-        args.kind, args.scope, args.format, args.orphan,
-        args.older_than, args.fields, args.delete, args.move,
-        getattr(args, "push", None), getattr(args, "pull", None),
-    ))
-
-
 def _enumerate_objects(db):
     """The composition root: enumerate produced artifacts (cache layer) and
-    fetched datasets (fetch layer) as a single list of maintenance objects.
+    fetched datasets (fetch layer) as a single list of objects.
 
     Reachability is resolved here — the one place that bridges both layers: a
-    produced artifact is ``referenced`` iff its portable key is rooted by the
-    project's ``cached.toml``; a present fetched dataset is referenced by its
-    manifest entry. The cache-layer enumeration itself imports only ``store``.
+    produced artifact is ``referenced`` iff its ``(scope, cachetype, version,
+    hash)`` is rooted (scope-aware) by the project's ``cached.toml``; a fetched
+    dataset is referenced by its manifest entry. Both **present** and not-yet-
+    fetched datasets are included (``present`` tells them apart). The cache-layer
+    enumeration itself imports only ``store``.
     """
     from . import storage
     from .cache import CACHED_INDEX_NAME, CachedIndex, enumerate_artifacts
@@ -119,48 +114,64 @@ def _enumerate_objects(db):
 
     objects = []
 
-    # Produced artifacts under the resolved $cache root, tagged referenced via
-    # the project's sibling cached.toml.
+    # Produced artifacts under the resolved $cache root, tagged referenced +
+    # named via the project's sibling cached.toml.
     cache_root = storage.resolve_selector("$cache")
     prefix = storage.content_prefix("cached")
-    referenced = set()
+    referenced, names_by_id = set(), {}
     base = os.path.dirname(db.datasets_toml) if db.datasets_toml else os.getcwd()
     cached_toml = os.path.join(base or ".", CACHED_INDEX_NAME)
     if os.path.isfile(cached_toml):
         try:
-            referenced = CachedIndex.read(cached_toml).scoped_keys()
+            idx = CachedIndex.read(cached_toml)
+            referenced = idx.scoped_keys()
+            for nm, e in idx.entries.items():
+                names_by_id[(e.get("scope", ""), e.get("cachetype", ""),
+                             e.get("version", ""), e.get("hash", ""))] = nm
         except Exception:  # noqa: BLE001 - an unreadable index roots nothing
-            referenced = set()
+            referenced, names_by_id = set(), {}
     for obj in enumerate_artifacts(cache_root, prefix=prefix):
         # Scope-aware: another project's artifact (different scope) is not ours
         # even when its cachetype/hash coincide.
-        obj.referenced = (obj.scope, obj.cachetype, obj.version, obj.hash) in referenced
+        ident = (obj.scope, obj.cachetype, obj.version, obj.hash)
+        obj.referenced = ident in referenced
+        obj.name = names_by_id.get(ident) or f"{obj.cachetype}/{obj.hash[:12]}"
         objects.append(obj)
 
-    # Present fetched datasets (always referenced — they are manifest entries).
+    # Fetched datasets — present and not-yet-fetched alike (manifest entries are
+    # always referenced).
     for name, entry in db.datasets.items():
+        path, present = "", False
         try:
             path = resolve_existing_path(db, entry)
-        except Exception:  # noqa: BLE001 - unresolvable entry is not on disk
-            continue
-        if not (os.path.isfile(path) or os.path.isdir(path)):
-            continue
+            present = os.path.isfile(path) or os.path.isdir(path)
+        except Exception:  # noqa: BLE001 - unresolvable entry is simply absent
+            present = False
         objects.append(CacheObject(
             kind="datasets",
-            location=os.path.abspath(path),
+            location=os.path.abspath(path) if present else "",
             key=name,
+            name=name,
+            present=present,
             format=getattr(entry, "format", "") or "",
-            size=_object_size(path),
-            created=iso_from_mtime(path),
-            last_access=last_access(path),
+            size=_object_size(path) if present else 0,
+            created=iso_from_mtime(path) if present else "",
+            last_access=last_access(path) if present else "",
             referenced=True,
         ))
     return objects
 
 
 def _filter_objects(objects, args):
-    """Apply the ``list`` filter flags (``--kind``/``--scope``/``--format``/
-    ``--orphan``/``--older-than``) to *objects*."""
+    """Apply the ``list`` *filter* flags to *objects* — narrowing only, never a
+    change of output style (the renderer is chosen separately).
+
+    Filters: ``--kind`` / ``--scope`` / ``--format`` / ``--older-than`` (object
+    attributes); ``--present`` / ``--missing`` (fetched-dataset presence);
+    ``--orphan`` (only unreferenced produced artifacts). By default a produced
+    artifact this project's ``cached.toml`` does not root is hidden — surfaced by
+    ``--all`` (with datasets) or ``--orphan`` (orphans only).
+    """
     out = objects
     if args.kind:
         out = [o for o in out if o.kind == args.kind]
@@ -168,8 +179,15 @@ def _filter_objects(objects, args):
         out = [o for o in out if o.scope == args.scope]
     if args.format:
         out = [o for o in out if o.format == args.format]
+    if getattr(args, "present", False):
+        out = [o for o in out if o.kind == "datasets" and o.present]
+    if getattr(args, "missing", False):
+        out = [o for o in out if o.kind == "datasets" and not o.present]
     if args.orphan:
         out = [o for o in out if o.referenced is False]
+    elif not getattr(args, "all", False):
+        # Hide produced artifacts not rooted by this project's cached.toml.
+        out = [o for o in out if not (o.kind == "cached" and o.referenced is False)]
     if args.older_than:
         seconds = _parse_duration(args.older_than)
         now = datetime.datetime.now(datetime.timezone.utc).timestamp()
@@ -229,94 +247,30 @@ def _fit(text, width, *, keep_tail=False) -> str:
     return "…" + text[-(width - 1):] if keep_tail else text[: width - 1] + "…"
 
 
-def _default_list_data(db, *, include_unlisted=False):
-    """Rows for the human default listing, as ``(datasets, cached)``.
-
-    *datasets* is every manifest entry with present/size/location resolved.
-    *cached* is, by default, only the produced artifacts **this project's**
-    ``cached.toml`` roots (matched scope-aware, so another project's artifacts
-    are not mistaken for ours). With *include_unlisted* it also walks ``$cache``
-    and appends the rest — orphans and other projects' artifacts — flagged
-    unreferenced.
-    """
-    from .database import resolve_existing_path
-
-    datasets = []
-    for name, entry in db.datasets.items():
-        path, present = "", False
-        try:
-            path = resolve_existing_path(db, entry)
-            present = os.path.isfile(path) or os.path.isdir(path)
-        except Exception:  # noqa: BLE001 - an unresolvable entry is just missing
-            present = False
-        datasets.append({
-            "name": name,
-            "format": getattr(entry, "format", "") or "",
-            "present": present,
-            "size": _object_size(path) if present else 0,
-            "location": os.path.abspath(path) if present else "",
-        })
-
-    from . import storage
-    from .cache import CACHED_INDEX_NAME, CachedIndex, enumerate_artifacts
-
-    base = os.path.dirname(db.datasets_toml) if db.datasets_toml else os.getcwd()
-    cached_toml = os.path.join(base or ".", CACHED_INDEX_NAME)
-    names_by_id = {}  # (scope, cachetype, version, hash) -> registry name
-    if os.path.isfile(cached_toml):
-        try:
-            idx = CachedIndex.read(cached_toml)
-        except Exception:  # noqa: BLE001 - an unreadable index names nothing
-            idx = None
-        if idx is not None:
-            for nm, e in idx.entries.items():
-                names_by_id[(e.get("scope", ""), e.get("cachetype", ""),
-                             e.get("version", ""), e.get("hash", ""))] = nm
-
-    cache_root = storage.resolve_selector("$cache")
-    prefix = storage.content_prefix("cached")
-    cached = []
-    for obj in enumerate_artifacts(cache_root, prefix=prefix):
-        ident = (obj.scope, obj.cachetype, obj.version, obj.hash)
-        referenced = ident in names_by_id
-        # By default show only what this project's cached.toml roots; --all
-        # surfaces orphans and other projects' artifacts too.
-        if not referenced and not include_unlisted:
-            continue
-        cached.append({
-            "name": names_by_id.get(ident) or f"{obj.cachetype}/{obj.hash[:12]}",
-            "scope": obj.scope,
-            "format": obj.format,
-            "size": obj.size,
-            "location": obj.location,
-            "referenced": referenced,
-        })
-    return datasets, cached
+def _render_bare(objects):
+    """Plain newline-separated names of the (already filtered) *objects* — the
+    scriptable form selected by ``--bare`` / ``--names``."""
+    for o in objects:
+        print(o.name or o.key)
 
 
-def _print_default_list(db, args):
-    """The default ``datamanifest list`` view: one styled line per object,
-    datasets and cached artifacts grouped and color-coded, sized to the
-    terminal width. ``--present`` / ``--missing`` keep their plain name-only
-    output (scriptable); ``--all`` also lists cached artifacts this project's
-    ``cached.toml`` does not root (orphans and other projects')."""
-    datasets, cached = _default_list_data(db, include_unlisted=getattr(args, "all", False))
-
-    if args.present or args.missing:
-        for d in datasets:
-            if (args.present and d["present"]) or (args.missing and not d["present"]):
-                print(d["name"])
-        return
+def _render_rich(objects):
+    """The default styled ``list`` view of the (already filtered) *objects*: one
+    line per object, fetched datasets and produced artifacts grouped under
+    colour-coded headers, sized to the terminal width with clickable OSC-8
+    ``file://`` locations. Style is independent of the filters that produced
+    *objects* — narrowing the set never changes this layout."""
+    datasets = [o for o in objects if o.kind == "datasets"]
+    cached = [o for o in objects if o.kind == "cached"]
 
     on = _color_enabled()
     width = shutil.get_terminal_size((80, 20)).columns
 
-    if not datasets and not cached:
-        print(_paint("No datasets or cached artifacts.", "dim", on=on))
+    if not objects:
+        print(_paint("Nothing to list.", "dim", on=on))
         return
 
-    names = [d["name"] for d in datasets] + [c["name"] for c in cached]
-    name_w = min(max((len(n) for n in names), default=4), 36)
+    name_w = min(max((len(o.name) for o in objects), default=4), 36)
     name_w = max(name_w, 4)
     fmt_w, size_w = 8, 9
     tail_w = max(12, width - (name_w + fmt_w + size_w + 8))
@@ -338,12 +292,11 @@ def _print_default_list(db, args):
     if datasets:
         print(_paint("Datasets", "bold", on=on))
         for d in datasets:
-            if d["present"]:
-                emit("●", d["name"], d["format"], _fmt_size(d["size"]),
-                     d["location"], name_styles=("bold", "green"),
-                     link=d["location"])
+            if d.present:
+                emit("●", d.name, d.format, _fmt_size(d.size),
+                     d.location, name_styles=("bold", "green"), link=d.location)
             else:
-                emit("○", d["name"], d["format"], "—", "missing",
+                emit("○", d.name, d.format, "—", "missing",
                      name_styles=("dim",), tail_styles=("red",), keep_tail=False)
 
     if cached:
@@ -353,27 +306,23 @@ def _print_default_list(db, args):
         for c in cached:
             # Referenced artifacts are cyan; orphans (no cached.toml root) are
             # flagged in yellow — the colour carries the status, no extra column.
-            if c["referenced"]:
-                emit("◆", c["name"], c["format"], _fmt_size(c["size"]),
-                     c["location"], name_styles=("bold", "cyan"),
-                     link=c["location"])
+            if c.referenced:
+                emit("◆", c.name, c.format, _fmt_size(c.size),
+                     c.location, name_styles=("bold", "cyan"), link=c.location)
             else:
-                emit("◆", c["name"], c["format"], _fmt_size(c["size"]),
-                     c["location"], name_styles=("bold", "yellow"),
-                     tail_styles=("yellow",), prefix="orphan  ",
-                     link=c["location"])
+                emit("◆", c.name, c.format, _fmt_size(c.size),
+                     c.location, name_styles=("bold", "yellow"),
+                     tail_styles=("yellow",), prefix="orphan  ", link=c.location)
 
 
 def _cmd_list(args):
     db = _get_db()
 
-    if not _is_maintenance(args):
-        _print_default_list(db, args)
-        return
-
-    # ----- maintenance object view -----
+    # Filters narrow the object set; the output style is chosen separately, so a
+    # filter flag never changes how the list is rendered.
     objects = _filter_objects(_enumerate_objects(db), args)
 
+    # ----- actions (operate on the filtered set, report their own output) -----
     if args.delete or args.move:
         _maintain(objects, args)
         return
@@ -385,6 +334,8 @@ def _cmd_list(args):
         direction = "push" if args.push else "pull"
         sync_objects = []
         for obj in objects:
+            if not obj.present:  # nothing on disk to transfer
+                continue
             try:
                 sync_objects.append(sync.sync_object_from_location(
                     db, kind=obj.kind, ident=obj.key, location=obj.location,
@@ -395,12 +346,16 @@ def _cmd_list(args):
         _do_transfer(db, sync_objects, host, direction, args)
         return
 
-    fields = (
-        [f.strip() for f in args.fields.split(",") if f.strip()]
-        if args.fields else list(_DEFAULT_OBJECT_FIELDS)
-    )
-    for obj in objects:
-        print("\t".join(_get_field(obj, f) for f in fields))
+    # ----- output style (explicit; independent of the filters) -----
+    if args.fields:
+        # Machine-readable tab-separated columns (explicit field selection).
+        fields = [f.strip() for f in args.fields.split(",") if f.strip()]
+        for obj in objects:
+            print("\t".join(_get_field(obj, f) for f in fields))
+    elif getattr(args, "bare", False):
+        _render_bare(objects)
+    else:
+        _render_rich(objects)
 
 
 def _maintain(objects, args):
@@ -776,8 +731,14 @@ def main():
     )
     _excl.add_argument(
         "--all", action="store_true",
-        help="In the default view, also list cached artifacts this project's "
-             "cached.toml does not root (orphans and other projects')",
+        help="Also list cached artifacts this project's cached.toml does not "
+             "root (orphans and other projects')",
+    )
+    style_group = p_list.add_argument_group("output style")
+    style_group.add_argument(
+        "--bare", "--names", dest="bare", action="store_true",
+        help="Print a plain newline-separated list of names (scriptable); "
+             "default is the styled, grouped view",
     )
     obj_group = p_list.add_argument_group("object view (maintenance)")
     obj_group.add_argument(
