@@ -16,14 +16,18 @@ other implementation of the spec must resolve to the identical paths:
 Per-store precedence (highest first):
 
 1. ``DATAMANIFEST_<STORE>_DIR`` environment variable.
-2. ``[_STORAGE._PROFILE.<profile>].<store>`` — only when a profile is active.
-3. ``[_STORAGE._HOST.<glob>].<store>`` — first glob (``fnmatch``) matching the
+2. ``[_STORAGE._HOST.<glob>].<store>`` — first glob (``fnmatch``) matching the
    host.
-4. ``[_STORAGE].<store>`` base value.
-5. The ``platformdirs`` / ``project_root`` default.
+3. ``[_STORAGE].<store>`` base value.
+4. The ``platformdirs`` / ``project_root`` default.
 
 The chosen value has ``~`` and ``$VAR`` expanded; a relative ``repo`` value is
 resolved against ``project_root``.
+
+(``[_STORAGE._PROFILE.<name>]`` was a spec-v2 rung — a named, env-activated
+override bundle — **shelved in spec-v3** in favour of ``_HOST`` (auto-matched by
+hostname, no env var). The key stays *reserved* so spec-v2 manifests still parse
+and it is not mistaken for a folder definition, but it has no effect here.)
 """
 
 import contextlib
@@ -37,7 +41,6 @@ import socket
 import platformdirs
 
 __all__ = [
-    "store_root",
     "folder_root",
     "folder_base",
     "content_prefix",
@@ -134,113 +137,36 @@ def _patched_environ(env):
         os.environ.update(saved)
 
 
-def _normalize(value, store, project_root, env):
-    """Expand ``~``/``$VAR`` (honouring *env*) and resolve a relative ``repo``
-    value against *project_root*."""
-    with _patched_environ(env):
-        expanded = os.path.expandvars(os.path.expanduser(value))
-    if store == "repo" and not os.path.isabs(expanded):
-        expanded = os.path.join(project_root or "", expanded)
-    return expanded
-
-
-def store_root(store, *, project_root="", storage_config=None, env=os.environ,
-               host=None, profile=None):
-    """Resolve *store* to its absolute root directory.
-
-    Parameters
-    ----------
-    store:
-        Store name (``data`` / ``cache`` / ``repo`` / ...). Empty ⇒ ``data``.
-    project_root:
-        Project root used for the ``repo`` store and relative ``repo`` values.
-    storage_config:
-        Parsed ``[_STORAGE]`` table (base keys plus ``_HOST`` / ``_PROFILE``
-        sub-tables). ``None`` ⇒ no config.
-    env:
-        Environment mapping (defaults to ``os.environ``; injectable for tests).
-    host:
-        Hostname for ``_HOST`` glob matching (defaults to
-        ``socket.gethostname()``).
-    profile:
-        Active profile name (defaults to ``$DATAMANIFEST_PROFILE``). Empty ⇒ no
-        profile overrides applied.
-    """
-    store = store or "data"
-    if storage_config is None:
-        storage_config = {}
-    if host is None:
-        host = socket.gethostname()
-    if profile is None:
-        profile = env.get("DATAMANIFEST_PROFILE", "")
-
-    raw = None
-
-    # 1. DATAMANIFEST_<STORE>_DIR environment override.
-    raw = env.get(f"DATAMANIFEST_{store.upper()}_DIR")
-
-    # 2. Active profile override.
-    if raw is None and profile:
-        prof = storage_config.get("_PROFILE", {}).get(profile, {})
-        if isinstance(prof, dict) and isinstance(prof.get(store), str):
-            raw = prof[store]
-
-    # 3. First matching host glob.
-    if raw is None:
-        for pattern, mapping in storage_config.get("_HOST", {}).items():
-            if isinstance(mapping, dict) and fnmatch.fnmatch(host, pattern) \
-                    and isinstance(mapping.get(store), str):
-                raw = mapping[store]
-                break
-
-    # 4. [_STORAGE].<store> base value.
-    if raw is None and isinstance(storage_config.get(store), str):
-        raw = storage_config[store]
-
-    # 5. Built-in default (bare root, no content prefix).
-    if raw is None:
-        raw = _bare_default_root(store, project_root, env)
-
-    return _normalize(raw, store, project_root, env)
-
-
-def _folder_raw(name, storage_config, env, host, profile):
-    """Walk ladder rungs 1–4 for *name*, returning the first raw (un-expanded)
+def _folder_raw(name, storage_config, env, host):
+    """Walk the ladder rungs for *name*, returning the first raw (un-expanded)
     value found, or ``None`` if no rung defines it."""
     # 1. DATAMANIFEST_<NAME>_DIR environment override.
     raw = env.get(f"DATAMANIFEST_{name.upper()}_DIR")
     if raw is not None:
         return raw
 
-    # 2. Active profile override.
-    if profile:
-        prof = storage_config.get("_PROFILE", {}).get(profile, {})
-        if isinstance(prof, dict) and isinstance(prof.get(name), str):
-            return prof[name]
-
-    # 3. First matching host glob.
+    # 2. First matching host glob.
     for pattern, mapping in storage_config.get("_HOST", {}).items():
         if isinstance(mapping, dict) and fnmatch.fnmatch(host, pattern) \
                 and isinstance(mapping.get(name), str):
             return mapping[name]
 
-    # 4. [_STORAGE].<name> base value.
+    # 3. [_STORAGE].<name> base value.
     if isinstance(storage_config.get(name), str):
         return storage_config[name]
 
     return None
 
 
-def _folder_is_defined(name, storage_config, env, host, profile):
+def _folder_is_defined(name, storage_config, env, host):
     """Whether *name* names a resolvable folder variable (built-in, or defined
     on some ladder rung) as opposed to a plain environment variable."""
     if name in _BUILTIN_FOLDERS:
         return True
-    return _folder_raw(name, storage_config, env, host, profile) is not None
+    return _folder_raw(name, storage_config, env, host) is not None
 
 
-def _interpolate(value, *, project_root, storage_config, env, host, profile,
-                 resolving):
+def _interpolate(value, *, project_root, storage_config, env, host, resolving):
     """Expand a path expression: ``~`` → home, and each ``$NAME`` / ``${NAME}``
     → folder variable *NAME* (resolved via :func:`folder_root`) if one is
     defined, else environment variable *NAME*, else left verbatim."""
@@ -249,10 +175,10 @@ def _interpolate(value, *, project_root, storage_config, env, host, profile,
 
     def repl(match):
         var = match.group(1) or match.group(2)
-        if _folder_is_defined(var, storage_config, env, host, profile):
+        if _folder_is_defined(var, storage_config, env, host):
             return folder_root(
                 var, project_root=project_root, storage_config=storage_config,
-                env=env, host=host, profile=profile, _resolving=resolving,
+                env=env, host=host, _resolving=resolving,
             )
         if var in env:
             return env[var]
@@ -262,15 +188,11 @@ def _interpolate(value, *, project_root, storage_config, env, host, profile,
 
 
 def folder_root(name, *, project_root="", storage_config=None, env=os.environ,
-                host=None, profile=None, _resolving=()):
+                host=None, _resolving=()):
     """Resolve folder variable *name* to its absolute bare root directory.
 
-    Delegates to :func:`folder_base` (spec-v3 bare-root resolver). The
-    *profile* parameter is accepted for API compatibility but ignored — the
-    ``_PROFILE`` rung is dropped in spec-v3.
-
-    Parameters mirror :func:`folder_base`. ``_resolving`` is an internal tuple
-    used for cycle detection.
+    Delegates to :func:`folder_base` (spec-v3 bare-root resolver).
+    ``_resolving`` is an internal tuple used for cycle detection.
     """
     return folder_base(
         name, project_root=project_root, storage_config=storage_config,
@@ -295,7 +217,7 @@ def project_default(storage_config=None):
 
 
 def resolve_selector(selector, *, project_root="", storage_config=None,
-                     env=os.environ, host=None, profile=None):
+                     env=os.environ, host=None):
     """Resolve a storage *selector* to its absolute directory path.
 
     A selector is ``$folder[/subpath]``: the leading ``$folder`` (or
@@ -324,7 +246,7 @@ def resolve_selector(selector, *, project_root="", storage_config=None,
 
     root = folder_root(
         name, project_root=project_root, storage_config=storage_config,
-        env=env, host=host, profile=profile,
+        env=env, host=host,
     )
     if subpath:
         root = os.path.join(root, subpath)
@@ -373,7 +295,7 @@ def _interpolate_base(value, *, project_root, storage_config, env, host,
 
     def repl(match):
         var = match.group(1) or match.group(2)
-        if _folder_is_defined(var, storage_config, env, host, ""):
+        if _folder_is_defined(var, storage_config, env, host):
             return folder_base(
                 var, project_root=project_root, storage_config=storage_config,
                 env=env, host=host, _resolving=resolving,
@@ -419,8 +341,7 @@ def folder_base(name, *, project_root="", storage_config=None, env=os.environ,
         cycle = " -> ".join((*_resolving, name))
         raise ValueError(f"folder variable ${name} references itself ({cycle})")
 
-    # profile="" skips the _PROFILE rung (dropped in spec-v3).
-    raw = _folder_raw(name, storage_config, env, host, "")
+    raw = _folder_raw(name, storage_config, env, host)
 
     if raw is None:
         if name not in _BUILTIN_FOLDERS:

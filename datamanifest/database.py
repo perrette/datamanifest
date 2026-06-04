@@ -830,14 +830,12 @@ def get_dataset_path(
     """
     if entry.local_path != "":
         host = socket.gethostname()
-        profile = os.environ.get("DATAMANIFEST_PROFILE", "")
         local_path = storage._interpolate(
             entry.local_path,
             project_root=project_root,
             storage_config=storage_config or {},
             env=os.environ,
             host=host,
-            profile=profile,
             resolving=(),
         )
         if os.path.isabs(local_path):

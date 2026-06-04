@@ -10,7 +10,6 @@ from .store.locations import (  # noqa: F401  (private names used by database.py
     _folder_is_defined,
     _folder_raw,
     _interpolate,
-    _normalize,
     _patched_environ,
 )
 from .store.locations import __all__  # noqa: F401

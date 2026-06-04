@@ -27,7 +27,6 @@ from .locations import (
     project_default,
     project_id,
     resolve_selector,
-    store_root,
     tmp_path,
 )
 from .materialize import is_complete, remove_path
@@ -51,7 +50,6 @@ __all__ = [
     "project_default",
     "project_id",
     "resolve_selector",
-    "store_root",
     "tmp_path",
     "is_complete",
     "remove_path",
