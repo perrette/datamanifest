@@ -706,7 +706,9 @@ def main():
     )
 
     subparsers = parser.add_subparsers(dest="command", metavar="COMMAND")
-    subparsers.required = True
+    # Not required: a bare `datamanifest` prints the help (the command list +
+    # the -h/--help hint) rather than erroring with a bare usage line.
+    subparsers.required = False
 
     # list — dataset listing + the spec-v3 store-maintenance surface.
     p_list = subparsers.add_parser(
@@ -947,6 +949,10 @@ def main():
         p_sync.set_defaults(func=func)
 
     args = parser.parse_args()
+    if getattr(args, "func", None) is None:
+        # No subcommand: show the command list and the -h/--help hint.
+        parser.print_help()
+        return
     try:
         args.func(args)
     except Exception as e:

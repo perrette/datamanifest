@@ -54,6 +54,17 @@ def test_help_lists_all_subcommands():
         assert sub in result.stdout, f"subcommand {sub!r} missing from --help output"
 
 
+def test_bare_invocation_lists_commands():
+    # Running `datamanifest` with no subcommand lists the available commands
+    # (and the -h/--help hint) instead of erroring with a bare usage line.
+    result = _run()
+    assert result.returncode == 0, result.stderr
+    out = result.stdout + result.stderr
+    for sub in ["list", "download", "add", "verify", "where"]:
+        assert sub in out, f"command {sub!r} missing from bare-invocation output"
+    assert "--help" in out
+
+
 def test_gc_subcommand_removed():
     # spec-v3 retired the automatic collector: `gc` is gone (the maintenance
     # surface is `list --delete`). The subcommand must no longer parse.
