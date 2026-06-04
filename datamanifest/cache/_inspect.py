@@ -29,7 +29,13 @@ import os
 import shutil
 
 from ..store import materialize
-from ._sidecars import CONFIG_NAME, METADATA_NAME, read_config, read_metadata
+from ._sidecars import (
+    CONFIG_NAME,
+    METADATA_NAME,
+    config_key_table,
+    read_config,
+    read_metadata,
+)
 from ._usage import iso_from_mtime, last_access
 
 __all__ = [
@@ -84,13 +90,13 @@ class CacheObject:
     __slots__ = (
         "kind", "location", "key", "hash", "cachetype", "version",
         "scope", "format", "size", "created", "last_access", "referenced",
-        "name", "present",
+        "name", "present", "params",
     )
 
     def __init__(
         self, *, kind, location, key="", hash="", cachetype="", version="",
         scope="", format="", size=0, created="", last_access="",
-        referenced=None, name="", present=True,
+        referenced=None, name="", present=True, params=None,
     ):
         self.kind = kind
         self.location = location
@@ -105,11 +111,13 @@ class CacheObject:
         self.last_access = last_access
         self.referenced = referenced
         # *name* is the friendly display label (a dataset name, or a produced
-        # artifact's registry name); *present* is whether the object is
-        # materialized on disk (always true for enumerated cached artifacts;
-        # false for a manifest dataset not yet fetched).
+        # artifact's cachetype); *present* is whether the object is materialized
+        # on disk (always true for enumerated cached artifacts; false for a
+        # manifest dataset not yet fetched); *params* is the produced variation's
+        # key table (the kwargs it was produced with).
         self.name = name or key
         self.present = present
+        self.params = dict(params) if params else {}
 
     def __repr__(self):
         ref = {True: "referenced", False: "orphan", None: "?"}[self.referenced]
@@ -211,9 +219,10 @@ def enumerate_artifacts(cache_root: str, *, prefix: str = "cached"):
     """
     for artifact_dir, key in find_produced_artifacts(cache_root):
         try:
-            meta = read_config(artifact_dir).get("_META", {})
+            config = read_config(artifact_dir)
         except Exception:  # noqa: BLE001 - already filtered, belt-and-braces
             continue
+        meta = config.get("_META", {})
         cachetype = meta.get("cachetype", "")
         h = meta.get("hash", "")
         version = meta.get("version", "")
@@ -221,6 +230,7 @@ def enumerate_artifacts(cache_root: str, *, prefix: str = "cached"):
             kind="cached",
             location=os.path.abspath(artifact_dir),
             key=key,
+            name=cachetype,                 # the recipe identity is the cachetype
             hash=h,
             cachetype=cachetype,
             version=version,
@@ -231,6 +241,7 @@ def enumerate_artifacts(cache_root: str, *, prefix: str = "cached"):
             size=_dir_size(artifact_dir),
             created=_created(artifact_dir),
             last_access=last_access(artifact_dir),
+            params=config_key_table(config),  # the kwargs that produced it
         )
 
 

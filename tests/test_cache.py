@@ -446,7 +446,7 @@ def test_cached_hit_reregisters_when_index_deleted(cache_root, scope_base):
 
     produce(name="a")
     index_path = os.path.join(os.getcwd(), "cached.toml")
-    assert "produce" in CachedIndex.read(index_path).entries
+    assert CachedIndex.read(index_path).scoped_keys()
 
     # Delete the index by hand; the artifact itself stays on disk.
     os.remove(index_path)
@@ -455,7 +455,8 @@ def test_cached_hit_reregisters_when_index_deleted(cache_root, scope_base):
 
     # A hit (artifact present + valid) self-heals the registry.
     assert produce(name="a") == "hi a"
-    assert "produce" in CachedIndex.read(index_path).entries
+    cts = {r["cachetype"] for r in CachedIndex.read(index_path).recipe_records()}
+    assert "g" in cts
 
 
 def test_cached_hit_does_not_rewrite_index_when_present(cache_root, scope_base):
@@ -474,9 +475,9 @@ def test_cached_hit_does_not_rewrite_index_when_present(cache_root, scope_base):
 
 # ----- spec-v3 scope field ---------------------------------------------------
 
-def test_cached_registers_scope_field(cache_root, scope_base):
-    """The cached.toml entry records the project scope under the ``scope`` key
-    (not the former ``project``)."""
+def test_cached_registers_scope_and_params(cache_root, scope_base):
+    """The cached.toml recipe records the project ``scope`` and each variation's
+    ``params`` (the kwargs it was produced with)."""
     from datamanifest.cache import CachedIndex
     from datamanifest.store.locations import project_id
 
@@ -486,9 +487,9 @@ def test_cached_registers_scope_field(cache_root, scope_base):
 
     produce(name="v")
     index = CachedIndex.read(os.path.join(os.getcwd(), "cached.toml"))
-    entry = index.entries["produce"]
-    assert "project" not in entry
-    assert entry["scope"] == project_id("")
+    rec = {r["cachetype"]: r for r in index.recipe_records()}["t"]
+    assert rec["scope"] == project_id("")
+    assert list(rec["instances"].values()) == [{"name": "v"}]
 
 
 def test_cached_discovers_project_root_for_scope(cache_root, tmp_path, monkeypatch):
@@ -513,7 +514,7 @@ def test_cached_discovers_project_root_for_scope(cache_root, tmp_path, monkeypat
     assert (cache_root / "cached" / "myproj" / "t" / h / "data.txt").exists()
     # cached.toml lands at the discovered project root and records scope=myproj.
     index = CachedIndex.read(str(proj / "cached.toml"))
-    assert index.entries["produce"]["scope"] == "myproj"
+    assert {r["scope"] for r in index.recipe_records()} == {"myproj"}
 
 
 # ----- spec-v3 recipe version ------------------------------------------------

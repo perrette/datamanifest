@@ -53,7 +53,7 @@ def _add_delegate_flags(group):
 # the timestamps double as the spec-v3 ``datamanifest list`` object schema.
 _OBJECT_FIELDS = (
     "kind", "name", "key", "hash", "cachetype", "version", "scope", "format",
-    "size", "location", "referenced", "present", "created", "last-access",
+    "params", "size", "location", "referenced", "present", "created", "last-access",
 )
 _DEFAULT_OBJECT_FIELDS = ("kind", "referenced", "key", "location")
 
@@ -78,6 +78,8 @@ def _get_field(obj, name: str) -> str:
         return {True: "true", False: "false", None: "?"}[val]
     if name == "present":
         return "true" if val else "false"
+    if name == "params":
+        return _fmt_params(val or {})
     return "" if val is None else str(val)
 
 
@@ -114,28 +116,23 @@ def _enumerate_objects(db):
 
     objects = []
 
-    # Produced artifacts under the resolved $cache root, tagged referenced +
-    # named via the project's sibling cached.toml.
+    # Produced artifacts under the resolved $cache root, tagged referenced via
+    # the project's sibling cached.toml (scope-aware reachability).
     cache_root = storage.resolve_selector("$cache")
     prefix = storage.content_prefix("cached")
-    referenced, names_by_id = set(), {}
+    referenced = set()
     base = os.path.dirname(db.datasets_toml) if db.datasets_toml else os.getcwd()
     cached_toml = os.path.join(base or ".", CACHED_INDEX_NAME)
     if os.path.isfile(cached_toml):
         try:
-            idx = CachedIndex.read(cached_toml)
-            referenced = idx.scoped_keys()
-            for nm, e in idx.entries.items():
-                names_by_id[(e.get("scope", ""), e.get("cachetype", ""),
-                             e.get("version", ""), e.get("hash", ""))] = nm
+            referenced = CachedIndex.read(cached_toml).scoped_keys()
         except Exception:  # noqa: BLE001 - an unreadable index roots nothing
-            referenced, names_by_id = set(), {}
+            referenced = set()
     for obj in enumerate_artifacts(cache_root, prefix=prefix):
         # Scope-aware: another project's artifact (different scope) is not ours
-        # even when its cachetype/hash coincide.
-        ident = (obj.scope, obj.cachetype, obj.version, obj.hash)
-        obj.referenced = ident in referenced
-        obj.name = names_by_id.get(ident) or f"{obj.cachetype}/{obj.hash[:12]}"
+        # even when its cachetype/hash coincide. name/params come from the
+        # artifact's own config.toml (set by enumerate_artifacts).
+        obj.referenced = (obj.scope, obj.cachetype, obj.version, obj.hash) in referenced
         objects.append(obj)
 
     # Fetched datasets — present and not-yet-fetched alike (manifest entries are
@@ -247,19 +244,35 @@ def _fit(text, width, *, keep_tail=False) -> str:
     return "…" + text[-(width - 1):] if keep_tail else text[: width - 1] + "…"
 
 
+def _fmt_params(params: dict) -> str:
+    """Compact one-line rendering of a produced variation's key table."""
+    if not params:
+        return "()"
+    return ", ".join(f"{k}={params[k]}" for k in sorted(params))
+
+
 def _render_bare(objects):
     """Plain newline-separated names of the (already filtered) *objects* — the
-    scriptable form selected by ``--bare`` / ``--names``."""
+    scriptable form selected by ``--bare`` / ``--names``. Cached artifacts are
+    deduplicated to one line per recipe (cachetype)."""
+    seen = set()
     for o in objects:
-        print(o.name or o.key)
+        label = o.cachetype if o.kind == "cached" else o.name
+        if label in seen:
+            continue
+        seen.add(label)
+        print(label)
 
 
 def _render_rich(objects):
-    """The default styled ``list`` view of the (already filtered) *objects*: one
-    line per object, fetched datasets and produced artifacts grouped under
-    colour-coded headers, sized to the terminal width with clickable OSC-8
-    ``file://`` locations. Style is independent of the filters that produced
-    *objects* — narrowing the set never changes this layout."""
+    """The default styled ``list`` view of the (already filtered) *objects*.
+
+    Fetched datasets are one styled line each; produced artifacts are **grouped
+    by recipe** (``cachetype`` [+ ``version``]) with each parameter variation
+    listed under it (its short hash — a clickable OSC-8 ``file://`` link — plus
+    the params it was produced with and its size). Colour carries status: green
+    present datasets, red missing, cyan referenced artifacts, yellow orphans.
+    The layout is independent of the filters that produced *objects*."""
     datasets = [o for o in objects if o.kind == "datasets"]
     cached = [o for o in objects if o.kind == "cached"]
 
@@ -270,49 +283,56 @@ def _render_rich(objects):
         print(_paint("Nothing to list.", "dim", on=on))
         return
 
-    name_w = min(max((len(o.name) for o in objects), default=4), 36)
-    name_w = max(name_w, 4)
-    fmt_w, size_w = 8, 9
-    tail_w = max(12, width - (name_w + fmt_w + size_w + 8))
-
-    def emit(glyph, name, fmt, size_str, tail, *, name_styles,
-             tail_styles=("dim",), keep_tail=True, prefix="", link=""):
-        # The name itself links to its on-disk location (clickable file://);
-        # the tail shows the truncated path (also linked) or a status word.
-        uri = f"file://{link}" if link else ""
-        g = _paint(glyph, *name_styles, on=on)
-        n = _osc8(uri, _fit(name, name_w).ljust(name_w), on=on)
-        n = _paint(n, *name_styles, on=on)
-        f = _paint(_fit(fmt or "—", fmt_w).ljust(fmt_w), "dim", on=on)
-        s = _paint(size_str.rjust(size_w), "dim", on=on)
-        tail_fit = _fit(tail, tail_w - len(prefix), keep_tail=keep_tail)
-        t = _paint(_osc8(uri, prefix + tail_fit, on=on), *tail_styles, on=on)
-        print(f"{g} {n}  {f}  {s}  {t}")
-
     if datasets:
         print(_paint("Datasets", "bold", on=on))
+        name_w = min(max((len(d.name) for d in datasets), default=4), 36)
+        tail_w = max(12, width - name_w - 25)
         for d in datasets:
+            uri = f"file://{d.location}" if d.location else ""
+            styles = ("bold", "green") if d.present else ("dim",)
+            g = _paint("●" if d.present else "○", *styles, on=on)
+            n = _paint(_osc8(uri, _fit(d.name, name_w).ljust(name_w), on=on),
+                       *styles, on=on)
+            f = _paint(_fit(d.format or "—", 8).ljust(8), "dim", on=on)
             if d.present:
-                emit("●", d.name, d.format, _fmt_size(d.size),
-                     d.location, name_styles=("bold", "green"), link=d.location)
+                s = _paint(_fmt_size(d.size).rjust(9), "dim", on=on)
+                t = _paint(_osc8(uri, _fit(d.location, tail_w, keep_tail=True),
+                                 on=on), "dim", on=on)
             else:
-                emit("○", d.name, d.format, "—", "missing",
-                     name_styles=("dim",), tail_styles=("red",), keep_tail=False)
+                s = _paint("—".rjust(9), "dim", on=on)
+                t = _paint("missing", "red", on=on)
+            print(f"{g} {n}  {f}  {s}  {t}")
 
     if cached:
         if datasets:
             print()
         print(_paint("Cached", "bold", on=on))
+        groups = {}
         for c in cached:
-            # Referenced artifacts are cyan; orphans (no cached.toml root) are
-            # flagged in yellow — the colour carries the status, no extra column.
-            if c.referenced:
-                emit("◆", c.name, c.format, _fmt_size(c.size),
-                     c.location, name_styles=("bold", "cyan"), link=c.location)
-            else:
-                emit("◆", c.name, c.format, _fmt_size(c.size),
-                     c.location, name_styles=("bold", "yellow"),
-                     tail_styles=("yellow",), prefix="orphan  ", link=c.location)
+            groups.setdefault((c.scope, c.cachetype, c.version), []).append(c)
+        params_w = max(8, width - 35)
+        for key in sorted(groups, key=lambda k: (k[1], k[2], k[0])):
+            _scope, cachetype, version = key
+            insts = sorted(groups[key], key=lambda o: o.hash)
+            fmt = insts[0].format
+            any_ref = any(o.referenced for o in insts)
+            head_styles = ("bold", "cyan") if any_ref else ("bold", "yellow")
+            label = cachetype + (f" @{version}" if version else "")
+            head = _paint("◆ " + label, *head_styles, on=on)
+            meta = _paint(
+                f"  {fmt or '—'}  {len(insts)}×  {_fmt_size(sum(o.size for o in insts))}",
+                "dim", on=on,
+            )
+            print(head + meta)
+            for o in insts:
+                colour = "cyan" if o.referenced else "yellow"
+                uri = f"file://{o.location}" if o.location else ""
+                h = _paint(_osc8(uri, o.hash[:12] or "?", on=on), colour, on=on)
+                p = _paint(_fit(_fmt_params(o.params), params_w).ljust(params_w),
+                           "dim", on=on)
+                s = _paint(_fmt_size(o.size).rjust(9), "dim", on=on)
+                flag = _paint(" orphan", "yellow", on=on) if not o.referenced else ""
+                print(f"    {h}  {p}  {s}{flag}")
 
 
 def _cmd_list(args):

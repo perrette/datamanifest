@@ -327,49 +327,23 @@ def _locate_cached_toml(cached_toml, project_root) -> str:
     return os.path.join(os.getcwd(), CACHED_INDEX_NAME)
 
 
-def _is_registered(
-    cached_toml_path, name, *, cachetype, hash_, scope, version,
-) -> bool:
-    """Whether *cached_toml_path* already lists *name* with a matching identity
-    (``cachetype`` / ``hash`` / ``scope`` / ``version``).
-
-    Used on a cache hit to decide whether the registry needs self-healing: a
-    hand-deleted index, a missing entry, or one pointing elsewhere returns
-    ``False`` so the hit re-registers it.
-    """
-    if not os.path.isfile(cached_toml_path):
-        return False
-    try:
-        entry = CachedIndex.read(cached_toml_path).entries.get(name)
-    except Exception:  # noqa: BLE001 - an unreadable index roots nothing
-        return False
-    if not entry:
-        return False
-    return (
-        entry.get("cachetype", "") == cachetype
-        and entry.get("hash", "") == hash_
-        and entry.get("scope", "") == scope
-        and entry.get("version", "") == version
-    )
-
-
 def _register_produced(
-    cached_toml_path, name, *, cachetype, hash_, ref, format, scope="",
+    cached_toml_path, *, cachetype, hash_, params, ref, format, scope="",
     version="",
 ) -> str:
-    """Register a freshly-produced artifact into its ``cached.toml`` and record
+    """Register a freshly-produced variation into its ``cached.toml`` and record
     that index in the depot usage log. Returns the index path written.
 
-    Reads any existing index (so a register adds/updates one entry without
-    dropping the rest), registers the portable key (plus the spec-v3
-    *scope* and recipe *version* when set), writes canonically, and
-    stamps the usage log so GC can discover this root.
+    Reads any existing index (so a register **adds** this variation without
+    dropping the rest), records the parameter ``hash`` + ``params`` under the
+    recipe ``(scope, cachetype, version)``, writes canonically, and stamps the
+    usage log so GC can discover this root.
     """
     index = CachedIndex.read_or_empty(cached_toml_path)
     index.register(
-        name,
         cachetype=cachetype,
         hash=hash_,
+        params=params,
         ref=ref,
         format=format or "",
         store=DEFAULT_STORE,
@@ -379,6 +353,37 @@ def _register_produced(
     written = index.write(cached_toml_path)
     record_path(written)
     return written
+
+
+def _heal_on_hit(
+    cached_toml_path, *, cachetype, hash_, params, ref, format, scope, version,
+) -> None:
+    """Self-heal the registry on a cache hit (best-effort, never raises).
+
+    If this variation is missing from ``cached.toml`` (the index was deleted by
+    hand, or never written), re-register it; if the variation is present but the
+    recipe's ``ref`` has drifted (the producing function was refactored), refresh
+    it. Otherwise do nothing. A read-only or malformed index must never break a
+    hit, so any error is swallowed.
+    """
+    try:
+        index = CachedIndex.read_or_empty(cached_toml_path)
+        present = index.has_instance(
+            scope=scope, cachetype=cachetype, version=version, hash=hash_,
+        )
+        ref_current = index.ref_of(
+            scope=scope, cachetype=cachetype, version=version,
+        ) == ref
+        if present and ref_current:
+            return
+        index.register(
+            cachetype=cachetype, hash=hash_, params=params, ref=ref,
+            format=format or "", store=DEFAULT_STORE, scope=scope,
+            version=version,
+        )
+        record_path(index.write(cached_toml_path))
+    except Exception:  # noqa: BLE001 - a hit must never fail on index issues
+        pass
 
 
 def cached(
@@ -501,7 +506,6 @@ def cached(
             # The portable registry coordinates (shared by the hit self-heal and
             # the miss registration).
             ref = f"{fn.__module__}:{fn.__qualname__}"
-            reg_name = name or fn.__name__
             scope = locations.project_id(root)
             index_path = _locate_cached_toml(cached_toml, root)
 
@@ -517,34 +521,24 @@ def cached(
                 and config_is_valid(artifact_dir)
                 and os.path.exists(data_path)
             ):
-                # Self-heal the registry: if the artifact is on disk but its
-                # cached.toml entry is gone (index deleted by hand, or never
-                # written), re-register it so the index rebuilds itself just by
-                # re-running. A read-only index must never break a hit.
-                if not _is_registered(
-                    index_path, reg_name, cachetype=ct, hash_=hash_,
-                    scope=scope, version=version,
-                ):
-                    try:
-                        _register_produced(
-                            index_path, reg_name, cachetype=ct,
-                            hash_=hash_, ref=ref, format=fmt, scope=scope,
-                            version=version,
-                        )
-                    except OSError:
-                        pass
+                # Self-heal the registry: register this variation if the index
+                # lost it, or refresh a drifted recipe ref. Never breaks a hit.
+                _heal_on_hit(
+                    index_path, cachetype=ct, hash_=hash_, params=key_table,
+                    ref=ref, format=fmt, scope=scope, version=version,
+                )
                 return _load_value(data_path, fmt)
 
             result = fn(**kwargs)
             write_value = _default_writer(fmt)
             data_filename = _data_name(basename, fmt)
 
-            # Register the produced artifact in the project's cached.toml (the
+            # Register the produced variation in the project's cached.toml (the
             # liveness root for GC) and record that index in the depot usage log.
             written_index = _register_produced(
-                index_path, reg_name,
-                cachetype=ct, hash_=hash_, ref=ref, format=fmt,
-                scope=scope, version=version,
+                index_path,
+                cachetype=ct, hash_=hash_, params=key_table, ref=ref,
+                format=fmt, scope=scope, version=version,
             )
 
             def write_fn(tmp: str) -> None:

@@ -285,11 +285,11 @@ def test_default_list_hides_unlisted_cached_unless_all(tmp_path):
     assert "mydata" in default.stdout
     assert "mt/" not in default.stdout
 
-    # --all surfaces the orphan, flagged.
+    # --all surfaces the orphan, flagged (grouped under its recipe cachetype).
     allruns = _run("list", "--all", env=env)
     assert allruns.returncode == 0, allruns.stderr
     assert "mydata" in allruns.stdout
-    assert "mt/" in allruns.stdout
+    assert "mt" in allruns.stdout              # the recipe (cachetype) header
     assert "orphan" in allruns.stdout
 
 
@@ -340,10 +340,10 @@ def test_list_bare_prints_plain_names(tmp_path):
     lines = [ln for ln in result.stdout.splitlines() if ln.strip()]
     assert lines == ["mydata"]  # no headers, no styling; orphan hidden by default
 
-    # --all --bare includes the orphan's name (cachetype/short-hash).
+    # --all --bare includes the orphan recipe's name (the cachetype), deduped.
     allbare = _run("list", "--all", "--bare", env=env)
     assert allbare.returncode == 0, allbare.stderr
-    assert any(ln.startswith("mt/") for ln in allbare.stdout.splitlines())
+    assert "mt" in allbare.stdout.split()
     assert "Cached" not in allbare.stdout
 
 

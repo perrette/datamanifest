@@ -49,60 +49,74 @@ def usage_log(tmp_path, monkeypatch):
 
 # ----- CachedIndex round-trip (spec fixture schema) --------------------------
 
-# The two entries of the spec fixture
-# (datamanifest.toml/tests/fixtures/cached_index.toml).
-_FIX_ENTRIES = {
-    "load_20c_esm_anomaly": {
+# Two recipes for the index round-trip (schema 2: nested by cachetype, with
+# per-variation instances carrying hash + params).
+_FIX_RECIPES = [
+    {
         "cachetype": "esm_20c_anomaly",
         "hash": "83425a30d111562d46c1fce9de7618ea7f1f54e1be72e086cba0ac63c6f2ce9b",
+        "params": {"grid": "5x5"},
         "ref": "lgmpre.data:load_20c_esm_anomaly",
         "format": "nc",
         "store": "$cache",
     },
-    "load_lgm_esm_anomaly": {
+    {
         "cachetype": "esm_lgm_anomaly",
         "hash": "40384c4db019d383728340a2d8c5db9c96eb41db0231e93dd944091ca180633c",
+        "params": {},
         "ref": "lgmpre.data:load_lgm_esm_anomaly",
         "format": "nc",
         "store": "$cache",
     },
-}
+]
 
 
 def _write_fixture_index(path):
     index = CachedIndex(path=str(path))
-    for name, e in _FIX_ENTRIES.items():
+    for r in _FIX_RECIPES:
         index.register(
-            name,
-            cachetype=e["cachetype"], hash=e["hash"],
-            ref=e["ref"], format=e["format"], store=e["store"],
+            cachetype=r["cachetype"], hash=r["hash"], params=r["params"],
+            ref=r["ref"], format=r["format"], store=r["store"],
         )
     return index.write()
 
 
-def test_cached_index_round_trip_entries(tmp_path):
+def test_cached_index_round_trip_recipes(tmp_path):
     p = _write_fixture_index(tmp_path / "cached.toml")
     back = CachedIndex.read(p)
-    assert back.entries == _FIX_ENTRIES
-    assert back.keys() == {
-        "esm_20c_anomaly/" + _FIX_ENTRIES["load_20c_esm_anomaly"]["hash"],
-        "esm_lgm_anomaly/" + _FIX_ENTRIES["load_lgm_esm_anomaly"]["hash"],
+    recs = {r["cachetype"]: r for r in back.recipe_records()}
+    assert set(recs) == {"esm_20c_anomaly", "esm_lgm_anomaly"}
+    assert recs["esm_20c_anomaly"]["ref"] == "lgmpre.data:load_20c_esm_anomaly"
+    assert recs["esm_20c_anomaly"]["instances"] == {
+        _FIX_RECIPES[0]["hash"]: {"grid": "5x5"}
+    }
+    assert back.scoped_keys() == {
+        ("", "esm_20c_anomaly", "", _FIX_RECIPES[0]["hash"]),
+        ("", "esm_lgm_anomaly", "", _FIX_RECIPES[1]["hash"]),
     }
 
 
 def test_cached_index_write_is_canonical(tmp_path):
     p = _write_fixture_index(tmp_path / "cached.toml")
     text = (tmp_path / "cached.toml").read_text()
-    # [_META] first (uppercase '_' sorts before lowercase names), then the two
-    # tables in name order; within a table the five fields are sorted.
-    assert text.index("[_META]") < text.index("[load_20c_esm_anomaly]")
-    assert text.index("[load_20c_esm_anomaly]") < text.index("[load_lgm_esm_anomaly]")
-    block = text.split("[load_20c_esm_anomaly]", 1)[1].split("[load_lgm", 1)[0]
-    keys = [ln.split("=")[0].strip() for ln in block.splitlines() if "=" in ln]
-    assert keys == sorted(keys) == ["cachetype", "format", "hash", "ref", "store"]
+    # [_META] first, then [[produced]] recipe tables sorted by cachetype.
+    assert text.index("[_META]") < text.index("[[produced]]")
+    assert text.index("esm_20c_anomaly") < text.index("esm_lgm_anomaly")
     # Idempotent: a second write of the read-back index is byte-identical.
-    again = CachedIndex.read(p).write(tmp_path / "again.toml")
+    CachedIndex.read(p).write(tmp_path / "again.toml")
     assert (tmp_path / "again.toml").read_text() == text
+
+
+def test_cached_index_accumulates_variations(tmp_path):
+    # Registering the same recipe with different params accumulates instances —
+    # it does not overwrite (the core fix).
+    index = CachedIndex(path=str(tmp_path / "cached.toml"))
+    index.register(cachetype="c", hash="h1", params={"n": 1}, ref="m:f")
+    index.register(cachetype="c", hash="h2", params={"n": 2}, ref="m:f")
+    recs = index.recipe_records()
+    assert len(recs) == 1
+    assert recs[0]["instances"] == {"h1": {"n": 1}, "h2": {"n": 2}}
+    assert index.scoped_keys() == {("", "c", "", "h1"), ("", "c", "", "h2")}
 
 
 # ----- @cached produce registers in a sibling cached.toml --------------------
@@ -124,19 +138,22 @@ def test_cached_produce_registers_and_back_points(cache_root, usage_log, tmp_pat
     index_path = proj / "cached.toml"
     assert index_path.is_file()
     index = CachedIndex.read(str(index_path))
-    assert "make_greeting" in index.entries
-    entry = index.entries["make_greeting"]
-    assert entry["cachetype"] == "greet"
+    recs = {r["cachetype"]: r for r in index.recipe_records()}
+    assert "greet" in recs
+    rec = recs["greet"]
     # ref = "<module>:<qualname>" (qualname includes the enclosing scope).
-    assert ":" in entry["ref"]
-    assert entry["ref"].split(":", 1)[1].endswith("make_greeting")
-    assert entry["store"] == "$cache"
-    # spec-v3: the entry records the project-id scope it was produced under.
-    assert entry["scope"] == project_id(str(proj))
+    assert ":" in rec["ref"]
+    assert rec["ref"].split(":", 1)[1].endswith("make_greeting")
+    assert rec["store"] == "$cache"
+    # spec-v3: the recipe records the project-id scope it was produced under.
+    assert rec["scope"] == project_id(str(proj))
+    # one instance, recording the params it was produced with.
+    assert list(rec["instances"].values()) == [{"who": "x"}]
+    artifact_hash = next(iter(rec["instances"]))
 
     # Artifact metadata back-points at that index (audit only). spec-v3 layout:
     # <cache>/cached/<project-id>/<cachetype>/<hash>.
-    artifact = cache_root / "cached" / project_id(str(proj)) / "greet" / entry["hash"]
+    artifact = cache_root / "cached" / project_id(str(proj)) / "greet" / artifact_hash
     md = read_metadata(str(artifact))
     assert md["origin"]["cached_toml"] == os.path.abspath(str(index_path))
 
@@ -156,7 +173,8 @@ def test_cached_hit_does_not_duplicate_or_restamp(cache_root, usage_log, tmp_pat
 
     make_greeting(who="x")
     index_path = proj / "cached.toml"
-    artifact_hash = CachedIndex.read(str(index_path)).entries["make_greeting"]["hash"]
+    _rec = {r["cachetype"]: r for r in CachedIndex.read(str(index_path)).recipe_records()}["greet"]
+    artifact_hash = next(iter(_rec["instances"]))
     metadata_path = (
         cache_root / "cached" / project_id(str(proj)) / "greet"
         / artifact_hash / "metadata.toml"
