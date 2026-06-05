@@ -13,6 +13,7 @@ import argparse
 import datetime
 import os
 import shutil
+import socket
 import sys
 
 from . import __version__
@@ -992,6 +993,113 @@ def _cmd_where(args):
     print(f"datasets_folder={db.datasets_folder}")
 
 
+# ----- storage config editing ([_STORAGE]) -----------------------------------
+
+def _valid_storage_field(field: str) -> bool:
+    """Whether *field* is a settable ``[_STORAGE]`` key — a folder field
+    (``datasets_dir`` / ``datacache_dir``) or a user ``$symbol`` name (a plain
+    identifier). Reserved ``_``-prefixed keys (``_HOST`` / ``_META`` …) are not."""
+    return bool(field) and not field.startswith("_") and field.replace("_", "a").isalnum()
+
+
+def _storage_db(action: str):
+    """The active database for a ``storage`` edit, or exit with a clear error when
+    there is no manifest to edit."""
+    db = _get_db()
+    if not db.datasets_toml:
+        print(f"Error: no manifest found to {action} (run inside a project with a "
+              "datamanifest.toml).", file=sys.stderr)
+        sys.exit(1)
+    return db
+
+
+def _cmd_storage_set(args):
+    """Set a ``[_STORAGE]`` field. By default it applies to **this host** (written
+    under ``[_STORAGE._HOST."<hostname>"]``); ``--host GLOB`` targets a host glob,
+    ``--all-hosts`` the project-wide base. Edits the manifest (the committed spec)."""
+    if not _valid_storage_field(args.field):
+        print(f"Error: invalid field name {args.field!r} (use datasets_dir / "
+              "datacache_dir or a $symbol name).", file=sys.stderr)
+        sys.exit(1)
+    db = _storage_db("edit")
+    storage = db.extra.setdefault("_STORAGE", {})
+    if args.all_hosts:
+        storage[args.field] = args.value
+        where = "all hosts"
+    else:
+        host = args.host or socket.gethostname()
+        storage.setdefault("_HOST", {}).setdefault(host, {})[args.field] = args.value
+        where = f'host "{host}"' + ("" if args.host else " (this machine)")
+    db.write(db.datasets_toml)
+    print(f"Set {args.field} = {args.value!r} for {where}.")
+
+
+def _cmd_storage_unset(args):
+    """Remove a ``[_STORAGE]`` field (same targeting as ``set``: this host by
+    default, ``--host GLOB`` or ``--all-hosts``). Prunes now-empty host tables."""
+    db = _storage_db("edit")
+    storage = db.extra.get("_STORAGE", {})
+    removed = False
+    if args.all_hosts:
+        removed = storage.pop(args.field, None) is not None
+        where = "all hosts"
+    else:
+        host = args.host or socket.gethostname()
+        host_tbl = storage.get("_HOST", {})
+        if host in host_tbl and args.field in host_tbl[host]:
+            del host_tbl[host][args.field]
+            removed = True
+            if not host_tbl[host]:
+                del host_tbl[host]
+            if not host_tbl:
+                storage.pop("_HOST", None)
+        where = f'host "{host}"'
+    if removed:
+        db.write(db.datasets_toml)
+        print(f"Unset {args.field} for {where}.")
+    else:
+        print(f"Nothing to unset: {args.field} not set for {where}.")
+
+
+def _cmd_storage_show(args):
+    """Show the storage config resolved for this host, plus the raw rules."""
+    from . import storage as storage_mod
+
+    db = _get_db()
+    cfg = db.extra.get("_STORAGE", {})
+    root = db.get_project_root()
+    host = socket.gethostname()
+    on = _color_enabled()
+
+    print(_paint(f"Host: {host}", "bold", on=on))
+    print(_paint("Resolved for this host:", "bold", on=on))
+    for field in ("datasets_dir", "datacache_dir"):
+        try:
+            resolved = getattr(storage_mod, field)(
+                project_root=root, storage_config=cfg,
+            )
+        except Exception as e:  # noqa: BLE001 - report an unresolved symbol inline
+            resolved = f"<unresolved: {e}>"
+        print(f"  {field:<13} -> {resolved}")
+
+    print(_paint("[_STORAGE] rules:", "bold", on=on))
+    base = {k: v for k, v in cfg.items() if k != "_HOST"}
+    if not base and not cfg.get("_HOST"):
+        print(_paint("  (none — repo-local defaults: ./datasets, ./cached)", "dim", on=on))
+    for k, v in base.items():
+        print(f"  {k} = {v!r}")
+    for pattern, mapping in cfg.get("_HOST", {}).items():
+        if isinstance(mapping, dict):
+            for k, v in mapping.items():
+                marker = "  ←matches" if _host_matches(host, pattern) else ""
+                print(f'  [_HOST "{pattern}"] {k} = {v!r}{_paint(marker, "green", on=on)}')
+
+
+def _host_matches(host: str, pattern: str) -> bool:
+    import fnmatch
+    return fnmatch.fnmatch(host, pattern)
+
+
 def _cmd_format(args):
     """Rewrite a manifest in canonical form (the cross-tool byte-identity format).
 
@@ -1343,6 +1451,53 @@ def main():
         help="Preview the reconciliation without writing the state file",
     )
     p_refresh.set_defaults(func=_cmd_refresh)
+
+    # storage (edit [_STORAGE] without hand-writing the _HOST syntax)
+    p_storage = subparsers.add_parser(
+        "storage",
+        help="Show or edit the manifest's [_STORAGE] config (folders + per-host "
+             "overrides) without hand-editing the _HOST syntax",
+        description=(
+            "Show or edit [_STORAGE] in datamanifest.toml. `set`/`unset` target "
+            "THIS host by default (written under [_STORAGE._HOST.\"<hostname>\"]); "
+            "--host GLOB targets a host pattern, --all-hosts the project-wide "
+            "base. `show` (the default) prints the config resolved for this host "
+            "plus the raw rules."
+        ),
+    )
+    storage_sub = p_storage.add_subparsers(dest="storage_cmd", metavar="{show,set,unset}")
+
+    p_st_show = storage_sub.add_parser(
+        "show", help="Show storage config resolved for this host + the raw rules")
+    p_st_show.set_defaults(func=_cmd_storage_show)
+
+    def _add_target_flags(p):
+        excl = p.add_mutually_exclusive_group()
+        excl.add_argument(
+            "--host", metavar="GLOB",
+            help="Apply on hosts matching GLOB (fnmatch); default: this host only",
+        )
+        excl.add_argument(
+            "--all-hosts", action="store_true",
+            help="Apply as the project-wide base value (all hosts)",
+        )
+
+    p_st_set = storage_sub.add_parser(
+        "set", help="Set a folder field (datasets_dir/datacache_dir) or a $symbol")
+    p_st_set.add_argument("field", metavar="FIELD",
+                          help="datasets_dir, datacache_dir, or a user $symbol name")
+    p_st_set.add_argument("value", metavar="VALUE",
+                          help="Path expression (may use $user_data_dir, $repo, $USER, …)")
+    _add_target_flags(p_st_set)
+    p_st_set.set_defaults(func=_cmd_storage_set)
+
+    p_st_unset = storage_sub.add_parser(
+        "unset", help="Remove a storage field (this host by default)")
+    p_st_unset.add_argument("field", metavar="FIELD")
+    _add_target_flags(p_st_unset)
+    p_st_unset.set_defaults(func=_cmd_storage_unset)
+
+    p_storage.set_defaults(func=_cmd_storage_show)   # bare `storage` → show
 
     # format
     p_format = subparsers.add_parser(

@@ -101,6 +101,7 @@ datamanifest COMMAND [OPTIONS]
 | `update-checksums [NAME ...] [--dry-run]` | Recompute stored checksums from what's on disk |
 | `init [--folder PATH] [--force]` | Create a fresh `datasets.toml` in the current directory |
 | `where` | Print active `datasets_toml` and `datasets_folder` paths |
+| `storage [show]` / `storage set FIELD VALUE [--host GLOB\|--all-hosts]` / `storage unset FIELD [...]` | Show or edit `[_STORAGE]` without hand-writing the `_HOST` syntax. `set`/`unset` target **this host** by default (a `[_STORAGE._HOST."<hostname>"]` override); `--host GLOB` targets a host pattern, `--all-hosts` the project-wide base. `FIELD` is `datasets_dir`/`datacache_dir` or a user `$symbol` |
 | `migrate FILE [--dry-run]` | Reshape a spec-v3 manifest's `[_STORAGE]` to the spec-v4 two-field model: write `datasets_dir`/`datacache_dir` at their defaults, drop the retired keys, carry `local_path` → `storage_path`. Moves no bytes |
 | `push ID SSH_HOST [--dry-run] [--batch]` | Transfer a stored object **to** an SSH host (rsync over ssh), addressed by id (a dataset's `key`, or `cachetype[/version]/hash`) |
 | `pull ID SSH_HOST [--dry-run] [--batch]` | Transfer a stored object **from** an SSH host (rsync over ssh), same addressing |
@@ -227,6 +228,16 @@ uri = "https://example.com/bigsim.nc"
 [hpc_output]                            # per-dataset override (a path expression)
 storage_path = "$scratch/results/$key"
 format = "nc"
+```
+
+You rarely need to write the `_HOST` syntax by hand — `datamanifest storage`
+edits `[_STORAGE]` for you, defaulting to **this host**:
+
+```bash
+datamanifest storage set datacache_dir "/scratch/$USER/cache"   # this host only
+datamanifest storage set datacache_dir "$user_cache_dir/myproj" --all-hosts  # project default
+datamanifest storage set datasets_dir /fast/data --host "login*.hpc.edu"     # a host glob
+datamanifest storage                  # show the config resolved for this host + the raw rules
 ```
 
 **Resolution ladder** for any field/symbol *name* (first match wins):

@@ -1,6 +1,7 @@
 """Subprocess-based smoke tests for the datamanifest CLI (Item 18)."""
 
 import os
+import socket
 import subprocess
 import sys
 
@@ -50,7 +51,7 @@ def test_version():
 def test_help_lists_all_subcommands():
     result = _run("--help")
     assert result.returncode == 0
-    for sub in ["list", "download", "path", "add", "remove", "show", "verify", "update-checksums", "init", "where", "migrate", "format"]:
+    for sub in ["list", "download", "path", "add", "remove", "show", "verify", "update-checksums", "init", "where", "migrate", "refresh", "storage", "format"]:
         assert sub in result.stdout, f"subcommand {sub!r} missing from --help output"
 
 
@@ -557,3 +558,73 @@ def test_format_in_place(tmp_path):
     assert result.returncode == 0
     text = src.read_text()
     assert text.index("[a]") < text.index("[b]")
+
+
+# ----- storage (edit [_STORAGE] without hand-writing _HOST) -----
+
+def _load_toml(path):
+    try:
+        import tomllib
+    except ModuleNotFoundError:  # Python < 3.11
+        import tomli as tomllib
+    with open(path, "rb") as f:
+        return tomllib.load(f)
+
+
+def _storage_project(tmp_path):
+    toml = tmp_path / "datamanifest.toml"
+    toml.write_text("[_META]\nschema = 1\n")
+    return toml
+
+
+def test_storage_set_all_hosts_writes_base(tmp_path):
+    toml = _storage_project(tmp_path)
+    r = _run("storage", "set", "datacache_dir", "cached", "--all-hosts",
+             env=_env_with_toml(toml))
+    assert r.returncode == 0, r.stderr
+    assert _load_toml(toml)["_STORAGE"]["datacache_dir"] == "cached"
+
+
+def test_storage_set_host_glob(tmp_path):
+    toml = _storage_project(tmp_path)
+    r = _run("storage", "set", "datasets_dir", "/scratch/data",
+             "--host", "login*.hpc.edu", env=_env_with_toml(toml))
+    assert r.returncode == 0, r.stderr
+    host = _load_toml(toml)["_STORAGE"]["_HOST"]["login*.hpc.edu"]
+    assert host["datasets_dir"] == "/scratch/data"
+
+
+def test_storage_set_defaults_to_this_host(tmp_path):
+    toml = _storage_project(tmp_path)
+    r = _run("storage", "set", "datacache_dir", "/fast", env=_env_with_toml(toml))
+    assert r.returncode == 0, r.stderr
+    host = socket.gethostname()
+    assert _load_toml(toml)["_STORAGE"]["_HOST"][host]["datacache_dir"] == "/fast"
+
+
+def test_storage_unset_removes_and_prunes(tmp_path):
+    toml = _storage_project(tmp_path)
+    env = _env_with_toml(toml)
+    _run("storage", "set", "datacache_dir", "/fast", env=env)        # this host
+    r = _run("storage", "unset", "datacache_dir", env=env)
+    assert r.returncode == 0, r.stderr
+    # The empty host table (and _HOST) are pruned.
+    assert "_HOST" not in _load_toml(toml).get("_STORAGE", {})
+
+
+def test_storage_set_rejects_reserved_field(tmp_path):
+    toml = _storage_project(tmp_path)
+    r = _run("storage", "set", "_HOST", "x", "--all-hosts", env=_env_with_toml(toml))
+    assert r.returncode != 0
+    assert "invalid field" in (r.stdout + r.stderr).lower()
+
+
+def test_storage_show_resolves_for_this_host(tmp_path):
+    toml = _storage_project(tmp_path)
+    env = _env_with_toml(toml)
+    _run("storage", "set", "datasets_dir", "$user_data_dir/myproj", "--all-hosts",
+         env=env)
+    r = _run("storage", "show", env=env)
+    assert r.returncode == 0, r.stderr
+    assert "Resolved for this host" in r.stdout
+    assert "myproj" in r.stdout                       # resolved, $user_data_dir expanded
