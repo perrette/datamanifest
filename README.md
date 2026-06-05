@@ -122,15 +122,16 @@ datamanifest update-checksums           # recompute them after regenerating data
 python analysis.py --data "$(datamanifest path file.nc)"   # composable in shell
 ```
 
-A concrete run:
+A concrete run — the HadCRUT5 global temperature series and the Mauna Loa CO₂
+record:
 
 ```console
-$ datamanifest add https://raw.githubusercontent.com/mwaskom/seaborn-data/master/iris.csv --name iris
-$ datamanifest add https://raw.githubusercontent.com/mwaskom/seaborn-data/master/penguins.csv --name penguins
+$ datamanifest add "https://www.metoffice.gov.uk/hadobs/hadcrut5/data/HadCRUT.5.0.2.0/analysis/diagnostics/HadCRUT.5.0.2.0.analysis.summary_series.global.annual.csv" --name temperature
+$ datamanifest add "https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv" --name co2
 $ datamanifest list
 Datasets
-● iris      csv         3.8 KiB  …ntent.com/mwaskom/seaborn-data/master/iris.csv
-● penguins  csv        13.2 KiB  …t.com/mwaskom/seaborn-data/master/penguins.csv
+● co2          csv         3.1 KiB  …webdata/ccgg/trends/co2/co2_annmean_mlo.csv
+● temperature  csv         6.9 KiB  …0.analysis.summary_series.global.annual.csv
 
 Cached
 ◆ myproj.load_anomaly  pickle  2×  768 B
@@ -138,9 +139,10 @@ Cached
     50f04896d3ee  grid=5x5                                           382 B
 ```
 
-The **Cached** group lists the `load_anomaly(grid=…)` results from the
-[`@cached` example](#use-it-from-your-code) above, grouped by function with
-their parameters.
+`temperature` is now loadable from code — `datamanifest.load_dataset("temperature")`,
+as in the [API example](#use-it-from-your-code) above — and the **Cached** group
+lists the `load_anomaly(grid=…)` results from the same section, grouped by
+function with their parameters.
 
 ### Repair: reassociate data on disk
 
