@@ -52,8 +52,9 @@ def _add_delegate_flags(group):
 # Fields a maintenance object exposes, in display order. ``key``/``hash`` and
 # the timestamps double as the spec-v3 ``datamanifest list`` object schema.
 _OBJECT_FIELDS = (
-    "kind", "name", "key", "hash", "cachetype", "version", "scope", "format",
-    "params", "size", "location", "referenced", "present", "created", "last-access",
+    "kind", "name", "key", "hash", "cachetype", "version", "storage-path",
+    "format", "params", "size", "location", "referenced", "present", "created",
+    "last-access",
 )
 _DEFAULT_OBJECT_FIELDS = ("kind", "referenced", "key", "location")
 
@@ -72,7 +73,7 @@ def _object_size(path: str) -> int:
 
 def _get_field(obj, name: str) -> str:
     """Render the maintenance field *name* of *obj* for display."""
-    attr = "last_access" if name == "last-access" else name
+    attr = name.replace("-", "_")
     val = getattr(obj, attr, "")
     if name == "referenced":
         return {True: "true", False: "false", None: "?"}[val]
@@ -102,11 +103,11 @@ def _enumerate_objects(db):
     fetched datasets (fetch layer) as a single list of objects.
 
     Reachability is resolved here — the one place that bridges both layers: a
-    produced artifact is ``referenced`` iff its ``(scope, cachetype, version,
-    hash)`` is rooted (scope-aware) by the project's ``cached.toml``; a fetched
-    dataset is referenced by its manifest entry. Both **present** and not-yet-
-    fetched datasets are included (``present`` tells them apart). The cache-layer
-    enumeration itself imports only ``store``.
+    produced artifact is ``referenced`` iff its ``(cachetype, version, hash)`` is
+    rooted by the project's ``cached.toml``; a fetched dataset is referenced by
+    its manifest entry. Both **present** and not-yet-fetched datasets are
+    included (``present`` tells them apart). The cache-layer enumeration itself
+    imports only ``store``.
     """
     from . import storage
     from .cache import CACHED_INDEX_NAME, CachedIndex, enumerate_artifacts
@@ -116,23 +117,23 @@ def _enumerate_objects(db):
 
     objects = []
 
-    # Produced artifacts under the resolved $cache root, tagged referenced via
-    # the project's sibling cached.toml (scope-aware reachability).
-    cache_root = storage.resolve_selector("$cache")
-    prefix = storage.content_prefix("cached")
+    # Produced artifacts under the resolved datacache_dir, tagged referenced via
+    # the project's sibling cached.toml ((cachetype, version, hash) reachability).
+    cache_root = storage.datacache_dir(
+        project_root=db.get_project_root(), storage_config=db.storage_config,
+    )
     referenced = set()
     base = os.path.dirname(db.datasets_toml) if db.datasets_toml else os.getcwd()
     cached_toml = os.path.join(base or ".", CACHED_INDEX_NAME)
     if os.path.isfile(cached_toml):
         try:
-            referenced = CachedIndex.read(cached_toml).scoped_keys()
+            referenced = CachedIndex.read(cached_toml).reachable_keys()
         except Exception:  # noqa: BLE001 - an unreadable index roots nothing
             referenced = set()
-    for obj in enumerate_artifacts(cache_root, prefix=prefix):
-        # Scope-aware: another project's artifact (different scope) is not ours
-        # even when its cachetype/hash coincide. name/params come from the
-        # artifact's own config.toml (set by enumerate_artifacts).
-        obj.referenced = (obj.scope, obj.cachetype, obj.version, obj.hash) in referenced
+    for obj in enumerate_artifacts(cache_root):
+        # name/params come from the artifact's own config.toml (set by
+        # enumerate_artifacts).
+        obj.referenced = (obj.cachetype, obj.version, obj.hash) in referenced
         objects.append(obj)
 
     # Fetched datasets — present and not-yet-fetched alike (manifest entries are
@@ -155,6 +156,7 @@ def _enumerate_objects(db):
             created=iso_from_mtime(path) if present else "",
             last_access=last_access(path) if present else "",
             referenced=True,
+            storage_path=getattr(entry, "storage_path", "") or "",
         ))
     return objects
 
@@ -163,17 +165,15 @@ def _filter_objects(objects, args):
     """Apply the ``list`` *filter* flags to *objects* — narrowing only, never a
     change of output style (the renderer is chosen separately).
 
-    Filters: ``--kind`` / ``--scope`` / ``--format`` / ``--older-than`` (object
-    attributes); ``--present`` / ``--missing`` (fetched-dataset presence);
-    ``--orphan`` (only unreferenced produced artifacts). By default a produced
-    artifact this project's ``cached.toml`` does not root is hidden — surfaced by
-    ``--all`` (with datasets) or ``--orphan`` (orphans only).
+    Filters: ``--kind`` / ``--format`` / ``--older-than`` (object attributes);
+    ``--present`` / ``--missing`` (fetched-dataset presence); ``--orphan`` (only
+    unreferenced produced artifacts). By default a produced artifact this
+    project's ``cached.toml`` does not root is hidden — surfaced by ``--all``
+    (with datasets) or ``--orphan`` (orphans only).
     """
     out = objects
     if args.kind:
         out = [o for o in out if o.kind == args.kind]
-    if args.scope is not None:
-        out = [o for o in out if o.scope == args.scope]
     if args.format:
         out = [o for o in out if o.format == args.format]
     if getattr(args, "present", False):
@@ -301,7 +301,11 @@ def _render_rich(objects):
             else:
                 s = _paint("—".rjust(9), "dim", on=on)
                 t = _paint("missing", "red", on=on)
-            print(f"{g} {n}  {f}  {s}  {t}")
+            # Flag datasets that deviate from the global $datasets_dir/$key
+            # default (a custom / user-managed storage_path).
+            m = (_paint(" ⚑custom", "yellow", on=on)
+                 if getattr(d, "storage_path", "") else "")
+            print(f"{g} {n}  {f}  {s}  {t}{m}")
 
     if cached:
         if datasets:
@@ -309,10 +313,10 @@ def _render_rich(objects):
         print(_paint("Cached", "bold", on=on))
         groups = {}
         for c in cached:
-            groups.setdefault((c.scope, c.cachetype, c.version), []).append(c)
+            groups.setdefault((c.cachetype, c.version), []).append(c)
         params_w = max(8, width - 35)
-        for key in sorted(groups, key=lambda k: (k[1], k[2], k[0])):
-            _scope, cachetype, version = key
+        for key in sorted(groups):
+            cachetype, version = key
             insts = sorted(groups[key], key=lambda o: o.hash)
             fmt = insts[0].format
             any_ref = any(o.referenced for o in insts)
@@ -360,8 +364,9 @@ def _cmd_list(args):
                 sync_objects.append(sync.sync_object_from_location(
                     db, kind=obj.kind, ident=obj.key, location=obj.location,
                 ))
-            except sync.RemoteRepoError as e:
-                print(f"Skipped ($repo, out of scope): {obj.key}", file=sys.stderr)
+            except sync.RemoteRepoError:
+                print(f"Skipped (local, out of scope for sync): {obj.key}",
+                      file=sys.stderr)
                 continue
         _do_transfer(db, sync_objects, host, direction, args)
         return
@@ -700,18 +705,17 @@ def _parse_duration(text: str) -> float:
 
 
 def _cmd_migrate(args):
-    from .database import Database, migrate_v0_to_v1, migrate_v1_to_v2
+    """Freeze a spec-v3 manifest's storage locations into the spec-v4 two-field
+    model (datasets_dir / datacache_dir + per-dataset storage_path). Moves no
+    bytes; see :mod:`datamanifest.migrate`."""
+    from .migrate import migrate_manifest
 
     toml_path = os.path.abspath(args.file)
     if not os.path.isfile(toml_path):
         print(f"Error: {toml_path} not found.", file=sys.stderr)
         sys.exit(1)
 
-    db = Database(datasets_toml=toml_path, persist=False)
-    migrate_v0_to_v1(db)
-    migrate_v1_to_v2(db)
-    db.write(toml_path)
-    print(f"Migrated: {toml_path}")
+    print(migrate_manifest(toml_path, dry_run=args.dry_run))
 
 
 # ----- argument parser -----
@@ -766,10 +770,6 @@ def main():
     obj_group.add_argument(
         "--kind", choices=["datasets", "cached"],
         help="Only objects of this kind (fetched datasets / produced artifacts)",
-    )
-    obj_group.add_argument(
-        "--scope", metavar="SCOPE",
-        help="Only objects under this scope segment (e.g. a project-id)",
     )
     obj_group.add_argument(
         "--format", metavar="FMT", help="Only objects in this serialization format"
@@ -921,9 +921,14 @@ def main():
     # migrate
     p_migrate = subparsers.add_parser(
         "migrate",
-        help="Migrate a v0 manifest to v1 _LANG form (in-place)",
+        help="Freeze a spec-v3 manifest's storage into the spec-v4 two-field "
+             "model (datasets_dir/datacache_dir + storage_path); moves no bytes",
     )
     p_migrate.add_argument("file", metavar="FILE", help="Path to datasets.toml to migrate")
+    p_migrate.add_argument(
+        "--dry-run", action="store_true",
+        help="Print what would change without writing the manifest",
+    )
     p_migrate.set_defaults(func=_cmd_migrate)
 
     # format

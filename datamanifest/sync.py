@@ -18,28 +18,22 @@ executing real ssh/rsync. It is deliberately *not* under ``datamanifest/cache/``
 
 Addressing (machine-independent)
 ---------------------------------
-An object's address is its path **relative to the store-folder root**:
+An object's address (``rel``) is its **logical identity**, independent of any
+machine's folders:
 
-- fetched   → ``<datasets-prefix>/[<datasets-scope>/]<key>`` (scope empty by
-  default), addressed by ``name`` / ``alias`` / ``doi``;
-- produced  → ``<cached-prefix>/[<cached-scope>/]<cachetype>/[<version>/]<hash>``,
-  addressed by ``cachetype[/version]/hash`` (full or an unambiguous hash prefix).
+- fetched   → the dataset ``key`` (addressed by ``name`` / ``alias`` / ``doi``);
+- produced  → ``<cachetype>/[<version>/]<hash>`` (addressed by
+  ``cachetype[/version]/hash`` — full or an unambiguous hash prefix).
 
-The same store-relative ``rel`` composes against either root::
+The same ``rel`` re-attaches under each end's own folder::
 
-    local_abs  = <local-root>/<rel>
-    remote_abs = <remote-root>/<rel>
-
-``rel`` is derived from the existing ``content_prefix`` / ``content_scope`` +
-key composition — there is one composition, no duplication: we resolve the full
-``composed_path`` against the *local* store and strip the local root to obtain
-``rel``, then re-attach ``rel`` to the resolved remote root.
+    local_abs  = <local datasets_dir|datacache_dir>/<rel>
+    remote_abs = <remote datasets_dir|datacache_dir>/<rel>
 
 Remote root resolution (precedence)
 -----------------------------------
-The remote store root is resolved with the **existing** folder ladder
-(:func:`datamanifest.store.folder_base`), fed three inputs in this order of
-authority:
+The remote ``datasets_dir`` / ``datacache_dir`` is resolved with the **existing**
+field ladder, fed two inputs in this order of authority:
 
 1. **Best-effort remote-env probe.** Over ssh we run
    ``source ~/.bashrc >/dev/null 2>&1; env`` (via the injectable runner) and
@@ -47,14 +41,12 @@ authority:
    often early-returns for non-interactive shells, and ssh itself may fail — so
    this is **best-effort**: an empty or failed capture is *normal* and must not
    error. When it succeeds, the captured ``DATAMANIFEST_*`` map is passed as
-   ``env=`` to ``folder_base`` and the existing ladder turns it into the remote
-   root via the remote ``DATAMANIFEST_<NAME>_DIR`` / ``DATAMANIFEST_DIR`` rung.
+   ``env=`` and the existing ladder honours the remote
+   ``DATAMANIFEST_DATASETS_DIR`` / ``DATAMANIFEST_DATACACHE_DIR`` rung.
 2. **``[_STORAGE._HOST.<glob>]`` host overrides** — selected by passing
-   ``host=<remote-host>`` to ``folder_base``. This is the **deterministic
-   cross-machine config**: the remote-env probe is only a convenience; the
-   ``_HOST`` table is the reliable, declared mapping.
-3. **The shared default** — ``platformdirs`` (``$data`` / ``$cache``), which both
-   machines agree on by construction.
+   ``host=<remote-host>``. This is the **deterministic cross-machine config**:
+   the remote-env probe is only a convenience; the ``_HOST`` table is the
+   reliable, declared mapping.
 
 We never re-implement the ladder; we only choose its ``env`` / ``host`` inputs.
 
@@ -62,9 +54,9 @@ Contract
 --------
 - **Target = an SSH address** (``user@host`` or ``host``): transport (rsync over
   ssh) + host identity. No remote registry.
-- **``$repo`` is out of scope.** A fetched dataset whose resolved ``store``
-  selector names ``$repo`` is refused — only machine-global ``$data`` / ``$cache``
-  / user-defined folders sync.
+- **Local (``$repo``-relative) objects are out of scope.** A dataset or cache
+  whose folder resolves under the project root is refused — only machine-global
+  locations (``$user_data_dir`` / ``$user_cache_dir`` / user-defined) sync.
 - **Writes no manifest** (bytes only). A received object lands as an orphan,
   usable via read-resolution.
 - **Integrity is rsync's**; **idempotent** (a no-op when the target already holds
@@ -119,11 +111,10 @@ class SyncObject:
         ``cachetype[/version]/hash`` / hash-prefix).
     kind:
         ``"datasets"`` (fetched) or ``"cached"`` (produced).
-    selector:
-        The ``$folder[/subpath]`` store selector the object lives under.
     rel:
-        The store-relative address — the path under the bare store-folder root
-        (``<prefix>/[<scope>/]<key>``).
+        The machine-independent address — a fetched dataset's ``key``, or a
+        produced artifact's ``cachetype/[version/]hash``. It re-attaches under
+        the receiver's ``datasets_dir`` / ``datacache_dir``.
     local_abs:
         The resolved absolute local path.
     is_dir:
@@ -133,12 +124,11 @@ class SyncObject:
         Total bytes on disk (best-effort; ``0`` when not present locally).
     """
 
-    __slots__ = ("id", "kind", "selector", "rel", "local_abs", "is_dir", "size")
+    __slots__ = ("id", "kind", "rel", "local_abs", "is_dir", "size")
 
-    def __init__(self, *, id, kind, selector, rel, local_abs, is_dir, size):
+    def __init__(self, *, id, kind, rel, local_abs, is_dir, size):
         self.id = id
         self.kind = kind
-        self.selector = selector
         self.rel = rel
         self.local_abs = local_abs
         self.is_dir = is_dir
@@ -152,19 +142,8 @@ class SyncObject:
 
 
 # ---------------------------------------------------------------------------
-# store-relative address
+# machine-independent address
 # ---------------------------------------------------------------------------
-
-def _rel_from_composed(composed, root):
-    """Store-relative address: *composed* (the full ``composed_path``) with the
-    bare *root* stripped off. Both are absolute; the relpath is the
-    machine-independent ``<prefix>/[<scope>/]<key>``."""
-    rel = os.path.relpath(composed, root)
-    # Normalize to forward slashes — it is an rsync operand suffix, not a local
-    # path, and the remote may use a different separator convention only in
-    # theory; in practice both ends are POSIX. ``relpath`` already uses os.sep.
-    return rel
-
 
 def _dir_size(path):
     total = 0
@@ -195,39 +174,33 @@ def _object_size(path):
 def _resolve_fetched(db, entry, ident, project_root):
     """Build a :class:`SyncObject` for a fetched dataset *entry*.
 
-    Refuses a ``$repo``-stored dataset (out of scope for sync). The
-    store-relative address is the ``datasets/`` composition stripped of the bare
-    store root."""
-    selector = entry.store or store.project_default(db.storage_config)
-    # Resolve the folder name out of the selector ($folder[/subpath]).
-    folder_name = selector[1:].split("/", 1)[0] if selector.startswith("$") else ""
-    if folder_name.startswith("{") and folder_name.endswith("}"):
-        folder_name = folder_name[1:-1]
-    if folder_name == "repo":
+    Refuses a **local** (``$repo``-relative) dataset — only machine-global
+    locations sync. The machine-independent address is the dataset's ``key``,
+    re-attached under the receiver's ``datasets_dir``."""
+    expr = entry.storage_path or "$datasets_dir/$key"
+    if store.is_local_path(
+        expr, key=entry.key, project_root=project_root,
+        storage_config=db.storage_config,
+    ):
         raise RemoteRepoError(
-            f"dataset {ident!r} is stored in $repo (project-relative); $repo is "
-            "out of scope for sync — only $data / $cache / user-defined folders "
-            "are machine-global. Move it to a global store to sync it."
+            f"dataset {ident!r} is stored locally (under the project root); a "
+            "repo-relative object is out of scope for sync — only machine-global "
+            "locations ($user_data_dir / $user_cache_dir / user-defined) sync. "
+            "Point datasets_dir at a machine-global folder to sync it."
         )
-
-    local_abs = store.composed_path(
-        selector, entry.key, kind="datasets",
+    local_abs = store.dataset_path(
+        entry.storage_path, entry.key,
         project_root=project_root, storage_config=db.storage_config,
     )
-    root = store.folder_base(
-        folder_name, project_root=project_root,
-        storage_config=db.storage_config,
-    )
-    rel = _rel_from_composed(local_abs, root)
     is_dir = os.path.isdir(local_abs)
     return SyncObject(
-        id=ident, kind="datasets", selector=selector, rel=rel,
+        id=ident, kind="datasets", rel=entry.key,
         local_abs=local_abs, is_dir=is_dir, size=_object_size(local_abs),
     )
 
 
-def _produced_key_from_id(ident, cache_root, prefix):
-    """Resolve a produced-artifact *ident* against the on-disk ``$cache`` store.
+def _produced_key_from_id(ident, cache_root):
+    """Resolve a produced-artifact *ident* against the on-disk ``datacache_dir``.
 
     *ident* is ``cachetype[/version]/hash`` with a full hash or an unambiguous
     hash **prefix**. Returns ``(key, artifact_dir)`` where ``key`` is the full
@@ -323,26 +296,24 @@ def _all_produced_for_id(ident, cache_root):
 
 def _resolve_produced(db, ident, project_root, *, full_key, artifact_dir):
     """Build a :class:`SyncObject` for a produced artifact addressed by
-    *full_key* (``cachetype/[version/]hash``) living at *artifact_dir*."""
-    selector = "$cache"
-    local_abs = store.composed_path(
-        selector, full_key, kind="cached",
-        project_root=project_root, storage_config=db.storage_config,
-        meta=db.extra.get("_META"),
-    )
-    # find_produced_artifacts already located the dir; prefer it (it accounts
-    # for the actual on-disk scope) but fall back to the composed path.
-    if artifact_dir and os.path.isdir(artifact_dir):
-        local_abs = os.path.abspath(artifact_dir)
-    folder_name = "cache"
-    root = store.folder_base(
-        folder_name, project_root=project_root,
+    *full_key* (``cachetype/[version/]hash``) living at *artifact_dir*.
+
+    Refuses a **local** (repo-relative) ``datacache_dir`` — only a machine-global
+    cache syncs. The machine-independent address is *full_key*, re-attached under
+    the receiver's ``datacache_dir``."""
+    if store.is_local_path(
+        "$datacache_dir", project_root=project_root,
         storage_config=db.storage_config,
-    )
-    rel = _rel_from_composed(local_abs, root)
+    ):
+        raise RemoteRepoError(
+            f"artifact {ident!r} is in a local (repo-relative) datacache_dir; a "
+            "repo-relative object is out of scope for sync — point datacache_dir "
+            "at a machine-global folder ($user_cache_dir/…) to sync it."
+        )
+    local_abs = os.path.abspath(artifact_dir)
     is_dir = os.path.isdir(local_abs)
     return SyncObject(
-        id=ident, kind="cached", selector=selector, rel=rel,
+        id=ident, kind="cached", rel=full_key,
         local_abs=local_abs, is_dir=is_dir, size=_object_size(local_abs),
     )
 
@@ -374,14 +345,10 @@ def resolve_object(db, ident, *, project_root=None):
         return _resolve_fetched(db, entry, ident, project_root)
 
     # No dataset — try a produced artifact.
-    cache_root = store.resolve_selector(
-        "$cache", project_root=project_root, storage_config=db.storage_config,
+    cache_root = store.datacache_dir(
+        project_root=project_root, storage_config=db.storage_config,
     )
-    full_key, artifact_dir = _produced_key_from_id(
-        ident, cache_root, store.content_prefix(
-            "cached", storage_config=db.storage_config,
-        ),
-    )
+    full_key, artifact_dir = _produced_key_from_id(ident, cache_root)
     return _resolve_produced(
         db, ident, project_root, full_key=full_key, artifact_dir=artifact_dir,
     )
@@ -403,8 +370,8 @@ def resolve_objects(db, ident, *, project_root=None, batch=False):
             objects.append(_resolve_fetched(db, entry, ident, project_root))
         except RemoteRepoError:
             raise
-    cache_root = store.resolve_selector(
-        "$cache", project_root=project_root, storage_config=db.storage_config,
+    cache_root = store.datacache_dir(
+        project_root=project_root, storage_config=db.storage_config,
     )
     for full_key, artifact_dir in _all_produced_for_id(ident, cache_root):
         objects.append(_resolve_produced(
@@ -416,34 +383,31 @@ def resolve_objects(db, ident, *, project_root=None, batch=False):
     return objects
 
 
-def sync_object_from_location(db, *, kind, ident, location, selector=None,
-                              project_root=None):
+def sync_object_from_location(db, *, kind, ident, location, project_root=None):
     """Build a :class:`SyncObject` from an already-resolved on-disk *location*.
 
     Used by the bulk ``list --push/--pull`` path, where the maintenance
-    enumeration has already produced the object's kind / key / absolute
-    location: the store-relative ``rel`` is the location stripped of the bare
-    store-folder root (``$data`` for fetched, ``$cache`` for produced — the
-    selector the enumeration walked). Refuses a ``$repo`` location."""
+    enumeration has already produced the object's kind / absolute location: the
+    machine-independent ``rel`` is the location stripped of the local root
+    (``datasets_dir`` for fetched, ``datacache_dir`` for produced). Refuses a
+    **local** (repo-relative) root."""
     if project_root is None:
         project_root = db.get_project_root()
-    if selector is None:
-        selector = "$cache" if kind == "cached" else "$data"
-    folder_name = selector[1:].split("/", 1)[0] if selector.startswith("$") else "data"
-    if folder_name.startswith("{") and folder_name.endswith("}"):
-        folder_name = folder_name[1:-1]
-    if folder_name == "repo":
+    field = "$datacache_dir" if kind == "cached" else "$datasets_dir"
+    if store.is_local_path(
+        field, project_root=project_root, storage_config=db.storage_config,
+    ):
         raise RemoteRepoError(
-            f"object {ident!r} is under $repo; $repo is out of scope for sync."
+            f"object {ident!r} is in a local (repo-relative) "
+            f"{field[1:]}; repo-relative objects are out of scope for sync."
         )
-    root = store.folder_base(
-        folder_name, project_root=project_root,
-        storage_config=db.storage_config,
+    root = (store.datacache_dir if kind == "cached" else store.datasets_dir)(
+        project_root=project_root, storage_config=db.storage_config,
     )
     local_abs = os.path.abspath(location)
-    rel = _rel_from_composed(local_abs, root)
+    rel = os.path.relpath(local_abs, root)
     return SyncObject(
-        id=ident, kind=kind, selector=selector, rel=rel,
+        id=ident, kind=kind, rel=rel,
         local_abs=local_abs, is_dir=os.path.isdir(local_abs),
         size=_object_size(local_abs),
     )
@@ -461,9 +425,8 @@ def remote_env(host, *, runner=None):
     output. ``.bashrc`` commonly early-returns for non-interactive shells and
     ssh may fail outright — so this is **best-effort**: an empty or failed
     capture is normal and returns ``{}`` (never raises). The returned map is fed
-    to :func:`datamanifest.store.folder_base` as ``env=``, letting the existing
-    folder ladder honour the remote's ``DATAMANIFEST_<NAME>_DIR`` /
-    ``DATAMANIFEST_DIR`` rung.
+    to the field resolver as ``env=``, letting the existing ladder honour the
+    remote's ``DATAMANIFEST_DATASETS_DIR`` / ``DATAMANIFEST_DATACACHE_DIR`` rung.
     """
     run = runner or _runner
     argv = ["ssh", host, "source ~/.bashrc >/dev/null 2>&1; env"]
@@ -486,27 +449,25 @@ def remote_env(host, *, runner=None):
 
 
 def remote_root(obj, host, *, db, project_root, runner=None):
-    """Resolve the **remote** bare store-folder root for *obj* on *host*.
+    """Resolve the **remote** root folder for *obj* on *host* — the remote's
+    ``datasets_dir`` (fetched) or ``datacache_dir`` (produced).
 
-    Precedence (all via the existing :func:`datamanifest.store.folder_base`
-    ladder — we only pick its ``env`` / ``host`` inputs):
+    Precedence (all via the existing field resolver — we only pick its ``env`` /
+    ``host`` inputs):
 
     1. best-effort remote-env probe (``remote_env`` → ``DATAMANIFEST_*`` rung);
     2. ``[_STORAGE._HOST.<glob>]`` overrides for *host* (the deterministic
        cross-machine config);
-    3. the shared ``platformdirs`` default.
+    3. the shared default.
 
     The remote *hostname* used for ``_HOST`` matching is the host part of the ssh
     target (``user@host`` → ``host``).
     """
     env = remote_env(host, runner=runner)
     match_host = host.split("@", 1)[1] if "@" in host else host
-    folder_name = obj.selector[1:].split("/", 1)[0] if obj.selector.startswith("$") \
-        else "data"
-    if folder_name.startswith("{") and folder_name.endswith("}"):
-        folder_name = folder_name[1:-1]
-    return store.folder_base(
-        folder_name, project_root=project_root,
+    resolver = store.datacache_dir if obj.kind == "cached" else store.datasets_dir
+    return resolver(
+        project_root=project_root,
         storage_config=db.storage_config, env=env, host=match_host,
     )
 

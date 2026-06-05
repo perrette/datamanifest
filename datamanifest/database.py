@@ -19,7 +19,6 @@ so a cross-language manifest survives a read/write round-trip intact.
 """
 
 import os
-import socket
 import sys
 from dataclasses import dataclass, field, fields
 from urllib.parse import parse_qs, urlparse
@@ -57,7 +56,11 @@ class DatasetEntry:
     aliases: list = field(default_factory=list)
     description: str = ""
     key: str = ""
-    local_path: str = ""
+    # spec-v4 per-dataset location override. A path expression; default
+    # ``$datasets_dir/$key`` when empty. Contains ``$key`` ⇒ tool-managed/keyed;
+    # an exact path without ``$key`` ⇒ user-managed, used verbatim, never touched
+    # by maintenance. Subsumes the former ``store`` + ``local_path``.
+    storage_path: str = ""
     sha256: str = ""
     skip_checksum: bool = False
     skip_download: bool = False
@@ -91,10 +94,6 @@ class DatasetEntry:
     lang_python_fetcher_kwargs: dict = field(default_factory=dict)
     lang_python_loader_args: list = field(default_factory=list)
     lang_python_loader_kwargs: dict = field(default_factory=dict)
-    # Store selection: "$data" (default), "$cache", "$repo", or any "$folder"
-    # selector defined in [_STORAGE]. Empty string selects the project default
-    # and is elided on write.
-    store: str = ""
     # Cross-language fetch (fetch-ladder rung 3) opt-out. Delegation is on by
     # default (probe-gated: it no-ops silently unless a foreign-language fetcher
     # and a usable foreign toolchain are actually present). Set to False to opt
@@ -261,8 +260,6 @@ def to_dict(entry: DatasetEntry) -> dict:
         if name == "key" and value == build_dataset_key(entry):
             continue
         if name == "format" and value == guess_file_format(entry):
-            continue
-        if name == "store" and value == "":
             continue
         output[name] = value
     # Bare bindings (spec-v3.4): keep them BARE on write — never promote a bare
@@ -809,158 +806,43 @@ def get_dataset_path(
     project_root: str = "",
     storage_config=None,
 ) -> str:
-    """Return the on-disk *write* path for *entry* (Databases.jl:319-343).
+    """Return the on-disk path for *entry* (spec-v4).
 
-    ``local_path`` is a **path expression** (spec-v2): ``$folder`` / ``${folder}``
-    interpolate a folder variable (or environment variable) and ``~`` expands to
-    home before the abs/relative decision — absolute → returned verbatim;
-    relative → joined to *project_root* when available; otherwise returned as-is.
-    ``skip_download``: returns ``entry.uri`` directly (the user manages the
-    file; the pipeline raises if that path is absent).
-
-    Otherwise the path is composed (spec-v3) as
-    ``<root>/datasets/<key>`` where ``<root>`` is the **bare** root of the
-    entry's store **selector** (``$folder[/subpath]``), via
-    :func:`datamanifest.storage.composed_path` with ``kind="datasets"`` (scope
-    is empty for fetched datasets). An empty ``store`` uses the project default
-    selector (:func:`datamanifest.storage.project_default`). An
-    explicitly-provided *datasets_folder* overrides the default ``$data`` root
-    and is used verbatim, with no ``datasets/`` prefix (back-compat with callers
-    that pass a fixed folder).
+    The location is the entry's ``storage_path`` expression (default
+    ``$datasets_dir/$key``) resolved via
+    :func:`datamanifest.store.locations.dataset_path`: ``$``-symbols,
+    ``$key``, ``$USER``/env and ``~`` are interpolated, and a relative result is
+    anchored to *project_root*. ``skip_download`` returns ``entry.uri`` directly
+    (the user manages the file). An explicit *datasets_folder* overrides
+    ``[_STORAGE].datasets_dir`` (the ``$datasets_dir`` symbol) for this call.
     """
-    if entry.local_path != "":
-        host = socket.gethostname()
-        local_path = storage._interpolate(
-            entry.local_path,
-            project_root=project_root,
-            storage_config=storage_config or {},
-            env=os.environ,
-            host=host,
-            resolving=(),
-        )
-        if os.path.isabs(local_path):
-            return local_path
-        elif project_root != "":
-            return os.path.join(project_root, local_path)
-        else:
-            return local_path
     if entry.skip_download:
         return entry.uri
+    if datasets_folder:
+        storage_config = {**(storage_config or {}), "datasets_dir": datasets_folder}
     if extract is None:
         extract = entry.extract
     key = entry.key
     if extract:
         key = get_extract_path(key)
-    selector = entry.store or storage.project_default(storage_config)
-    # An explicit datasets_folder overrides the default $data root and is used
-    # verbatim (no datasets/ prefix), for back-compat with callers passing a
-    # fixed folder. Otherwise compose the spec-v3 path <root>/datasets/<key>.
-    if datasets_folder and selector == "$data":
-        return os.path.join(datasets_folder, key)
-    return storage.composed_path(
-        selector, key, kind="datasets",
+    return storage.dataset_path(
+        entry.storage_path, key,
         project_root=project_root, storage_config=storage_config,
     )
 
 
-# Read-resolution search order: a present, complete entry in a higher-priority
-# store shadows the others (Theme A / spec-v1.1 portable storage model).
-_READ_STORE_ORDER = ("repo", "data", "cache")
-
 def resolve_existing_path(db: "Database", entry: "DatasetEntry", extract=None) -> str:
     """Return the on-disk path to read *entry* from.
 
-    Probes, in order, the entry's own resolved ``store`` **selector** then the
-    built-in folders in :data:`_READ_STORE_ORDER` (``repo`` → ``data`` →
-    ``cache``), each composed (spec-v3) under the ``datasets/`` content prefix
-    via :func:`datamanifest.storage.composed_path` (``<root>/datasets/<key>``),
-    and returns the first that exists. A present copy in a higher-priority
-    folder shadows the others (portable storage model). When none exist, the
-    legacy read-only locations are probed: the pre-v1.1 default
-    (``~/.cache/Datasets/<key>``) and the v0.5.0 spec-v2 layout
-    (``<root>/Datasets/<key>``), skipped when the data dir is pinned via
-    ``DATAMANIFEST_DATA_DIR`` / ``DATAMANIFEST_DIR``. When nothing is found,
-    falls back to the *write* path for the entry's selected store (so a
-    subsequent fetch materializes there).
+    Under spec-v4 a dataset has exactly **one** location — its ``storage_path``
+    (default ``$datasets_dir/$key``) — so the read path is the write path; this
+    delegates to :func:`get_dataset_path`.
     """
-    project_root = db.get_project_root()
-    if entry.local_path != "" or entry.skip_download:
-        return get_dataset_path(
-            entry,
-            db.datasets_folder,
-            extract=extract,
-            project_root=project_root,
-            storage_config=db.storage_config,
-        )
-    if extract is None:
-        extract = entry.extract
-    key = entry.key
-    if extract:
-        key = get_extract_path(key)
-
-    # Candidate paths in priority order: the entry's own resolved store selector
-    # first, then the built-in folders repo -> data -> cache, each composed under
-    # the spec-v3 ``datasets/`` content prefix (``<root>/datasets/<key>``). The
-    # ``datasets_folder`` back-compat override still wins for the default data
-    # store and is used verbatim (no prefix).
-    candidates = []
-    selector = entry.store or storage.project_default(db.storage_config)
-    if db.datasets_folder and selector == "$data":
-        candidates.append(os.path.join(db.datasets_folder, key))
-    else:
-        candidates.append(
-            storage.composed_path(
-                selector, key, kind="datasets",
-                project_root=project_root, storage_config=db.storage_config,
-            )
-        )
-    for store in _READ_STORE_ORDER:
-        if store == "data" and db.datasets_folder:
-            candidates.append(os.path.join(db.datasets_folder, key))
-        else:
-            candidates.append(
-                storage.composed_path(
-                    "$" + store, key, kind="datasets",
-                    project_root=project_root, storage_config=db.storage_config,
-                )
-            )
-
-    seen = set()
-    for candidate in candidates:
-        if candidate in seen:
-            continue
-        seen.add(candidate)
-        if os.path.isfile(candidate) or os.path.isdir(candidate):
-            return candidate
-    # Legacy read-only back-compat probes, checked last so any new-layout copy
-    # wins. Covers the pre-v1.1 default (~/.cache/Datasets) and the v0.5.0
-    # spec-v2 layout (<root>/Datasets/<key> per built-in store, via the suffixed
-    # folder_root resolver). Skipped when the user has pinned the data dir
-    # (DATAMANIFEST_DATA_DIR / DATAMANIFEST_DIR). New writes never go here.
-    if not (
-        os.environ.get("DATAMANIFEST_DATA_DIR") or os.environ.get("DATAMANIFEST_DIR")
-    ):
-        legacy_roots = [storage.legacy_data_root()]
-        for store in _READ_STORE_ORDER:
-            legacy_roots.append(
-                storage.folder_root(
-                    store, project_root=project_root,
-                    storage_config=db.storage_config,
-                )
-            )
-        seen_legacy = set()
-        for root in legacy_roots:
-            if root in seen_legacy:
-                continue
-            seen_legacy.add(root)
-            legacy_candidate = os.path.join(root, key)
-            if os.path.isfile(legacy_candidate) or os.path.isdir(legacy_candidate):
-                return legacy_candidate
     return get_dataset_path(
         entry,
         db.datasets_folder,
         extract=extract,
-        project_root=project_root,
+        project_root=db.get_project_root(),
         storage_config=db.storage_config,
     )
 
@@ -1146,8 +1028,12 @@ def update_entry(
 
 
 def _remove_dataset_from_disk(db: "Database", entry: "DatasetEntry") -> None:
-    """Delete the on-disk files for *entry* (Databases.jl:589-605)."""
-    if entry.skip_download or entry.local_path != "":
+    """Delete the on-disk files for *entry* (Databases.jl:589-605).
+
+    A user-managed ``storage_path`` (an exact path without ``$key``) is never
+    touched by maintenance (spec-v4); ``skip_download`` entries are external.
+    """
+    if entry.skip_download or storage.is_user_managed(entry.storage_path):
         return
     download_path = get_dataset_path(
         entry,
@@ -1567,24 +1453,6 @@ def migrate_v0_to_v1(db: "Database") -> None:
     # [_LOADERS] is a supported spec-v3.4 language-implicit map; left bare
     # (not promoted to [_LANG.python.loaders]).
     db.schema_version = 1
-
-
-# ----- v1 → v2 migration -----
-def migrate_v1_to_v2(db: "Database") -> None:
-    """Migrate *db* from v1 bare-store names to v2 $-selector form (in-place).
-
-    Each dataset's ``store`` field is rewritten: bare names like ``"cache"``
-    become ``"$cache"``; ``"data"`` and ``""`` (both meaning the default data
-    store) are normalised to ``""`` (the elided default).  ``[_STORAGE]``
-    folder-variable definitions (bare keys like ``scratch = "/path"``) are
-    left untouched — only the per-dataset ``store`` selector is migrated.
-    """
-    for _name, entry in db.datasets.items():
-        s = entry.store
-        if not s or s == "data":
-            entry.store = ""
-        elif not s.startswith("$"):
-            entry.store = "$" + s
 
 
 # ----- default database (process-wide singleton) -----

@@ -85,7 +85,7 @@ def test_list_help():
     assert "--present" in result.stdout
     assert "--missing" in result.stdout
     # spec-v3 maintenance surface: filter + action flags on `list`.
-    for flag in ["--kind", "--scope", "--orphan", "--older-than", "--format", "--delete", "--move"]:
+    for flag in ["--kind", "--orphan", "--older-than", "--format", "--delete", "--move"]:
         assert flag in result.stdout, f"list --help missing {flag}"
 
 
@@ -148,9 +148,9 @@ def _orphan_artifact(cache, cachetype, key_table):
     from datamanifest.cache._sidecars import write_config
 
     h = param_hash(key_table)
-    # An unscoped layout: <cache>/cached/<cachetype>/<hash> still enumerates as a
-    # produced artifact (no cached.toml roots it, so it reads as an orphan).
-    artifact = cache / "cached" / cachetype / h
+    # spec-v4 layout: <datacache_dir>/<cachetype>/<hash> enumerates as a produced
+    # artifact (no cached.toml roots it, so it reads as an orphan).
+    artifact = cache / cachetype / h
     artifact.mkdir(parents=True)
     (artifact / "data.txt").write_text("v")
     write_config(str(artifact), cachetype, h, key_table)
@@ -161,7 +161,7 @@ def _orphan_artifact(cache, cachetype, key_table):
 def _maint_env(tmp_path, cache):
     (tmp_path / "datasets.toml").write_text("")
     env = dict(os.environ)
-    env["DATAMANIFEST_CACHE_DIR"] = str(cache)
+    env["DATAMANIFEST_DATACACHE_DIR"] = str(cache)
     env["DATAMANIFEST_USAGE_LOG"] = str(tmp_path / "usage.toml")
     env["DATAMANIFEST_TOML"] = str(tmp_path / "datasets.toml")
     return env
@@ -235,7 +235,7 @@ def test_older_than_filter_excludes_recent():
         CacheObject(kind="cached", location="/x/new", key="new/h", last_access=fresh),
     ]
     args = types.SimpleNamespace(
-        kind=None, scope=None, format=None, orphan=False, older_than="1d"
+        kind=None, format=None, orphan=False, older_than="1d"
     )
     kept = {o.key for o in _filter_objects(objs, args)}
     assert "old/h" in kept and "new/h" not in kept
@@ -249,9 +249,9 @@ def test_list_kind_data_lists_fetched_dataset(tmp_path):
     data_file = tmp_path / "external.csv"
     data_file.write_text("a,b\n1,2\n")
     toml = tmp_path / "datasets.toml"
-    toml.write_text(f'[mydata]\nlocal_path = "{data_file}"\nformat = "csv"\n')
+    toml.write_text(f'[mydata]\nstorage_path = "{data_file}"\nformat = "csv"\n')
     env = dict(os.environ)
-    env["DATAMANIFEST_CACHE_DIR"] = str(cache)
+    env["DATAMANIFEST_DATACACHE_DIR"] = str(cache)
     env["DATAMANIFEST_USAGE_LOG"] = str(tmp_path / "usage.toml")
     env["DATAMANIFEST_TOML"] = str(toml)
 
@@ -271,9 +271,9 @@ def test_default_list_hides_unlisted_cached_unless_all(tmp_path):
     data_file = tmp_path / "external.csv"
     data_file.write_text("a,b\n1,2\n")
     toml = tmp_path / "datasets.toml"
-    toml.write_text(f'[mydata]\nlocal_path = "{data_file}"\nformat = "csv"\n')
+    toml.write_text(f'[mydata]\nstorage_path = "{data_file}"\nformat = "csv"\n')
     env = dict(os.environ)
-    env["DATAMANIFEST_CACHE_DIR"] = str(cache)
+    env["DATAMANIFEST_DATACACHE_DIR"] = str(cache)
     env["DATAMANIFEST_USAGE_LOG"] = str(tmp_path / "usage.toml")
     env["DATAMANIFEST_TOML"] = str(toml)
     env["NO_COLOR"] = "1"  # deterministic, escape-free output
@@ -299,9 +299,9 @@ def test_list_filters_keep_the_styled_view(tmp_path):
     cache = tmp_path / "cache"
     _orphan_artifact(cache, "mt", {"g": "5x5"})
     toml = tmp_path / "datasets.toml"
-    toml.write_text("[mydata]\nlocal_path = \"/nonexistent/x.csv\"\nformat = \"csv\"\n")
+    toml.write_text("[mydata]\nstorage_path = \"/nonexistent/x.csv\"\nformat = \"csv\"\n")
     env = dict(os.environ)
-    env["DATAMANIFEST_CACHE_DIR"] = str(cache)
+    env["DATAMANIFEST_DATACACHE_DIR"] = str(cache)
     env["DATAMANIFEST_USAGE_LOG"] = str(tmp_path / "usage.toml")
     env["DATAMANIFEST_TOML"] = str(toml)
     env["NO_COLOR"] = "1"
@@ -329,9 +329,9 @@ def test_list_bare_prints_plain_names(tmp_path):
     data_file = tmp_path / "external.csv"
     data_file.write_text("a,b\n1,2\n")
     toml = tmp_path / "datasets.toml"
-    toml.write_text(f'[mydata]\nlocal_path = "{data_file}"\nformat = "csv"\n')
+    toml.write_text(f'[mydata]\nstorage_path = "{data_file}"\nformat = "csv"\n')
     env = dict(os.environ)
-    env["DATAMANIFEST_CACHE_DIR"] = str(cache)
+    env["DATAMANIFEST_DATACACHE_DIR"] = str(cache)
     env["DATAMANIFEST_USAGE_LOG"] = str(tmp_path / "usage.toml")
     env["DATAMANIFEST_TOML"] = str(toml)
 

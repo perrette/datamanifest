@@ -76,7 +76,7 @@ ds = load_anomaly(grid="5x5", cached=False)  # force recompute
 
 The keyword arguments are the cache key — each distinct combination is stored separately. By default the result is saved with `pickle`; pass `format="nc"`/`"csv"`/… to pick a serialization, and `version="v2"` to invalidate when the function's *logic* changes.
 
-Where things live is configured **once** in `datamanifest.toml` ([Storage model](#storage-model)) and applies to both downloaded and cached data — point `$cache` at a scratch partition and produced artifacts follow. Each project's cache is isolated by default; `@cached(scope="shared")` lets projects share one.
+Where things live is configured **once** in `datamanifest.toml` ([Storage model](#storage-model)) and applies to both downloaded and cached data. By default produced artifacts land in a visible `./cached/` under the project root; set `datacache_dir` in `[_STORAGE]` (e.g. to a scratch partition) to centralize them elsewhere.
 
 `datamanifest list` shows cached results grouped by function with their parameters; `datamanifest list --orphan --delete` cleans up.
 
@@ -90,7 +90,7 @@ datamanifest COMMAND [OPTIONS]
 
 | Command | Description |
 |---|---|
-| `list [--present\|--missing\|--all] [--kind K] [--scope S] [--orphan] [--older-than AGE] [--format F] [--fields ...] [--delete\|--move DIR] [--yes]` | List datasets and cached artifacts; with `--delete`/`--move` becomes the maintenance command (dry run by default; `--yes` to apply) |
+| `list [--present\|--missing\|--all] [--kind K] [--orphan] [--older-than AGE] [--format F] [--fields ...] [--delete\|--move DIR] [--yes]` | List datasets and cached artifacts; with `--delete`/`--move` becomes the maintenance command (dry run by default; `--yes` to apply) |
 | `download [NAME ...] [--all] [--overwrite] [--delegate\|--no-delegate]` | Download specific datasets or all of them; `--no-delegate` disables the cross-language fetch rung for the run |
 | `path NAME` | Print the resolved on-disk path (composable in shell) |
 | `add URI [--name N] [--no-download] [--extract] [--delegate\|--no-delegate]` | Register and (by default) download a dataset |
@@ -100,8 +100,8 @@ datamanifest COMMAND [OPTIONS]
 | `update-checksums [NAME ...] [--dry-run]` | Recompute stored checksums from what's on disk |
 | `init [--folder PATH] [--force]` | Create a fresh `datasets.toml` in the current directory |
 | `where` | Print active `datasets_toml` and `datasets_folder` paths |
-| `migrate FILE` | Update an older manifest in place (move legacy flat fields into `_LANG`; rewrite bare `store = "x"` to `$`-selectors) |
-| `push ID SSH_HOST [--dry-run] [--batch]` | Transfer a stored object **to** an SSH host (rsync over ssh), addressed by id (`name`/`alias`/`doi`, or `cachetype[/version]/hash`) |
+| `migrate FILE [--dry-run]` | Freeze a manifest's existing spec-v3 storage locations into the spec-v4 model: set `[_STORAGE].datasets_dir`/`datacache_dir` to the old effective roots and add a per-dataset `storage_path` only where a dataset deviated from the default, so on-disk data keeps resolving. Moves no bytes |
+| `push ID SSH_HOST [--dry-run] [--batch]` | Transfer a stored object **to** an SSH host (rsync over ssh), addressed by id (a dataset's `key`, or `cachetype[/version]/hash`) |
 | `pull ID SSH_HOST [--dry-run] [--batch]` | Transfer a stored object **from** an SSH host (rsync over ssh), same addressing |
 
 Examples:
@@ -168,7 +168,7 @@ datamanifest list --kind cached --push user@hpc     # bulk: push the filtered se
 | Load ladder: own Python loader (explicit/bare) → manifest default (`[_LANG.python.loaders]`/`[_LOADERS]`) → built-in | yes |
 | Lossless round-trip of foreign `_LANG.*` subtrees | yes |
 | Manifest migration (`datamanifest migrate`) | yes |
-| Portable storage model (folder variables, `$`-selectors, `[_STORAGE]` with per-host overrides, `platformdirs` roots) | yes |
+| Portable storage model (two `[_STORAGE]` folder fields `datasets_dir`/`datacache_dir`, repo-local by default, `$`-interpolation, per-host overrides, `platformdirs` roots) | yes |
 | Parameterized bindings (`{ ref, args, kwargs }` + `$var` substitution) | yes |
 | Safe concurrent materialization (`.tmp` → atomic publish → `.complete` marker) | yes |
 | Verify-once integrity (checksum only at fetch; `.complete` entry skips re-hash) | yes |
@@ -179,72 +179,81 @@ datamanifest list --kind cached --push user@hpc     # bulk: push the filtered se
 
 ## Storage model
 
-> **Behavior change from earlier releases.** Earlier versions stored datasets under a
-> `/Datasets`-suffixed root (e.g. `~/.local/share/datamanifest/Datasets`). Now folder
-> variables resolve to **bare** roots, and content is composed as `<root>/datasets/<key>`
-> (downloads) or `<root>/cached/<scope>/<cachetype>/[<version>/]<hash>` (produced
-> artifacts). A legacy read-only probe still finds datasets at the old `/Datasets`-suffixed
-> locations unless `DATAMANIFEST_DATA_DIR` or `DATAMANIFEST_DIR` is set.
+> **Breaking storage-layout change (spec-v4).** The earlier scope / content-prefix /
+> `$data`-`$cache`-selector machinery is gone, replaced by the two explicit folder fields
+> below. Run `datamanifest migrate datasets.toml` to freeze an existing manifest's effective
+> locations into the new model so on-disk data keeps resolving (it moves no bytes).
 
-Each dataset entry carries an optional `store` field — a **`$`-selector**
-(`$folder` or `$folder/subpath`) referencing a named **folder variable**. The
-built-in folder variables are `$data`, `$cache`, and `$repo`. User-defined folders
-are declared in `[_STORAGE]`.
+Storage is **two folder fields** set in `[_STORAGE]`:
 
-A `[_STORAGE]` table lets you define folder variables, set a project-wide default
-selector, and override roots per host (glob):
+- `datasets_dir` (default `"datasets"`) — where fetched datasets go.
+- `datacache_dir` (default `"cached"`) — where the produced `@cached` cache goes.
+
+Both default to **relative** paths, so they resolve against the project root (the
+manifest's directory, `$repo`) and you get a visible local `./datasets/` and
+`./cached/` with zero config. The layout is flat — there is no scope, no content
+prefix, no project-id or app-name segment, no derived name. The folder you set **is**
+the location, and adding a `pyproject.toml` no longer moves anything:
+
+- fetched dataset → `<datasets_dir>/<key>`
+- produced artifact → `<datacache_dir>/<cachetype>/[<version>/]<hash>`
+
+A path expression may interpolate `$`-symbols: the predefined `$user_data_dir` /
+`$user_cache_dir` (straight from `platformdirs`, **bare** — no app name) and `$repo`
+(the project root); the two fields `$datasets_dir` / `$datacache_dir`; `$key` (a
+dataset's storage key); any user-defined bare `[_STORAGE]` key; `$USER` / env vars;
+and `~`. User-defined symbols can be made host-specific in
+`[_STORAGE._HOST."<glob>"]`.
 
 ```toml
 [_STORAGE]
-default = "$data"                        # project-wide default store selector
-data    = "~/data"                       # override built-in $data bare root
-cache   = "~/.cache/datamanifest"       # override built-in $cache bare root
-repo    = "."                            # relative → <project_root>
-scratch = "/tmp/$USER/scratch"          # user-defined folder variable
+datasets_dir  = "datasets"               # default: repo-local ./datasets/
+datacache_dir = "$user_cache_dir/myproj" # produced artifacts on the machine cache dir
+scratch       = "/tmp/$USER/scratch"     # user-defined symbol
 
 [_STORAGE._HOST."login*.hpc.edu"]
-data    = "/scratch/$USER"              # path expressions: $folder/$ENV/~ expand
+scratch = "/scratch/$USER"              # host-specific override of a user symbol
 
-[bigsim]                                # default selector ($data) → $data/datasets/bigsim
-uri   = "https://example.com/bigsim.nc"
+[bigsim]                                # → datasets/bigsim  (default storage_path)
+uri = "https://example.com/bigsim.nc"
 
-[scratch_run]
-store = "$cache"                        # disposable, re-fetchable → $cache/datasets/scratch_run
-uri   = "https://example.com/scratch.nc"
-
-[derived_table]
-store = "$repo"                         # lives under <project_root>/datasets/derived_table
-format = "csv"
-
-[hpc_output]
-store = "$scratch/results"             # user-defined folder + subpath
+[hpc_output]                            # per-dataset override (a path expression)
+storage_path = "$scratch/results/$key"
 format = "nc"
 ```
 
-**Per-folder-variable precedence** (highest first):
-1. `DATAMANIFEST_<FOLDER>_DIR` environment variable (e.g. `DATAMANIFEST_DATA_DIR`).
-2. First `[_STORAGE._HOST.<glob>].<folder>` where the glob matches the hostname.
-3. `[_STORAGE].<folder>` base value.
-4. Built-in: `$data`/`$cache` = `DATAMANIFEST_DIR` if set, else `platformdirs.user_{data,cache}_dir("datamanifest")`; `$repo` = `<project_root>`.
-   User-defined folders with no definition on any rung are an error.
+**Resolution ladder** for any field/symbol *name* (first match wins):
 
-`_PROFILE` is accepted and round-tripped verbatim but is not applied during resolution.
+1. `DATAMANIFEST_<NAME>` environment variable.
+2. First `[_STORAGE._HOST.<glob>].<name>` whose glob matches the hostname.
+3. `[_STORAGE].<name>` base value.
+4. The predefined symbol or field default.
 
-**Content path composition** (added by the consuming layer, not the selector):
-- Fetched datasets: `<root>[/subpath]/datasets/<key>`
-- Produced artifacts: `<root>/cached/<scope>/<cachetype>/[<version>/]<hash>`
+The only two env vars of note are `DATAMANIFEST_DATASETS_DIR` and
+`DATAMANIFEST_DATACACHE_DIR`.
 
-**Read resolution** probes built-in roots under their `datasets/` prefix (`$repo → $data → $cache`), then a legacy read-only probe for old locations (skipped when `DATAMANIFEST_DATA_DIR`/`DATAMANIFEST_DIR` is set).
+**Per-dataset override.** A dataset may set `storage_path` — a path expression,
+default `$datasets_dir/$key` — which **replaces** the old `store` and `local_path`
+fields. A `storage_path` that contains `$key` is a tool-managed keyed location; an
+exact path with no `$key` is a user-managed location used verbatim that maintenance
+never touches.
 
-**Migrating older manifests:** if you have manifests with bare `store = "cache"` entries,
-run `datamanifest migrate datasets.toml` to rewrite them to `store = "$cache"` (and similar
-for other stores). The `$data` default is elided on write.
+**Centralizing / sharing.** Because the default folders are repo-local, point both
+fields at a machine directory to share data across clones or projects — one explicit
+edit:
+
+```toml
+[_STORAGE]
+datasets_dir  = "$user_data_dir/myproj"
+datacache_dir = "$user_cache_dir/myproj"
+```
 
 ## Cross-machine sync
 
 Move a stored object between machines instead of re-downloading or recomputing it. Every
-object has a machine-independent address — a fetched dataset by `name`/`alias`/`doi`, a
-produced artifact by `cachetype[/version]/hash` — so only the physical root differs per host:
+syncable object has a machine-independent address — a fetched dataset by its `key`, a
+produced artifact by `cachetype[/version]/hash` — and lands under the receiver's own
+`datasets_dir`/`datacache_dir`, so only the physical folder differs per host:
 
 ```bash
 datamanifest push foo user@hpc             # copy dataset `foo` to the host (rsync over ssh)
@@ -255,10 +264,12 @@ datamanifest list --kind cached --push user@hpc   # bulk: push a filtered select
 
 - **Transport is rsync over SSH**, and the SSH target (`user@host`) is both the transport and
   the host identity — no remote registry.
-- **The remote store root** is resolved best-effort from the remote's own environment (the
-  tool probes `DATAMANIFEST_*` via `ssh <host> 'source ~/.bashrc; env'`), then the manifest's
-  `[_STORAGE._HOST]` rules for that host, then the shared default. `$repo` (project-relative)
-  is not syncable.
+- **The receiver's folders** (`datasets_dir`/`datacache_dir`) are resolved best-effort from
+  the remote's own environment (the tool probes `DATAMANIFEST_*` via
+  `ssh <host> 'source ~/.bashrc; env'`), then the manifest's `[_STORAGE._HOST]` rules for that
+  host, then the default. A **local / `$repo`-relative object is not syncable** — and since the
+  default folders are repo-local, you must point `datasets_dir`/`datacache_dir` at a
+  machine-global location (e.g. `$user_data_dir/…`) for an object to be syncable.
 - **Sync writes no manifest** — a transferred object lands in the destination store as an
   orphan (present, unreferenced) and is immediately usable; it is **idempotent** (a no-op when
   the target already holds the object complete).
@@ -395,16 +406,17 @@ Foreign `_LANG.<other>` subtrees (e.g. `_LANG.julia`) are preserved verbatim on 
 ### Migration
 
 ```bash
-datamanifest migrate datasets.toml
+datamanifest migrate datasets.toml            # rewrite in place
+datamanifest migrate datasets.toml --dry-run  # preview the changes
 ```
 
-Updates a manifest in place through all outstanding steps:
+`migrate` freezes a manifest's existing spec-v3 storage locations into the spec-v4
+model so that data already on disk keeps resolving after the upgrade. It:
 
-- **Legacy inline-code fields:** promotes per-dataset `python=`/`callable=` into `[<ds>._LANG.python].fetcher` and adds the `[_META]` header. Bare `fetcher`/`loader` and the `[_LOADERS]` map are **supported** language-implicit forms and are left bare. Foreign keys are left verbatim.
-- **Shell fetcher:** demotes a legacy `[<ds>._LANG.shell].fetcher` into the canonical bare `shell` field (dropping the emptied `_LANG.shell` block); an existing bare `shell` is left as-is.
-- **Storage selectors:** rewrites bare `store = "x"` entries to `store = "$x"` (`"data"`/`""` are elided, leaving the project default). `[_STORAGE]` folder *definitions* (bare keys like `data = "…"`) are left untouched.
+- sets `[_STORAGE].datasets_dir`/`datacache_dir` to the old effective roots, and
+- adds a per-dataset `storage_path` only where a dataset deviated from the default.
 
-Reading an older manifest without migrating still works for most operations, but a manifest with bare `store` values will error on resolution. A one-time deprecation warning is logged for the inline-code legacy fields.
+It **moves no bytes** — only the manifest is rewritten.
 
 ## Python adaptations
 
@@ -418,8 +430,8 @@ The Python port uses the same manifest format as `DataManifest.jl`. The `_LANG` 
 
 **Legacy fields** (still accepted on read; only these are deprecated):
 
-- **`python=`** (or **`callable=`**) — entry-point reference (`"pkg.mod:func"`) resolved via `importlib`. The callable receives keyword arguments `(download_path, project_root, entry, uri, key, version, doi, format, branch, requires_paths)`. No inline code execution (`exec`/`eval`) anywhere. `datamanifest migrate` promotes these into `[<ds>._LANG.python].fetcher`.
-- **`[<ds>._LANG.shell].fetcher`** — the legacy shell fetcher; `migrate` demotes it to the canonical bare `shell`.
+- **`python=`** (or **`callable=`**) — entry-point reference (`"pkg.mod:func"`) resolved via `importlib`. The callable receives keyword arguments `(download_path, project_root, entry, uri, key, version, doi, format, branch, requires_paths)`. No inline code execution (`exec`/`eval`) anywhere. Equivalent to `[<ds>._LANG.python].fetcher`.
+- **`[<ds>._LANG.shell].fetcher`** — the legacy shell fetcher; read as the fallback for the canonical bare `shell`.
 - **`python_includes=`** — list of directory paths prepended to `sys.path` during ref resolution (obsolete; the project root is auto-added).
 
 A single `datasets.toml` can be consumed by both tools: each reads the common fields and ignores the other's extension keys. See [docs/conformance.md](docs/conformance.md) for the shared manifest format and what this implementation supports.

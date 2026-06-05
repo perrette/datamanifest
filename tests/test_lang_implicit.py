@@ -219,8 +219,7 @@ kwargs = { grid = "$key", scale = 3 }
 [d]
 uri = "https://example.com/d.csv"
 sha256 = "dd"
-skip_download = true
-local_path = "%s"
+storage_path = "%s"
 """
     f = tmp_path / "d.csv"
     f.write_text("x")

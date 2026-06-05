@@ -1,10 +1,10 @@
-"""Tests for the cache layer's index + inspection maintenance (spec-v3).
+"""Tests for the cache layer's index + inspection maintenance (spec-v4).
 
 Covers the ``cached.toml`` index round-trip, ``@cached`` produce registration,
 and the ``cache/_inspect.py`` object enumeration / delete / move that backs the
 ``datamanifest list`` maintenance surface (which replaced the old automatic GC).
 
-Offline only: a ``tmp_path`` cache root (via ``DATAMANIFEST_CACHE_DIR``), a
+Offline only: a ``tmp_path`` cache root (via ``DATAMANIFEST_DATACACHE_DIR``), a
 ``tmp_path`` usage log (via ``DATAMANIFEST_USAGE_LOG``), and the trivial ``txt``
 format.
 """
@@ -28,15 +28,17 @@ from datamanifest.cache import (
 from datamanifest.cache._inspect import CacheObject
 from datamanifest.cache._sidecars import write_config
 from datamanifest.cache._usage import iso_from_mtime, last_access
-from datamanifest.store.locations import project_id
 
 
 # ----- fixtures --------------------------------------------------------------
 
 @pytest.fixture
 def cache_root(tmp_path, monkeypatch):
+    """The spec-v4 ``datacache_dir`` root. A produced artifact lands directly
+    under it as ``<cachetype>/[<version>/]<hash>`` — no ``cached/`` prefix and no
+    scope segment."""
     root = tmp_path / "cache"
-    monkeypatch.setenv("DATAMANIFEST_CACHE_DIR", str(root))
+    monkeypatch.setenv("DATAMANIFEST_DATACACHE_DIR", str(root))
     return root
 
 
@@ -50,7 +52,8 @@ def usage_log(tmp_path, monkeypatch):
 # ----- CachedIndex round-trip (spec fixture schema) --------------------------
 
 # Two recipes for the index round-trip (schema 2: nested by cachetype, with
-# per-variation instances carrying hash + params).
+# per-variation instances carrying hash + params). spec-v4 dropped the recipe
+# scope/store fields.
 _FIX_RECIPES = [
     {
         "cachetype": "esm_20c_anomaly",
@@ -58,7 +61,6 @@ _FIX_RECIPES = [
         "params": {"grid": "5x5"},
         "ref": "lgmpre.data:load_20c_esm_anomaly",
         "format": "nc",
-        "store": "$cache",
     },
     {
         "cachetype": "esm_lgm_anomaly",
@@ -66,7 +68,6 @@ _FIX_RECIPES = [
         "params": {},
         "ref": "lgmpre.data:load_lgm_esm_anomaly",
         "format": "nc",
-        "store": "$cache",
     },
 ]
 
@@ -76,7 +77,7 @@ def _write_fixture_index(path):
     for r in _FIX_RECIPES:
         index.register(
             cachetype=r["cachetype"], hash=r["hash"], params=r["params"],
-            ref=r["ref"], format=r["format"], store=r["store"],
+            ref=r["ref"], format=r["format"],
         )
     return index.write()
 
@@ -90,17 +91,18 @@ def test_cached_index_round_trip_recipes(tmp_path):
     assert recs["esm_20c_anomaly"]["instances"] == {
         _FIX_RECIPES[0]["hash"]: {"grid": "5x5"}
     }
-    assert back.scoped_keys() == {
-        ("", "esm_20c_anomaly", "", _FIX_RECIPES[0]["hash"]),
-        ("", "esm_lgm_anomaly", "", _FIX_RECIPES[1]["hash"]),
+    # reachable_keys() is (cachetype, version, hash) — no scope (spec-v4).
+    assert back.reachable_keys() == {
+        ("esm_20c_anomaly", "", _FIX_RECIPES[0]["hash"]),
+        ("esm_lgm_anomaly", "", _FIX_RECIPES[1]["hash"]),
     }
 
 
 def test_cached_index_write_is_canonical(tmp_path):
     p = _write_fixture_index(tmp_path / "cached.toml")
     text = (tmp_path / "cached.toml").read_text()
-    # [_META] first, then [[produced]] recipe tables sorted by cachetype.
-    assert text.index("[_META]") < text.index("[[produced]]")
+    # [_META] first, then schema-3 recipe tables keyed/sorted by cachetype.
+    assert text.index("[_META]") < text.index("esm_20c_anomaly")
     assert text.index("esm_20c_anomaly") < text.index("esm_lgm_anomaly")
     # Idempotent: a second write of the read-back index is byte-identical.
     CachedIndex.read(p).write(tmp_path / "again.toml")
@@ -116,7 +118,191 @@ def test_cached_index_accumulates_variations(tmp_path):
     recs = index.recipe_records()
     assert len(recs) == 1
     assert recs[0]["instances"] == {"h1": {"n": 1}, "h2": {"n": 2}}
-    assert index.scoped_keys() == {("", "c", "", "h1"), ("", "c", "", "h2")}
+    assert index.reachable_keys() == {("c", "", "h1"), ("c", "", "h2")}
+
+
+def test_schema3_version_in_key_storage_path_and_params_as_body(tmp_path):
+    """schema-3 keys recipes ["<cachetype>@<version>"] (bare when unversioned),
+    records a recipe-level storage_path, and writes each instance's params as the
+    body of ["<key>".instances.<hash>] (no params wrapper)."""
+    p = tmp_path / "cached.toml"
+    index = CachedIndex(path=str(p))
+    index.register(cachetype="mypkg.mod.run", version="v3", hash="83b2",
+                   params={"grid": "5x5"}, ref="mypkg.mod:run", format="pickle",
+                   storage_path="cached/mypkg.mod.run")
+    index.register(cachetype="plain", hash="44de", params={}, ref="m:plain",
+                   storage_path="cached/plain")
+    index.write()
+    text = p.read_text()
+
+    assert 'schema = 3' in text
+    assert '["mypkg.mod.run@v3"]' in text                       # version after @
+    assert '["mypkg.mod.run@v3".instances.83b2]' in text        # instance sub-table
+    assert 'storage_path = "cached/mypkg.mod.run"' in text      # recipe-level path
+    assert 'grid = "5x5"' in text                               # params ARE the body
+    assert '[plain]' in text                                    # unversioned ⇒ bare key
+    assert '[plain.instances.44de]' in text
+
+    # Round-trips identically.
+    again = tmp_path / "again.toml"
+    CachedIndex.read(p).write(again)
+    assert again.read_text() == text
+
+
+def test_entries_with_storage_paths_survive_roundtrip(tmp_path):
+    """Guard against a future format change silently wiping recorded entries:
+    several recipes (versioned + unversioned, each with a storage_path and
+    instances) must round-trip read → write → read losslessly and byte-stably."""
+    p = tmp_path / "cached.toml"
+    idx = CachedIndex(path=str(p))
+    idx.register(cachetype="a.b.run", version="v1", hash="h1", params={"n": 1},
+                 ref="a.b:run", format="pickle", storage_path="cached/a.b.run/v1")
+    idx.register(cachetype="a.b.run", version="v2", hash="h2", params={"n": 2},
+                 ref="a.b:run", format="pickle", storage_path="/scratch/v2")
+    idx.register(cachetype="plain", hash="h3", params={}, ref="m:plain",
+                 storage_path="cached/plain")
+    idx.write()
+    text = p.read_text()
+
+    back = CachedIndex.read(p)
+    assert back.recipes == idx.recipes                       # nothing dropped/altered
+    assert back.storage_path_of(cachetype="a.b.run", version="v2") == "/scratch/v2"
+    assert back.storage_path_of(cachetype="plain", version="") == "cached/plain"
+    # A second write is byte-identical (stable; no drift).
+    again = tmp_path / "again.toml"
+    back.write(again)
+    assert again.read_text() == text
+
+
+def test_pinned_schema3_fixture_preserves_storage_paths(tmp_path):
+    """A hand-pinned canonical schema-3 file must read back with every recipe's
+    storage_path intact. If a future reader/writer change breaks this, the test
+    fails — forcing a schema bump + migration rather than a silent wipe."""
+    p = tmp_path / "cached.toml"
+    p.write_text(
+        '[_META]\nschema = 3\n\n'
+        '[greet]\nref = "m:greet"\nformat = "txt"\nstorage_path = "cached/greet"\n\n'
+        '[greet.instances.aa]\nwho = "x"\n\n'
+        '["a.b.run@v2"]\nref = "a.b:run"\nformat = "pickle"\n'
+        'storage_path = "/scratch/v2"\n\n'
+        '["a.b.run@v2".instances.bb]\nn = 2\n'
+    )
+    idx = CachedIndex.read(p)
+    assert idx.storage_path_of(cachetype="greet", version="") == "cached/greet"
+    assert idx.storage_path_of(cachetype="a.b.run", version="v2") == "/scratch/v2"
+    assert idx.reachable_keys() == {("greet", "", "aa"), ("a.b.run", "v2", "bb")}
+
+
+def test_dead_instanceless_recipe_is_dropped_on_read(tmp_path):
+    """A residual recipe with no instances (e.g. left by an older shape) roots
+    nothing and is dropped on read, so it self-cleans on the next write —
+    without touching the real, populated entries."""
+    p = tmp_path / "cached.toml"
+    p.write_text(
+        '[_META]\nschema = 3\n\n'
+        '[memory2]\nformat = ""\nref = ""\nstorage_path = ""\n\n'
+        '[memory2.instances]\n\n'
+        '["memory2@2"]\nref = "m:p"\nformat = "pickle"\nstorage_path = "/c/ho/memory2"\n\n'
+        '["memory2@2".instances.h]\n\n'
+    )
+    idx = CachedIndex.read(p)
+    assert ("memory2", "") not in idx.recipes               # dead empty entry gone
+    assert ("memory2", "2") in idx.recipes                  # real entry kept
+    assert idx.storage_path_of(cachetype="memory2", version="2") == "/c/ho/memory2"
+    idx.write()
+    assert "[memory2]\n" not in p.read_text()               # self-cleaned on rewrite
+
+
+def test_cachetype_with_at_sign_is_rejected(tmp_path):
+    """'@' is reserved as the version separator — a cachetype can't contain it."""
+    import pytest
+    index = CachedIndex(path=str(tmp_path / "cached.toml"))
+    with pytest.raises(ValueError, match="@"):
+        index.register(cachetype="blabla@v2", hash="a1", ref="m:b")
+
+
+def test_cached_storage_path_replaces_cachetype_dir(tmp_path):
+    """@cached(storage_path=P) puts artifacts at P/[version]/hash (no cachetype
+    subfolder) and records P; cache_dir keeps the <cachetype> subfolder."""
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "datasets.toml").write_text("[_META]\nschema = 1\n")
+
+    @cached(cachetype="ct", format="txt", project_root=str(proj),
+            storage_path=str(tmp_path / "out"))
+    def f(*, x=1):
+        return str(x)
+
+    f(x=1)
+    # Artifact directly under storage_path (no "ct" segment).
+    hits = [r for r, _, fs in os.walk(tmp_path / "out") if "data.txt" in fs]
+    assert len(hits) == 1 and "/ct/" not in hits[0]
+    rec = CachedIndex.read(proj / "cached.toml").storage_path_of(
+        cachetype="ct", version="")
+    assert rec == str(tmp_path / "out")          # absolute (outside the repo)
+
+
+def test_cached_versioned_storage_path_includes_version(tmp_path):
+    """A versioned recipe records the version *in* storage_path (the direct hash
+    parent), and the artifact is storage_path/<hash> — no version re-appended."""
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "datasets.toml").write_text("[_META]\nschema = 1\n")
+
+    @cached(cachetype="ct", version="v3", format="txt", project_root=str(proj))
+    def f(*, x=1):
+        return str(x)
+
+    f(x=1)
+    rec = CachedIndex.read(proj / "cached.toml").storage_path_of(
+        cachetype="ct", version="v3")
+    assert rec == "cached/ct/v3"                              # version baked in
+    hits = [r for r, _, fs in os.walk(proj / "cached") if "data.txt" in fs]
+    assert len(hits) == 1
+    assert hits[0].endswith(os.path.join("cached", "ct", "v3", os.path.basename(hits[0])))
+
+
+def test_cached_hit_prefers_recorded_storage_path(tmp_path, monkeypatch):
+    """On a hit, the recorded storage_path wins over the machine-derived path: a
+    later call after datacache_dir changed still finds the artifact where it was
+    first written, instead of recomputing at the new default."""
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "datasets.toml").write_text("[_META]\nschema = 1\n")
+    calls = {"n": 0}
+
+    @cached(cachetype="ct", format="txt", project_root=str(proj))
+    def f(*, x=1):
+        calls["n"] += 1
+        return str(x)
+
+    monkeypatch.setenv("DATAMANIFEST_DATACACHE_DIR", str(tmp_path / "A"))
+    assert f(x=1) == "1"
+    assert calls["n"] == 1                                    # produced under A
+
+    # datacache_dir now points elsewhere; the derived path would miss, but the
+    # recorded storage_path (under A) is tried first → hit, no recompute.
+    monkeypatch.setenv("DATAMANIFEST_DATACACHE_DIR", str(tmp_path / "B"))
+    assert f(x=1) == "1"
+    assert calls["n"] == 1
+    assert not (tmp_path / "B").exists()                     # nothing written at the new default
+
+
+def test_schema2_is_read_and_rewritten_as_schema3(tmp_path):
+    """A legacy schema-2 ([[produced]]) file is read and rewritten as schema 3."""
+    p = tmp_path / "cached.toml"
+    p.write_text(
+        '[_META]\nschema = 2\n\n'
+        '[[produced]]\ncachetype = "c"\nref = "m:f"\nformat = "txt"\n'
+        '[[produced.instances]]\nhash = "h1"\n[produced.instances.params]\nn = 1\n'
+    )
+    index = CachedIndex.read(p)
+    assert index.reachable_keys() == {("c", "", "h1")}
+    assert index.recipes[("c", "")]["instances"] == {"h1": {"n": 1}}
+    index.write()
+    text = p.read_text()
+    assert 'schema = 3' in text and '[[produced]]' not in text
+    assert '[c.instances.h1]' in text
 
 
 # ----- @cached produce registers in a sibling cached.toml --------------------
@@ -134,7 +320,7 @@ def test_cached_produce_registers_and_back_points(cache_root, usage_log, tmp_pat
     make_greeting(who="x")
     assert calls["n"] == 1
 
-    # Registered in the sibling cached.toml under the function name.
+    # Registered in the sibling cached.toml under the cachetype.
     index_path = proj / "cached.toml"
     assert index_path.is_file()
     index = CachedIndex.read(str(index_path))
@@ -144,16 +330,13 @@ def test_cached_produce_registers_and_back_points(cache_root, usage_log, tmp_pat
     # ref = "<module>:<qualname>" (qualname includes the enclosing scope).
     assert ":" in rec["ref"]
     assert rec["ref"].split(":", 1)[1].endswith("make_greeting")
-    assert rec["store"] == "$cache"
-    # spec-v3: the recipe records the project-id scope it was produced under.
-    assert rec["scope"] == project_id(str(proj))
     # one instance, recording the params it was produced with.
     assert list(rec["instances"].values()) == [{"who": "x"}]
     artifact_hash = next(iter(rec["instances"]))
 
-    # Artifact metadata back-points at that index (audit only). spec-v3 layout:
-    # <cache>/cached/<project-id>/<cachetype>/<hash>.
-    artifact = cache_root / "cached" / project_id(str(proj)) / "greet" / artifact_hash
+    # Artifact metadata back-points at that index (audit only). spec-v4 layout:
+    # <datacache_dir>/<cachetype>/<hash> — no cached/ prefix, no scope.
+    artifact = cache_root / "greet" / artifact_hash
     md = read_metadata(str(artifact))
     assert md["origin"]["cached_toml"] == os.path.abspath(str(index_path))
 
@@ -175,10 +358,7 @@ def test_cached_hit_does_not_duplicate_or_restamp(cache_root, usage_log, tmp_pat
     index_path = proj / "cached.toml"
     _rec = {r["cachetype"]: r for r in CachedIndex.read(str(index_path)).recipe_records()}["greet"]
     artifact_hash = next(iter(_rec["instances"]))
-    metadata_path = (
-        cache_root / "cached" / project_id(str(proj)) / "greet"
-        / artifact_hash / "metadata.toml"
-    )
+    metadata_path = cache_root / "greet" / artifact_hash / "metadata.toml"
     first_index = index_path.read_bytes()
     first_meta_mtime = metadata_path.stat().st_mtime
 
@@ -198,10 +378,7 @@ def test_metadata_records_provenance(cache_root, usage_log, tmp_path):
         return name
 
     produce(name="v")
-    artifact = (
-        cache_root / "cached" / project_id(str(proj)) / "t"
-        / param_hash({"name": "v"})
-    )
+    artifact = cache_root / "t" / param_hash({"name": "v"})
     md = read_metadata(str(artifact))
     assert md["_META"]["schema"] == 1
     assert md["tool"].startswith("datamanifestpy ")
@@ -232,11 +409,12 @@ def test_last_access_missing_path_is_empty(tmp_path):
 # ----- inspect: enumerate produced artifacts ---------------------------------
 
 def _produce_artifact(cache_root, cachetype, key_table, *, version=""):
-    """Materialize a minimal produced artifact under the cached/ prefix."""
+    """Materialize a minimal produced artifact directly under the datacache_dir
+    root: ``<cachetype>/[<version>/]<hash>`` (spec-v4: no cached/ prefix)."""
     from datamanifest.cache import param_hash
 
     h = param_hash(key_table)
-    parts = ["cached", cachetype] + ([version] if version else []) + [h]
+    parts = [cachetype] + ([version] if version else []) + [h]
     directory = cache_root.joinpath(*parts)
     directory.mkdir(parents=True)
     (directory / "data.txt").write_text("payload")
@@ -261,7 +439,7 @@ def test_enumerate_artifacts_fields(cache_root):
     cache_root.mkdir(parents=True, exist_ok=True)
     prod_dir, key = _produce_artifact(cache_root, "mytype", {"g": "5x5"}, version="v3")
 
-    objs = list(enumerate_artifacts(str(cache_root), prefix="cached"))
+    objs = list(enumerate_artifacts(str(cache_root)))
     assert len(objs) == 1
     obj = objs[0]
     assert obj.kind == "cached"
@@ -276,27 +454,12 @@ def test_enumerate_artifacts_fields(cache_root):
     assert os.path.abspath(str(prod_dir)) == obj.location
 
 
-def test_enumerate_artifacts_scope_from_path(cache_root):
-    cache_root.mkdir(parents=True, exist_ok=True)
-    # A scoped layout: cached/<scope>/<cachetype>/<hash>.
-    from datamanifest.cache import param_hash
-
-    h = param_hash({"g": "1"})
-    directory = cache_root / "cached" / "proj-abc" / "t" / h
-    directory.mkdir(parents=True)
-    (directory / "data.txt").write_text("x")
-    write_config(str(directory), "t", h, {"g": "1"})
-
-    (obj,) = list(enumerate_artifacts(str(cache_root), prefix="cached"))
-    assert obj.scope == "proj-abc"
-
-
 # ----- inspect: delete / move are explicit and produced-only -----------------
 
 def test_delete_object_removes_artifact_and_markers(cache_root):
     cache_root.mkdir(parents=True, exist_ok=True)
     prod_dir, _key = _produce_artifact(cache_root, "t", {"g": "5x5"})
-    (obj,) = list(enumerate_artifacts(str(cache_root), prefix="cached"))
+    (obj,) = list(enumerate_artifacts(str(cache_root)))
 
     delete_object(obj)
     assert not os.path.exists(str(prod_dir))
@@ -312,7 +475,7 @@ def test_delete_object_refuses_non_cached(tmp_path):
 def test_move_object_preserves_key_path(cache_root, tmp_path):
     cache_root.mkdir(parents=True, exist_ok=True)
     prod_dir, _key = _produce_artifact(cache_root, "t", {"g": "5x5"}, version="v2")
-    (obj,) = list(enumerate_artifacts(str(cache_root), prefix="cached"))
+    (obj,) = list(enumerate_artifacts(str(cache_root)))
 
     dest_root = tmp_path / "elsewhere"
     new = move_object(obj, str(dest_root))

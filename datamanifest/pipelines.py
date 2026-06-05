@@ -684,17 +684,20 @@ def download_dataset(db, dataset, extract=None, overwrite: bool = False):
             "Skipping download for dataset: %s (skip_download=true)", dataset.uri
         )
         path = get_dataset_path(
-            dataset, db.datasets_folder, extract=extract, project_root=project_root
+            dataset, db.datasets_folder, extract=extract,
+            project_root=project_root, storage_config=db.storage_config,
         )
         if not (os.path.isfile(path) or os.path.isdir(path)):
             _missing_dataset_error(dataset, path)
         return path
 
     local_path = get_dataset_path(
-        dataset, db.datasets_folder, extract=extract, project_root=project_root
+        dataset, db.datasets_folder, extract=extract,
+        project_root=project_root, storage_config=db.storage_config,
     )
     download_path = get_dataset_path(
-        dataset, db.datasets_folder, extract=False, project_root=project_root
+        dataset, db.datasets_folder, extract=False,
+        project_root=project_root, storage_config=db.storage_config,
     )
 
     # Read-resolution: reuse an existing copy in any store — including the legacy
@@ -745,13 +748,18 @@ def download_dataset(db, dataset, extract=None, overwrite: bool = False):
                 _, dep_entry = search_dataset(db, ref)
                 dep_extract = extract if extract is not None else dep_entry.extract
                 req_paths_by_ref[_sanitize_ref(ref)] = get_dataset_path(
-                    dep_entry, db.datasets_folder, extract=dep_extract
+                    dep_entry, db.datasets_folder, extract=dep_extract,
+                    project_root=project_root, storage_config=db.storage_config,
                 )
             for dep_name in order[:-1]:
                 _, dep_entry = search_dataset(db, dep_name)
                 dep_extract = extract if extract is not None else dep_entry.extract
                 req_paths_ordered.append(
-                    get_dataset_path(dep_entry, db.datasets_folder, extract=dep_extract)
+                    get_dataset_path(
+                        dep_entry, db.datasets_folder, extract=dep_extract,
+                        project_root=project_root,
+                        storage_config=db.storage_config,
+                    )
                 )
         _download_dataset(
             dataset,
@@ -914,7 +922,8 @@ def _module_get_dataset_path(name: str, **kwargs):
     _, entry = search_dataset(db, name)
     from .database import get_dataset_path as _gdp
     return _gdp(entry, datasets_folder=db.datasets_folder,
-                project_root=db.get_project_root(), **kwargs)
+                project_root=db.get_project_root(),
+                storage_config=db.storage_config, **kwargs)
 
 
 def _module_download_dataset(name, **kwargs):

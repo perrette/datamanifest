@@ -104,7 +104,7 @@ def _julia_db(tmp_path, monkeypatch, *, delegate=True, with_julia=True):
     """
     data_dir = tmp_path / "store"
     data_dir.mkdir()
-    monkeypatch.setenv("DATAMANIFEST_DATA_DIR", str(data_dir))
+    monkeypatch.setenv("DATAMANIFEST_DATASETS_DIR", str(data_dir / "datasets"))
 
     proj = tmp_path / "proj"
     proj.mkdir()
@@ -221,7 +221,7 @@ def test_rung3_skipped_when_delegate_false(tmp_path, monkeypatch):
 def test_native_python_fetcher_never_reaches_rung3(tmp_path, monkeypatch):
     data_dir = tmp_path / "store"
     data_dir.mkdir()
-    monkeypatch.setenv("DATAMANIFEST_DATA_DIR", str(data_dir))
+    monkeypatch.setenv("DATAMANIFEST_DATASETS_DIR", str(data_dir / "datasets"))
     proj = tmp_path / "proj"
     proj.mkdir()
     _write_project_toml(str(proj / "Project.toml"))
