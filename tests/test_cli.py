@@ -110,6 +110,22 @@ def test_where():
         assert label in out, f"`where` output missing {label!r}: {out!r}"
 
 
+def test_where_selectors_print_bare_path(tmp_path):
+    toml = tmp_path / "datamanifest.toml"
+    toml.write_text('[_META]\nschema = 1\n[_STORAGE]\ndatasets_dir = "datasets"\n')
+    env = _env_with_toml(toml)
+    # Each selector prints exactly one bare line (no label), scriptable.
+    m = _run("where", "--manifest", env=env)
+    assert m.returncode == 0 and m.stdout.strip() == str(toml)
+    dd = _run("where", "--datasets-dir", env=env)
+    assert dd.stdout.strip() == str(tmp_path / "datasets")
+    sf = _run("where", "--state-file", env=env)
+    assert sf.stdout.strip().endswith(".datamanifest-state.toml")
+    assert ":" not in sf.stdout.strip()                # no "label : value" form
+    # Selectors are mutually exclusive.
+    assert _run("where", "--manifest", "--state-file", env=env).returncode != 0
+
+
 # ----- update-checksums -----
 
 def test_update_checksums_help():

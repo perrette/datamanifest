@@ -1069,7 +1069,10 @@ def _cmd_where(args):
     """Show where this project keeps things: the active manifest and state file,
     the data directories **resolved for this host** (datasets_dir / datacache_dir,
     honoring env vars and `_HOST` overrides), and any non-default per-dataset
-    locations (`storage_path` overrides)."""
+    locations (`storage_path` overrides).
+
+    With one of ``--manifest`` / ``--state-file`` / ``--datasets-dir`` /
+    ``--datacache-dir``, print only that single bare path (scriptable, no label)."""
     from . import storage as storage_mod
     from .cache import STATE_FILE_NAME, CachedIndex
     from .database import get_dataset_path
@@ -1078,20 +1081,35 @@ def _cmd_where(args):
     root = db.get_project_root()
     cfg = db.storage_config
     base = os.path.dirname(db.datasets_toml) if db.datasets_toml else os.getcwd()
-    state = CachedIndex.locate(base)
-    state_disp = (state if os.path.isfile(state)
-                  else os.path.join(base, STATE_FILE_NAME) + "  (not created yet)")
+    state_path = CachedIndex.locate(base)
+    if not os.path.isfile(state_path):
+        state_path = os.path.join(base, STATE_FILE_NAME)
+
+    def _resolve(field):
+        try:
+            return getattr(storage_mod, field)(project_root=root, storage_config=cfg)
+        except Exception as e:  # noqa: BLE001 - surface an unresolved symbol inline
+            return f"<unresolved: {e}>"
+
+    # Scriptable single-path selectors: print only the bare value, no label.
+    selectors = (
+        ("manifest", db.datasets_toml),
+        ("state_file", state_path),
+        ("datasets_dir", None),       # resolved lazily below
+        ("datacache_dir", None),
+    )
+    for attr, value in selectors:
+        if getattr(args, attr, False):
+            print(value if value is not None else _resolve(attr))
+            return
 
     rows = [
         ("manifest", db.datasets_toml or "(none — in-memory database)"),
-        ("state file", state_disp),
+        ("state file", state_path
+         + ("" if os.path.isfile(state_path) else "  (not created yet)")),
+        ("datasets_dir", _resolve("datasets_dir")),
+        ("datacache_dir", _resolve("datacache_dir")),
     ]
-    for field in ("datasets_dir", "datacache_dir"):
-        try:
-            rows.append((field, getattr(storage_mod, field)(
-                project_root=root, storage_config=cfg)))
-        except Exception as e:  # noqa: BLE001 - surface an unresolved symbol inline
-            rows.append((field, f"<unresolved: {e}>"))
     width = max(len(k) for k, _ in rows)
     for k, v in rows:
         print(f"{k:<{width}} : {v}")
@@ -1537,7 +1555,25 @@ def main():
     # where
     p_where = subparsers.add_parser(
         "where", help="Show the active manifest, state file, and resolved data "
-                      "directories for this host"
+                      "directories for this host",
+        description=(
+            "Show the active manifest, state file, and the datasets_dir / "
+            "datacache_dir resolved for this host (plus any per-dataset "
+            "storage_path overrides). With a single selector flag, print only "
+            "that bare path (scriptable)."
+        ),
+    )
+    _where_excl = p_where.add_mutually_exclusive_group()
+    _where_excl.add_argument("--manifest", action="store_true",
+                             help="Print only the manifest path")
+    _where_excl.add_argument("--state-file", dest="state_file", action="store_true",
+                             help="Print only the state-file path")
+    _where_excl.add_argument("--datasets-dir", dest="datasets_dir",
+                             action="store_true",
+                             help="Print only the resolved datasets_dir")
+    _where_excl.add_argument("--datacache-dir", dest="datacache_dir",
+                             action="store_true",
+                             help="Print only the resolved datacache_dir"
     )
     p_where.set_defaults(func=_cmd_where)
 
