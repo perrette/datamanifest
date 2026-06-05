@@ -13,7 +13,7 @@
 
 Keep track of datasets used in a scientific project: data dependencies and internal caching.
 
-`datamanifest` provides a simple way to declare data dependencies — URLs, git repositories, checksums, formats — in a `datasets.toml` file, and handles download, verification, extraction, and loading. It can now also cache your own computed results (versioned), reusing the same infrastructure. `datamanifest` started as a Python port of [`DataManifest.jl`](https://github.com/awi-esc/DataManifest.jl) (same author), sharing its manifest format and feature surface; it has since grown a CLI and now develops in parallel as the Python implementation of a [multi-language specification](https://github.com/perrette/datamanifest.toml).
+`datamanifest` provides a simple way to declare data dependencies — URLs, git repositories, checksums, formats — in a `datamanifest.toml` file, and handles download, verification, extraction, and loading. It can now also cache your own computed results (versioned), reusing the same infrastructure. `datamanifest` started as a Python port of [`DataManifest.jl`](https://github.com/awi-esc/DataManifest.jl) (same author), sharing its manifest format and feature surface; it has since grown a CLI and now develops in parallel as the Python implementation of a [multi-language specification](https://github.com/perrette/datamanifest.toml).
 
 ## Installation
 
@@ -30,6 +30,28 @@ pip install "datamanifestpy[nc]"        # xarray + netcdf4
 pip install "datamanifestpy[yaml]"      # pyyaml
 pip install "datamanifestpy[all]"       # all of the above
 ```
+
+## Quick start
+
+```bash
+datamanifest init                              # create datamanifest.toml here
+datamanifest add https://example.com/data.csv  # register + download + record sha256
+datamanifest list                              # what's tracked, and where it lives
+datamanifest path data.csv                     # resolve the on-disk path (for a script)
+datamanifest verify                            # re-check every checksum
+```
+
+**Commit `datamanifest.toml`** — it's the recipe (what to fetch and how). The
+downloaded data and a local `.datamanifest-state.toml` (which records *where*
+each file landed on this machine) stay git-ignored. A collaborator clones the
+repo and runs `datamanifest download` to materialize everything. Data lives
+under `./datasets/` and `./cached/` by default — point them elsewhere (e.g. a
+scratch partition, per host) with [`datamanifest storage`](#storage-model).
+
+New here? Skim the [API quickstart](#api-quickstart) and [`@cached`](#produce-or-load-caching-cached)
+below; the full format and behaviour are in the
+[specification](https://github.com/perrette/datamanifest.toml) and
+[design notes](docs/design-notes.md).
 
 ## API quickstart
 
@@ -50,12 +72,12 @@ path = datamanifest.get_dataset_path("jesstierney/lgmDA")
 ds = datamanifest.load_dataset("my_nc_entry")  # returns xarray.Dataset for nc format
 
 # Explicit database (no pyproject.toml / env-var lookup)
-db = datamanifest.Database("datasets.toml", "my-data-folder")
+db = datamanifest.Database("datamanifest.toml", "my-data-folder")
 datamanifest.add(db, "https://zenodo.org/record/.../file.csv")
 path = datamanifest.get_dataset_path(db, "file")
 ```
 
-The module-level functions (`add`, `download_dataset`, `load_dataset`, `get_dataset_path`, …) look up a process-wide default `Database` via `pyproject.toml` discovery, the `DATAMANIFEST_TOML` / `DATASETS_TOML` environment variables, or a `datasets.toml` / `datamanifest.toml` file in the working tree. Pass an explicit `db` as the first argument to bypass auto-discovery.
+The module-level functions (`add`, `download_dataset`, `load_dataset`, `get_dataset_path`, …) look up a process-wide default `Database` via `pyproject.toml` discovery, the `DATAMANIFEST_TOML` / `DATASETS_TOML` environment variables, or a `datamanifest.toml` (or legacy `datasets.toml`) file in the working tree. Pass an explicit `db` as the first argument to bypass auto-discovery.
 
 ### Produce-or-load caching (`@cached`)
 
@@ -99,7 +121,7 @@ datamanifest COMMAND [OPTIONS]
 | `show NAME` | Print full entry detail in TOML style |
 | `verify [NAME ...]` | Re-check sha256 checksums; exits nonzero on any mismatch |
 | `update-checksums [NAME ...] [--dry-run]` | Recompute stored checksums from what's on disk |
-| `init [--folder PATH] [--force]` | Create a fresh `datasets.toml` in the current directory |
+| `init [--folder PATH] [--force]` | Create a fresh `datamanifest.toml` in the current directory |
 | `where` | Print active `datasets_toml` and `datasets_folder` paths |
 | `storage [show]` / `storage set FIELD VALUE [--host GLOB\|--all-hosts]` / `storage unset FIELD [...]` | Show or edit `[_STORAGE]` without hand-writing the `_HOST` syntax. `set`/`unset` target **this host** by default (a `[_STORAGE._HOST."<hostname>"]` override); `--host GLOB` targets a host pattern, `--all-hosts` the project-wide base. `FIELD` is `datasets_dir`/`datacache_dir` or a user `$symbol` |
 | `migrate FILE [--dry-run]` | Reshape a spec-v3 manifest's `[_STORAGE]` to the spec-v4 two-field model: write `datasets_dir`/`datacache_dir` at their defaults, drop the retired keys, carry `local_path` → `storage_path`. Moves no bytes |

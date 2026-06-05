@@ -1373,7 +1373,7 @@ def main():
     _act_excl.add_argument(
         "--delete", action="store_true",
         help="Delete the selected objects — produced artifacts and fetched "
-             "datasets (dry run unless --yes); protected data is skipped",
+             "datasets (--dry-run previews); protected data is skipped",
     )
     _act_excl.add_argument(
         "--move", metavar="DEST",
