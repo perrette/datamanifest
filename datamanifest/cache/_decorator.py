@@ -581,6 +581,16 @@ def cached(
                     recorded_sp, project_root=root, storage_config=sconf))
             if derived_dir not in search_dirs:
                 search_dirs.append(derived_dir)
+            # Read pools (opt-in): produced-artifact locations another project may
+            # have already filled, probed at <pool>/<cachetype>[/<version>]/<hash>.
+            # config_is_valid still gates a hit, and a hit self-heals the record.
+            for pool in locations.datacache_pools(
+                project_root=root, storage_config=sconf,
+            ):
+                parts = [pool, ct] + ([version] if version else []) + [hash_]
+                pool_dir = os.path.join(*parts)
+                if pool_dir not in search_dirs:
+                    search_dirs.append(pool_dir)
 
             # A hit requires not just a complete, hash-valid artifact but the
             # expected data file for *this* format on disk (two recipes sharing a

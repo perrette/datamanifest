@@ -94,3 +94,50 @@ def test_pool_copy_with_matching_checksum_is_adopted(tmp_path):
     db = _project(tmp_path, pool_dir=str(pool), sha256=good)
     assert resolve_from_pools(db, db.datasets["a"]) == \
         str(pool / "example.com" / "a.csv")
+
+
+# ----- produced-artifact pools (datacache_pools, opt-in) ---------------------
+
+def test_datacache_pools_opt_in_empty_by_default():
+    # No de-facto shared compute cache: undefined → no pools.
+    assert L.datacache_pools(storage_config={}, env={}) == []
+    assert L.datacache_pools(
+        storage_config={"datacache_pools": ["/shared/cache"]}, env={}) == ["/shared/cache"]
+
+
+def test_datacache_pools_compose_with_host():
+    cfg = {"_HOST": {"hpc*": {"datacache_pools": ["/scratch/shared"]}}}
+    assert L.datacache_pools(storage_config=cfg, env={}, host="hpc01") == ["/scratch/shared"]
+    assert L.datacache_pools(storage_config=cfg, env={}, host="laptop") == []
+
+
+def test_cached_reuses_pooled_artifact(tmp_path, monkeypatch):
+    """A @cached call whose artifact already exists in a datacache pool loads it
+    in place instead of recomputing."""
+    from datamanifest.cache import cached, param_hash
+    from datamanifest.cache._sidecars import write_config
+
+    monkeypatch.setenv("DATAMANIFEST_USAGE_LOG", str(tmp_path / "usage.toml"))
+    monkeypatch.setenv("DATAMANIFEST_DATACACHE_DIR", str(tmp_path / "cache"))
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "datamanifest.toml").write_text("[_META]\nschema = 1\n")
+
+    pool = tmp_path / "pool"
+    h = param_hash({"x": 1})
+    art = pool / "ct" / h
+    art.mkdir(parents=True)
+    (art / "data.txt").write_text("from-pool")
+    write_config(str(art), "ct", h, {"x": 1})
+    (art / ".complete").write_text("")
+
+    calls = {"n": 0}
+
+    @cached(cachetype="ct", format="txt", project_root=str(proj),
+            storage_config={"datacache_pools": [str(pool)]})
+    def f(*, x=1):
+        calls["n"] += 1
+        return "computed"
+
+    assert f(x=1) == "from-pool"          # loaded from the pool …
+    assert calls["n"] == 0                # … not recomputed

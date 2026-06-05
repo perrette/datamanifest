@@ -49,6 +49,7 @@ __all__ = [
     "datasets_dir",
     "datacache_dir",
     "datasets_pools",
+    "datacache_pools",
     "dataset_path",
     "is_local_path",
     "is_user_managed",
@@ -266,41 +267,35 @@ POOL_DEFAULTS = (
 )
 
 
-def _pools_raw(storage_config, env, host):
-    """The raw ``datasets_pools`` value (a list of path expressions, or ``None``
-    when undefined) via the env > ``_HOST`` glob > base ladder. ``DATAMANIFEST_
-    DATASETS_POOLS`` is ``os.pathsep``-separated."""
-    raw = env.get("DATAMANIFEST_DATASETS_POOLS")
+def _pools_raw(field, storage_config, env, host):
+    """The raw value of a ``*_pools`` *field* (a list of path expressions, or
+    ``None`` when undefined) via the env > ``_HOST`` glob > base ladder.
+    ``DATAMANIFEST_<FIELD>`` is ``os.pathsep``-separated."""
+    raw = env.get(f"DATAMANIFEST_{field.upper()}")
     if raw is not None:
         return [p for p in raw.split(os.pathsep) if p]
     for pattern, mapping in storage_config.get("_HOST", {}).items():
         if isinstance(mapping, dict) and fnmatch.fnmatch(host, pattern) \
-                and "datasets_pools" in mapping:
-            v = mapping["datasets_pools"]
+                and field in mapping:
+            v = mapping[field]
             return list(v) if isinstance(v, (list, tuple)) else [v]
-    if "datasets_pools" in storage_config:
-        v = storage_config["datasets_pools"]
+    if field in storage_config:
+        v = storage_config[field]
         return list(v) if isinstance(v, (list, tuple)) else [v]
     return None
 
 
-def datasets_pools(*, project_root="", storage_config=None, env=os.environ,
-                   host=None):
-    """Resolved absolute **read-pool** directories — extra read-only locations
-    probed for an already-present ``<pool>/<key>`` before downloading, so a
-    dataset another project already fetched is reused in place.
-
-    ``[_STORAGE].datasets_pools`` (host-composable via ``_HOST``, or
-    ``DATAMANIFEST_DATASETS_POOLS``) gives the pools; when **undefined** the
-    built-in :data:`POOL_DEFAULTS` are used; an explicit **empty** list disables
-    pools entirely. Each entry is a path expression (``$``-symbols / ``~`` / env).
-    """
+def _resolve_pools(field, defaults, *, project_root, storage_config, env, host):
+    """Resolve a ``*_pools`` *field* to a list of absolute directories: the
+    configured value (host-composable via ``_HOST`` / ``DATAMANIFEST_<FIELD>``),
+    or *defaults* when undefined; an explicit empty list disables them. Each entry
+    is a path expression."""
     if storage_config is None:
         storage_config = {}
     if host is None:
         host = socket.gethostname()
-    raw = _pools_raw(storage_config, env, host)
-    exprs = list(POOL_DEFAULTS) if raw is None else raw
+    raw = _pools_raw(field, storage_config, env, host)
+    exprs = list(defaults) if raw is None else raw
     out = []
     for expr in exprs:
         try:
@@ -312,6 +307,42 @@ def datasets_pools(*, project_root="", storage_config=None, env=os.environ,
         if ap not in out:
             out.append(ap)
     return out
+
+
+def datasets_pools(*, project_root="", storage_config=None, env=os.environ,
+                   host=None):
+    """Resolved absolute **fetched-dataset read pools** — extra read-only
+    locations probed for an already-present ``<pool>/<key>`` before downloading,
+    so a dataset another project already fetched is reused in place.
+
+    ``[_STORAGE].datasets_pools`` (host-composable via ``_HOST``, or
+    ``DATAMANIFEST_DATASETS_POOLS``) gives the pools; when **undefined** the
+    built-in :data:`POOL_DEFAULTS` are used; an explicit **empty** list disables
+    them. Each entry is a path expression (``$``-symbols / ``~`` / env).
+    """
+    return _resolve_pools(
+        "datasets_pools", POOL_DEFAULTS, project_root=project_root,
+        storage_config=storage_config, env=env, host=host,
+    )
+
+
+def datacache_pools(*, project_root="", storage_config=None, env=os.environ,
+                    host=None):
+    """Resolved absolute **produced-artifact read pools** — extra read-only
+    locations probed for an already-produced ``<pool>/<cachetype>[/<version>]/
+    <hash>`` before recomputing, so a ``@cached`` result another project already
+    produced is reused in place.
+
+    ``[_STORAGE].datacache_pools`` (host-composable via ``_HOST``, or
+    ``DATAMANIFEST_DATACACHE_POOLS``); **opt-in** — undefined means *no* pools
+    (there is no de-facto shared compute cache, and produced artifacts carry no
+    content checksum, only their ``cachetype``/``version``/``hash`` identity and
+    ``config.toml`` validation). An empty list is likewise none.
+    """
+    return _resolve_pools(
+        "datacache_pools", (), project_root=project_root,
+        storage_config=storage_config, env=env, host=host,
+    )
 
 
 def dataset_path(storage_path, key, *, project_root="", storage_config=None,
