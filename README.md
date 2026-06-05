@@ -272,11 +272,13 @@ implementation supports.
 
 **Python alternatives:**
 
-- [`fatiando/pooch`](https://www.fatiando.org/pooch/) — the reference tool for
-  the download / checksum / unzip layer (it backs SciPy, scikit-image, and many
-  others). `datamanifest` covers the same ground and adds loading the data, the
-  `@cached` result cache, a `requires=` dependency graph, and the cross-language
-  manifest. Already using Pooch?
+- [`fatiando/pooch`](https://www.fatiando.org/pooch/) — the established tool
+  for fetching and verifying data from Python code (it backs SciPy,
+  scikit-image, and many others). `datamanifest` covers that ground and centers
+  on two things Pooch doesn't aim for: an explicit, cross-language manifest
+  file as the single source of truth, and a CLI that manages the whole dataset
+  lifecycle — add, verify, repair, sync — without touching code. Already using
+  Pooch?
   `datamanifest import pooch registry.txt --cache-dir "$(python -c 'import pooch; print(pooch.os_cache("yourpkg"))')"`
   converts the registry and adopts your downloaded files in place.
 - [`intake`](https://intake.readthedocs.io) — catalog of data sources with
