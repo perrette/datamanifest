@@ -126,6 +126,7 @@ datamanifest list --dirty       # preview: records that disagree with disk
 datamanifest refresh            # repoint moved files, drop deleted, adopt untracked
 datamanifest refresh --scan     # also discover & adopt copies found elsewhere
 datamanifest where              # the active manifest, state file, and data folders
+datamanifest storage            # the resolved storage config (much the same view)
 ```
 
 `refresh` only edits local state — never your data, never the manifest. To act
