@@ -101,8 +101,8 @@ def test_cached_index_round_trip_recipes(tmp_path):
 def test_cached_index_write_is_canonical(tmp_path):
     p = _write_fixture_index(tmp_path / "cached.toml")
     text = (tmp_path / "cached.toml").read_text()
-    # [_META] first, then [[produced]] recipe tables sorted by cachetype.
-    assert text.index("[_META]") < text.index("[[produced]]")
+    # [_META] first, then schema-3 recipe tables keyed/sorted by cachetype.
+    assert text.index("[_META]") < text.index("esm_20c_anomaly")
     assert text.index("esm_20c_anomaly") < text.index("esm_lgm_anomaly")
     # Idempotent: a second write of the read-back index is byte-identical.
     CachedIndex.read(p).write(tmp_path / "again.toml")
@@ -119,6 +119,106 @@ def test_cached_index_accumulates_variations(tmp_path):
     assert len(recs) == 1
     assert recs[0]["instances"] == {"h1": {"n": 1}, "h2": {"n": 2}}
     assert index.reachable_keys() == {("c", "", "h1"), ("c", "", "h2")}
+
+
+def test_schema3_version_in_key_storage_path_and_params_as_body(tmp_path):
+    """schema-3 keys recipes ["<cachetype>@<version>"] (bare when unversioned),
+    records a recipe-level storage_path, and writes each instance's params as the
+    body of ["<key>".instances.<hash>] (no params wrapper)."""
+    p = tmp_path / "cached.toml"
+    index = CachedIndex(path=str(p))
+    index.register(cachetype="mypkg.mod.run", version="v3", hash="83b2",
+                   params={"grid": "5x5"}, ref="mypkg.mod:run", format="pickle",
+                   storage_path="cached/mypkg.mod.run")
+    index.register(cachetype="plain", hash="44de", params={}, ref="m:plain",
+                   storage_path="cached/plain")
+    index.write()
+    text = p.read_text()
+
+    assert 'schema = 3' in text
+    assert '["mypkg.mod.run@v3"]' in text                       # version after @
+    assert '["mypkg.mod.run@v3".instances.83b2]' in text        # instance sub-table
+    assert 'storage_path = "cached/mypkg.mod.run"' in text      # recipe-level path
+    assert 'grid = "5x5"' in text                               # params ARE the body
+    assert '[plain]' in text                                    # unversioned ⇒ bare key
+    assert '[plain.instances.44de]' in text
+
+    # Round-trips identically.
+    again = tmp_path / "again.toml"
+    CachedIndex.read(p).write(again)
+    assert again.read_text() == text
+
+
+def test_cachetype_with_at_sign_is_rejected(tmp_path):
+    """'@' is reserved as the version separator — a cachetype can't contain it."""
+    import pytest
+    index = CachedIndex(path=str(tmp_path / "cached.toml"))
+    with pytest.raises(ValueError, match="@"):
+        index.register(cachetype="blabla@v2", hash="a1", ref="m:b")
+
+
+def test_cached_storage_path_replaces_cachetype_dir(tmp_path):
+    """@cached(storage_path=P) puts artifacts at P/[version]/hash (no cachetype
+    subfolder) and records P; cache_dir keeps the <cachetype> subfolder."""
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "datasets.toml").write_text("[_META]\nschema = 1\n")
+
+    @cached(cachetype="ct", format="txt", project_root=str(proj),
+            storage_path=str(tmp_path / "out"))
+    def f(*, x=1):
+        return str(x)
+
+    f(x=1)
+    # Artifact directly under storage_path (no "ct" segment).
+    hits = [r for r, _, fs in os.walk(tmp_path / "out") if "data.txt" in fs]
+    assert len(hits) == 1 and "/ct/" not in hits[0]
+    rec = CachedIndex.read(proj / "cached.toml").storage_path_of(
+        cachetype="ct", version="")
+    assert rec == str(tmp_path / "out")          # absolute (outside the repo)
+
+
+def test_cached_hit_prefers_recorded_storage_path(tmp_path, monkeypatch):
+    """On a hit, the recorded storage_path wins over the machine-derived path: a
+    later call after datacache_dir changed still finds the artifact where it was
+    first written, instead of recomputing at the new default."""
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "datasets.toml").write_text("[_META]\nschema = 1\n")
+    calls = {"n": 0}
+
+    @cached(cachetype="ct", format="txt", project_root=str(proj))
+    def f(*, x=1):
+        calls["n"] += 1
+        return str(x)
+
+    monkeypatch.setenv("DATAMANIFEST_DATACACHE_DIR", str(tmp_path / "A"))
+    assert f(x=1) == "1"
+    assert calls["n"] == 1                                    # produced under A
+
+    # datacache_dir now points elsewhere; the derived path would miss, but the
+    # recorded storage_path (under A) is tried first → hit, no recompute.
+    monkeypatch.setenv("DATAMANIFEST_DATACACHE_DIR", str(tmp_path / "B"))
+    assert f(x=1) == "1"
+    assert calls["n"] == 1
+    assert not (tmp_path / "B").exists()                     # nothing written at the new default
+
+
+def test_schema2_is_read_and_rewritten_as_schema3(tmp_path):
+    """A legacy schema-2 ([[produced]]) file is read and rewritten as schema 3."""
+    p = tmp_path / "cached.toml"
+    p.write_text(
+        '[_META]\nschema = 2\n\n'
+        '[[produced]]\ncachetype = "c"\nref = "m:f"\nformat = "txt"\n'
+        '[[produced.instances]]\nhash = "h1"\n[produced.instances.params]\nn = 1\n'
+    )
+    index = CachedIndex.read(p)
+    assert index.reachable_keys() == {("c", "", "h1")}
+    assert index.recipes[("c", "")]["instances"] == {"h1": {"n": 1}}
+    index.write()
+    text = p.read_text()
+    assert 'schema = 3' in text and '[[produced]]' not in text
+    assert '[c.instances.h1]' in text
 
 
 # ----- @cached produce registers in a sibling cached.toml --------------------

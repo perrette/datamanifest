@@ -100,6 +100,11 @@ def _resolve_cachetype(fn, explicit):
     identity-less case we refuse to guess and require an explicit *cachetype*.
     """
     if explicit:
+        if "@" in explicit:
+            raise ValueError(
+                f"cachetype {explicit!r} may not contain '@' (reserved as the "
+                "cached.toml version separator)"
+            )
         return explicit
     module = fn.__module__
     if module == "__main__":
@@ -245,40 +250,47 @@ def _key_table_for_call(key, call_kwargs: dict) -> dict:
     return {k: base[k] for k in key if k in base}
 
 
-def _produced_key(cachetype, version, hash_) -> str:
-    """The per-artifact key path under the ``cached`` scope:
-    ``<cachetype>/[<version>/]<hash>``.
+def _recipe_parent(*, cache_dir, storage_path, cachetype, project_root,
+                   storage_config) -> str:
+    """The recipe's **parent directory** (spec-v4) — parallel to the cachetype;
+    the artifact dir is ``<parent>/[<version>/]<hash>``.
 
-    *version* (the optional recipe version) becomes a path segment between the
-    cachetype and the parameter hash when set; it is **not** part of *hash_*.
+    Precedence: an explicit ``storage_path=`` (replaces ``datacache_dir`` *and*
+    the cachetype — used as the parent verbatim) → a per-call ``cache_dir=``
+    (``<cache_dir>/<cachetype>``, keeps the cachetype subfolder) → the default
+    ``<datacache_dir>/<cachetype>``. Returns an absolute path.
     """
-    parts = [cachetype]
+    if storage_path:
+        return locations.resolve_path(
+            storage_path, project_root=project_root, storage_config=storage_config,
+        )
+    if cache_dir:
+        return os.path.join(cache_dir, cachetype)
+    base = locations.datacache_dir(
+        project_root=project_root, storage_config=storage_config,
+    )
+    return os.path.join(base, cachetype)
+
+
+def _artifact_dir(parent, version, hash_) -> str:
+    """``<parent>/[<version>/]<hash>`` — the artifact directory under its
+    recipe's *parent* (see :func:`_recipe_parent`)."""
+    parts = [parent]
     if version:
         parts.append(version)
     parts.append(hash_)
     return os.path.join(*parts)
 
 
-def _artifact_dir(*, cache_dir, cachetype, version, hash_,
-                  project_root, storage_config) -> str:
-    """Resolve a produced artifact's directory (spec-v4).
-
-    Default composition: ``<datacache_dir>/<cachetype>/[<version>/]<hash>`` —
-    the manifest's ``datacache_dir`` (default ``cached`` ⇒ repo-local
-    ``./cached/``) plus the per-artifact key. No scope, no prefix. *project_root*
-    / *storage_config* are threaded to the resolver, and
-    ``DATAMANIFEST_DATACACHE_DIR`` applies through it.
-
-    An explicit per-call *cache_dir* is used **verbatim**
-    (``<cache_dir>/<cachetype>/[<version>/]<hash>``), bypassing folder resolution.
-    """
-    key_path = _produced_key(cachetype, version, hash_)
-    if cache_dir:
-        return os.path.join(cache_dir, key_path)
-    base = locations.datacache_dir(
-        project_root=project_root, storage_config=storage_config,
-    )
-    return os.path.join(base, key_path)
+def _record_storage_path(parent, project_root) -> str:
+    """Render a recipe *parent* for recording in ``cached.toml``: relative to the
+    manifest dir when it lives under the project root (portable across clones),
+    absolute otherwise. Mirrors a dataset's ``storage_path`` convention."""
+    if project_root:
+        ap, rt = os.path.abspath(parent), os.path.abspath(project_root)
+        if ap == rt or ap.startswith(rt + os.sep):
+            return os.path.relpath(ap, rt)
+    return parent
 
 
 def _discover_manifest(project_root):
@@ -343,15 +355,17 @@ def _locate_cached_toml(cached_toml, project_root) -> str:
 
 
 def _register_produced(
-    cached_toml_path, *, cachetype, hash_, params, ref, format, version="",
+    cached_toml_path, *, cachetype, hash_, params, ref, format, storage_path,
+    version="",
 ) -> str:
     """Register a freshly-produced variation into its ``cached.toml`` and record
     that index in the depot usage log. Returns the index path written.
 
     Reads any existing index (so a register **adds** this variation without
     dropping the rest), records the parameter ``hash`` + ``params`` under the
-    recipe ``(cachetype, version)``, writes canonically, and stamps the usage
-    log so GC can discover this root.
+    recipe ``(cachetype, version)`` along with the recipe's ``storage_path``
+    (its parent dir), writes canonically, and stamps the usage log so GC can
+    discover this root.
     """
     index = CachedIndex.read_or_empty(cached_toml_path)
     index.register(
@@ -360,6 +374,7 @@ def _register_produced(
         params=params,
         ref=ref,
         format=format or "",
+        storage_path=storage_path,
         version=version,
     )
     written = index.write(cached_toml_path)
@@ -368,7 +383,8 @@ def _register_produced(
 
 
 def _heal_on_hit(
-    cached_toml_path, *, cachetype, hash_, params, ref, format, version,
+    cached_toml_path, *, cachetype, hash_, params, ref, format, storage_path,
+    version,
 ) -> None:
     """Self-heal the registry on a cache hit (best-effort, never raises).
 
@@ -390,7 +406,7 @@ def _heal_on_hit(
             return
         index.register(
             cachetype=cachetype, hash=hash_, params=params, ref=ref,
-            format=format or "", version=version,
+            format=format or "", storage_path=storage_path, version=version,
         )
         record_path(index.write(cached_toml_path))
     except Exception:  # noqa: BLE001 - a hit must never fail on index issues
@@ -405,6 +421,7 @@ def cached(
     key=None,
     basename="",
     version="",
+    storage_path="",
     project_root="",
     storage_config=None,
     cached_toml="",
@@ -461,6 +478,14 @@ def cached(
         is **never** part of the parameter hash — same kwargs hash to the same
         ``<hash>`` with or without a version. Bumping it isolates artifacts
         across recipe revisions (e.g. preventing stale cross-branch hits).
+    storage_path:
+        The recipe's **parent directory** (parallel to the cachetype); the
+        artifact lands at ``<storage_path>/[<version>/]<hash>``. Replaces the
+        default ``<datacache_dir>/<cachetype>`` wholesale (unlike the per-call
+        ``cache_dir=``, which keeps the ``<cachetype>`` subfolder). A relative
+        value resolves against the manifest dir, absolute is used as-is. The
+        resolved parent is recorded in ``cached.toml`` and preferred on the next
+        hit. Default ``""`` ⇒ ``<datacache_dir>/<cachetype>``.
     project_root, storage_config:
         Threaded through to the ``$``-symbol resolver / git provenance (optional;
         no ``Database`` is required).
@@ -512,48 +537,72 @@ def cached(
                 storage_config if storage_config is not None
                 else _load_storage_config(manifest_toml)
             )
-            artifact_dir = _artifact_dir(
-                cache_dir=cache_dir, cachetype=ct,
-                version=version, hash_=hash_, project_root=root,
-                storage_config=sconf,
-            )
-            data_path = os.path.join(artifact_dir, _data_name(basename, fmt))
-
-            # The portable registry coordinates (shared by the hit self-heal and
-            # the miss registration).
             ref = f"{fn.__module__}:{fn.__qualname__}"
             index_path = _locate_cached_toml(cached_toml, root)
+            data_filename = _data_name(basename, fmt)
+
+            # Where THIS call would write under the current config (storage_path
+            # ⇒ verbatim parent; cache_dir ⇒ <cache_dir>/<cachetype>; else
+            # <datacache_dir>/<cachetype>), and the portable form recorded for it.
+            derived_parent = _recipe_parent(
+                cache_dir=cache_dir, storage_path=storage_path, cachetype=ct,
+                project_root=root, storage_config=sconf,
+            )
+            sp_record = _record_storage_path(derived_parent, root)
+
+            # Hit search prefers the location **recorded in cached.toml** (where
+            # this recipe's artifacts were actually written — which may differ
+            # from the current default if the config changed), then falls back to
+            # the machine-derived parent.
+            recorded_sp = ""
+            if os.path.isfile(index_path):
+                try:
+                    recorded_sp = CachedIndex.read(index_path).storage_path_of(
+                        cachetype=ct, version=version,
+                    )
+                except Exception:  # noqa: BLE001 - a broken index never blocks
+                    recorded_sp = ""
+            search_parents = []
+            if recorded_sp:
+                search_parents.append(locations.resolve_path(
+                    recorded_sp, project_root=root, storage_config=sconf))
+            if derived_parent not in search_parents:
+                search_parents.append(derived_parent)
 
             # A hit requires not just a complete, hash-valid artifact but the
-            # expected data file for *this* format on disk. Two recipes that
-            # share a cachetype and hash to the same key (e.g. both take no
-            # kwargs) land in the same directory; if they use different formats
-            # their data files (``data.txt`` vs ``data.pickle``) coexist, but a
-            # stale-format mismatch must recompute rather than fail to read.
-            if (
-                cached
-                and materialize.is_complete(artifact_dir)
-                and config_is_valid(artifact_dir)
-                and os.path.exists(data_path)
-            ):
-                # Self-heal the registry: register this variation if the index
-                # lost it, or refresh a drifted recipe ref. Never breaks a hit.
-                _heal_on_hit(
-                    index_path, cachetype=ct, hash_=hash_, params=key_table,
-                    ref=ref, format=fmt, version=version,
-                )
-                return _load_value(data_path, fmt)
+            # expected data file for *this* format on disk (two recipes sharing a
+            # cachetype+hash but different formats coexist; a stale-format
+            # mismatch must recompute rather than fail to read).
+            if cached:
+                for parent in search_parents:
+                    adir = _artifact_dir(parent, version, hash_)
+                    dpath = os.path.join(adir, data_filename)
+                    if (
+                        materialize.is_complete(adir)
+                        and config_is_valid(adir)
+                        and os.path.exists(dpath)
+                    ):
+                        # Self-heal: re-register a lost variation / drifted ref,
+                        # recording the location it was actually found at.
+                        _heal_on_hit(
+                            index_path, cachetype=ct, hash_=hash_,
+                            params=key_table, ref=ref, format=fmt,
+                            storage_path=_record_storage_path(parent, root),
+                            version=version,
+                        )
+                        return _load_value(dpath, fmt)
 
+            # Miss → produce at the derived (current-config) location.
+            artifact_dir = _artifact_dir(derived_parent, version, hash_)
             result = fn(**kwargs)
             write_value = _default_writer(fmt)
-            data_filename = _data_name(basename, fmt)
 
             # Register the produced variation in the project's cached.toml (the
             # liveness root for GC) and record that index in the depot usage log.
             written_index = _register_produced(
                 index_path,
                 cachetype=ct, hash_=hash_, params=key_table, ref=ref,
-                format=fmt, version=version,
+                format=fmt, storage_path=sp_record, version=version,
             )
 
             def write_fn(tmp: str) -> None:
