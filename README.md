@@ -100,7 +100,7 @@ datamanifest COMMAND [OPTIONS]
 | `update-checksums [NAME ...] [--dry-run]` | Recompute stored checksums from what's on disk |
 | `init [--folder PATH] [--force]` | Create a fresh `datasets.toml` in the current directory |
 | `where` | Print active `datasets_toml` and `datasets_folder` paths |
-| `migrate FILE [--dry-run]` | Freeze a manifest's existing spec-v3 storage locations into the spec-v4 model: set `[_STORAGE].datasets_dir`/`datacache_dir` to the old effective roots and add a per-dataset `storage_path` only where a dataset deviated from the default, so on-disk data keeps resolving. Moves no bytes |
+| `migrate FILE [--dry-run]` | Reshape a spec-v3 manifest's `[_STORAGE]` to the spec-v4 two-field model: write `datasets_dir`/`datacache_dir` at their defaults, drop the retired keys, carry `local_path` → `storage_path`. Moves no bytes |
 | `push ID SSH_HOST [--dry-run] [--batch]` | Transfer a stored object **to** an SSH host (rsync over ssh), addressed by id (a dataset's `key`, or `cachetype[/version]/hash`) |
 | `pull ID SSH_HOST [--dry-run] [--batch]` | Transfer a stored object **from** an SSH host (rsync over ssh), same addressing |
 
@@ -410,13 +410,20 @@ datamanifest migrate datasets.toml            # rewrite in place
 datamanifest migrate datasets.toml --dry-run  # preview the changes
 ```
 
-`migrate` freezes a manifest's existing spec-v3 storage locations into the spec-v4
-model so that data already on disk keeps resolving after the upgrade. It:
+`migrate` reshapes a spec-v3 manifest's `[_STORAGE]` to the spec-v4 two-field
+model. It:
 
-- sets `[_STORAGE].datasets_dir`/`datacache_dir` to the old effective roots, and
-- adds a per-dataset `storage_path` only where a dataset deviated from the default.
+- writes `[_STORAGE].datasets_dir`/`datacache_dir` at their **defaults**
+  (repo-local `./datasets/`, `./cached/`) and drops the retired
+  `default`/`scope`/`store`/`_SCOPE`/`_PREFIX` keys (a `_HOST` table and
+  user-defined symbols are preserved);
+- carries each dataset's explicit `local_path` over to `storage_path` losslessly,
+  and surfaces any dataset that used a retired `store` selector for manual attention.
 
-It **moves no bytes** — only the manifest is rewritten.
+It **moves no bytes**. The v4 defaults are repo-local, so if your data lives
+elsewhere edit `datasets_dir`/`datacache_dir` (or a dataset's `storage_path`) —
+see the [Storage model](#storage-model) for `$`-symbols and platform-dependent
+(`$user_data_dir`/`$user_cache_dir`) defaults.
 
 ## Python adaptations
 
