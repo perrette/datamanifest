@@ -44,6 +44,15 @@ datamanifest path data.csv                     # resolve the on-disk path (for a
 datamanifest storage                           # where data goes on this host; `storage set` to change
 ```
 
+The `add` above wrote one entry to `datamanifest.toml` — a plain TOML file you
+can read and edit by hand:
+
+```toml
+["example.com/data"]
+sha256 = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+uri = "https://example.com/data.csv"
+```
+
 **Commit `datamanifest.toml`** — it's the recipe (what to fetch and how). The
 downloaded data and a local `.datamanifest-state.toml` (which records *where*
 each file landed on this machine) stay git-ignored. A collaborator clones the
