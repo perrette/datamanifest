@@ -115,12 +115,48 @@ maintained **non-destructively**, git-style:
   such an entry by omission — it can't build the object when the bytes are gone;
   under this model it must show it flagged.)
 - **Explicit removal only.** Entries leave the lock via an explicit `--delete`
-  (or a future `--prune` for missing/dirty), never as a passive side effect.
+  (or `--prune` for missing/dirty), never as a passive side effect.
 
-Deferred (the *update policy* / *conflict resolution* discussion): lock-vs-
-directive disagreement, multiple recorded locations, and the boundary between
-*garbage to clean* (malformed residue) and *dirty to flag* (a valid entry whose
-bytes are missing).
+### Update policy & conflict resolution
+
+Two code paths touch the lock and are never conflated:
+
+- **Active resolution** (`get_dataset_path`/`download`/`@cached`) **self-heals
+  additively**: *relocated* → refresh the recorded location to where the bytes
+  actually are; *untracked* → register; *missing* → (re)materialize at the
+  current directive (download/produce) and record. It **never deletes** — and
+  because any access that consults the lock and finds nothing *proceeds to
+  download/produce*, it always lands in the relocate/register path, so it
+  cannot leave a stale record. The relocate-refresh is the **only** automatic
+  mutation.
+- **`list` (passive)** only **labels** state — never mutates.
+
+**Dirty states** (lock ↔ disk), git-style: `clean` / `missing` (recorded bytes
+gone) / `relocated` (recorded `L`, bytes at derived `D`) / `untracked` (bytes
+present, no lock entry — *orphan* for produced) / `modified` (recorded `sha256`
+≠ actual; datasets; deferred with the sha rework). `list` shows a dirty visual
+signal (a red/`✗` marker beside the existing `⚑custom`) and a **`--dirty`**
+filter.
+
+**Actions** (explicit, on the selected objects):
+- **`--refresh`** — reconcile lock ↔ disk: refresh *relocated* entries, register
+  *untracked* ones, **report** *missing* (does not re-fetch — materialization
+  stays with `download` / re-running the `@cached` function). Non-destructive.
+- **`--delete`** (one object) / **`--prune`** (sweep *missing*) — the only
+  removals, explicit and confirmed.
+
+**Concurrency.** Every write **re-reads the lock, merges** (additive union;
+last-writer-wins per object), then writes via temp-file + **atomic rename** — so
+parallel `@cached`/`download`s can't clobber each other. Additive-only updates
+make the merge conflict-free.
+
+**Garbage vs dirty.** A *malformed* entry rooting nothing (e.g. instance-less
+residue from a format change) is corruption, not a tracked-but-missing object —
+**cleaned silently** on read.
+
+Still deferred: the *modified* state in full (expected-vs-actual `sha256` /
+`skip_checksum` rework) and multiple recorded locations (one object synced to
+two places).
 
 ## Unified maintenance surface (the payoff)
 
