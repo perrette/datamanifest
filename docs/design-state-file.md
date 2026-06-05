@@ -192,3 +192,21 @@ migrates 1–4 forward: schema-4 recipes become `datacache.*`; older shapes as
 already handled. Fetched-dataset entries simply accrue as datasets are accessed.
 The file itself is renamed `cached.toml` → `.datamanifest-state.toml`
 (git-ignored).
+
+### Guiding principle: follow the user's de-facto layout, never relocate
+
+A migration (or any default change across versions) should **preserve where the
+user's data already lives** and adjust the *defaults* to keep matching that
+de-facto choice — never move bytes to fit a new default. Ideally a tool could
+read the recorded locations (the state file's per-object `storage_path`s), strip
+the known structural suffix (`/<key>` for a dataset, `/<cachetype>[/<version>]/
+<hash>` for an artifact), and infer the common `datasets_dir`/`datacache_dir`
+*pattern* the user is implicitly following — writing that compact, editable
+pattern back, with per-object overrides only for genuine outliers.
+
+In practice this is only worthwhile once the state file is populated; at a
+cold v3→v4 upgrade there's not enough recorded information to infer reliably, so
+the current `migrate` deliberately stays minimal (write v4 defaults, carry an
+explicit `local_path`, surface anything it can't translate) and leaves the user
+to set the folder fields. The inference idea is recorded here as the intended
+*direction* — not an implemented feature.
