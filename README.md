@@ -41,7 +41,6 @@ datamanifest init                              # create datamanifest.toml here
 datamanifest add https://example.com/data.csv  # register + download + record sha256
 datamanifest list                              # what's tracked, and where it lives
 datamanifest path data.csv                     # resolve the on-disk path (for a script)
-datamanifest verify                            # re-check every checksum
 datamanifest storage                           # where data goes on this host; `storage set` to change
 ```
 
