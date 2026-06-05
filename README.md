@@ -122,11 +122,13 @@ datamanifest COMMAND [OPTIONS]
 | `verify [NAME ...]` | Re-check sha256 checksums; exits nonzero on any mismatch |
 | `update-checksums [NAME ...] [--dry-run]` | Recompute stored checksums from what's on disk |
 | `init [--folder PATH] [--force]` | Create a fresh `datamanifest.toml` in the current directory |
-| `where` | Print active `datasets_toml` and `datasets_folder` paths |
-| `storage [show]` / `storage set FIELD VALUE [--host GLOB\|--all-hosts]` / `storage unset FIELD [...]` | Show or edit `[_STORAGE]` without hand-writing the `_HOST` syntax. `set`/`unset` target **this host** by default (a `[_STORAGE._HOST."<hostname>"]` override); `--host GLOB` targets a host pattern, `--all-hosts` the project-wide base. `FIELD` is `datasets_dir`/`datacache_dir` or a user `$symbol` |
+| `where [--manifest\|--state-file\|--datasets-dir\|--datacache-dir] [--scan]` | Show the active manifest, state file, resolved data dirs (for this host) + read pools, and what the state file records. A selector flag prints just that one bare path (scriptable); `--scan` probes read pools for datasets present there but not local |
+| `storage [show]` / `storage set FIELD VALUE… [--host GLOB\|--all-hosts]` / `storage unset FIELD [...]` | Show or edit `[_STORAGE]` without hand-writing the `_HOST` syntax. `set`/`unset` target **this host** by default (a `[_STORAGE._HOST."<hostname>"]` override); `--host GLOB` targets a host pattern, `--all-hosts` the project-wide base. `FIELD` is `datasets_dir`/`datacache_dir`, a user `$symbol`, or a `datasets_pools`/`datacache_pools` list |
 | `migrate FILE [--dry-run]` | Reshape a spec-v3 manifest's `[_STORAGE]` to the spec-v4 two-field model: write `datasets_dir`/`datacache_dir` at their defaults, drop the retired keys, carry `local_path` → `storage_path`. Moves no bytes |
 | `push ID SSH_HOST [--dry-run] [--batch]` | Transfer a stored object **to** an SSH host (rsync over ssh), addressed by id (a dataset's `key`, or `cachetype[/version]/hash`) |
 | `pull ID SSH_HOST [--dry-run] [--batch]` | Transfer a stored object **from** an SSH host (rsync over ssh), same addressing |
+| `delete ID [--dry-run] [--batch]` | Delete a stored object's **bytes** (and prune its state record), addressed by id like `push`/`pull` — *not* the manifest entry (use `remove` for that). Protected data is skipped |
+| `move ID DEST [--dry-run] [--batch]` | Move a stored object's **bytes** under DEST and repoint its state record (the manifest is not edited), addressed by id |
 
 Examples:
 
@@ -327,6 +329,28 @@ helps *find* existing bytes, never directs a write.
 
 The previous filename `cached.toml` (produced artifacts only) is still read and
 is rewritten to `.datamanifest-state.toml` on the next write.
+
+### Read pools (shared, machine-wide reuse)
+
+Before downloading a dataset (or recomputing a `@cached` result), the tool can
+probe **read pools** — extra read-only locations where the object may already
+exist because another project on the machine fetched/produced it. On a hit it
+**references the copy in place** (records the location in the state file — no
+copy, no re-download/recompute) and uses it; new writes still go to your
+`datasets_dir`/`datacache_dir`.
+
+- `datasets_pools` — for fetched datasets. **On by default**: undefined probes
+  well-known locations (`~/.cache/Datasets`, `$user_data_dir/datamanifest/datasets`).
+  A pooled copy is **checksum-verified** against the declared `sha256` before it
+  is adopted.
+- `datacache_pools` — for `@cached` artifacts. **Opt-in** (undefined = none),
+  since there's no de-facto shared compute cache and artifacts have no content
+  checksum (only their `cachetype`/`version`/`hash` identity).
+
+Both are set in `[_STORAGE]` (host-composable via `_HOST`, or the
+`DATAMANIFEST_*_POOLS` env vars); an explicit list replaces the defaults, an
+empty list disables them. Manage them with `datamanifest storage set
+datasets_pools <dir> …` and inspect with `datamanifest where` / `where --scan`.
 
 ## Cross-machine sync
 

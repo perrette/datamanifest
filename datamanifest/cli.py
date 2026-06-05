@@ -1288,7 +1288,11 @@ def _cmd_storage_show(args):
             )
         except Exception as e:  # noqa: BLE001 - report an unresolved symbol inline
             resolved = f"<unresolved: {e}>"
-        print(f"  {field:<13} -> {resolved}")
+        print(f"  {field:<14} -> {resolved}")
+    for field in ("datasets_pools", "datacache_pools"):
+        pools = getattr(storage_mod, field)(project_root=root, storage_config=cfg)
+        if pools:
+            print(f"  {field:<14} -> {', '.join(pools)}")
 
     print(_paint("[_STORAGE] rules:", "bold", on=on))
     base = {k: v for k, v in cfg.items() if k != "_HOST"}
