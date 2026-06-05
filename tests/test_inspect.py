@@ -1,10 +1,10 @@
-"""Tests for the cache layer's index + inspection maintenance (spec-v3).
+"""Tests for the cache layer's index + inspection maintenance (spec-v4).
 
 Covers the ``cached.toml`` index round-trip, ``@cached`` produce registration,
 and the ``cache/_inspect.py`` object enumeration / delete / move that backs the
 ``datamanifest list`` maintenance surface (which replaced the old automatic GC).
 
-Offline only: a ``tmp_path`` cache root (via ``DATAMANIFEST_CACHE_DIR``), a
+Offline only: a ``tmp_path`` cache root (via ``DATAMANIFEST_DATACACHE_DIR``), a
 ``tmp_path`` usage log (via ``DATAMANIFEST_USAGE_LOG``), and the trivial ``txt``
 format.
 """
@@ -28,15 +28,17 @@ from datamanifest.cache import (
 from datamanifest.cache._inspect import CacheObject
 from datamanifest.cache._sidecars import write_config
 from datamanifest.cache._usage import iso_from_mtime, last_access
-from datamanifest.store.locations import project_id
 
 
 # ----- fixtures --------------------------------------------------------------
 
 @pytest.fixture
 def cache_root(tmp_path, monkeypatch):
+    """The spec-v4 ``datacache_dir`` root. A produced artifact lands directly
+    under it as ``<cachetype>/[<version>/]<hash>`` — no ``cached/`` prefix and no
+    scope segment."""
     root = tmp_path / "cache"
-    monkeypatch.setenv("DATAMANIFEST_CACHE_DIR", str(root))
+    monkeypatch.setenv("DATAMANIFEST_DATACACHE_DIR", str(root))
     return root
 
 
@@ -50,7 +52,8 @@ def usage_log(tmp_path, monkeypatch):
 # ----- CachedIndex round-trip (spec fixture schema) --------------------------
 
 # Two recipes for the index round-trip (schema 2: nested by cachetype, with
-# per-variation instances carrying hash + params).
+# per-variation instances carrying hash + params). spec-v4 dropped the recipe
+# scope/store fields.
 _FIX_RECIPES = [
     {
         "cachetype": "esm_20c_anomaly",
@@ -58,7 +61,6 @@ _FIX_RECIPES = [
         "params": {"grid": "5x5"},
         "ref": "lgmpre.data:load_20c_esm_anomaly",
         "format": "nc",
-        "store": "$cache",
     },
     {
         "cachetype": "esm_lgm_anomaly",
@@ -66,7 +68,6 @@ _FIX_RECIPES = [
         "params": {},
         "ref": "lgmpre.data:load_lgm_esm_anomaly",
         "format": "nc",
-        "store": "$cache",
     },
 ]
 
@@ -76,7 +77,7 @@ def _write_fixture_index(path):
     for r in _FIX_RECIPES:
         index.register(
             cachetype=r["cachetype"], hash=r["hash"], params=r["params"],
-            ref=r["ref"], format=r["format"], store=r["store"],
+            ref=r["ref"], format=r["format"],
         )
     return index.write()
 
@@ -90,9 +91,10 @@ def test_cached_index_round_trip_recipes(tmp_path):
     assert recs["esm_20c_anomaly"]["instances"] == {
         _FIX_RECIPES[0]["hash"]: {"grid": "5x5"}
     }
-    assert back.scoped_keys() == {
-        ("", "esm_20c_anomaly", "", _FIX_RECIPES[0]["hash"]),
-        ("", "esm_lgm_anomaly", "", _FIX_RECIPES[1]["hash"]),
+    # reachable_keys() is (cachetype, version, hash) — no scope (spec-v4).
+    assert back.reachable_keys() == {
+        ("esm_20c_anomaly", "", _FIX_RECIPES[0]["hash"]),
+        ("esm_lgm_anomaly", "", _FIX_RECIPES[1]["hash"]),
     }
 
 
@@ -116,7 +118,7 @@ def test_cached_index_accumulates_variations(tmp_path):
     recs = index.recipe_records()
     assert len(recs) == 1
     assert recs[0]["instances"] == {"h1": {"n": 1}, "h2": {"n": 2}}
-    assert index.scoped_keys() == {("", "c", "", "h1"), ("", "c", "", "h2")}
+    assert index.reachable_keys() == {("c", "", "h1"), ("c", "", "h2")}
 
 
 # ----- @cached produce registers in a sibling cached.toml --------------------
@@ -134,7 +136,7 @@ def test_cached_produce_registers_and_back_points(cache_root, usage_log, tmp_pat
     make_greeting(who="x")
     assert calls["n"] == 1
 
-    # Registered in the sibling cached.toml under the function name.
+    # Registered in the sibling cached.toml under the cachetype.
     index_path = proj / "cached.toml"
     assert index_path.is_file()
     index = CachedIndex.read(str(index_path))
@@ -144,16 +146,13 @@ def test_cached_produce_registers_and_back_points(cache_root, usage_log, tmp_pat
     # ref = "<module>:<qualname>" (qualname includes the enclosing scope).
     assert ":" in rec["ref"]
     assert rec["ref"].split(":", 1)[1].endswith("make_greeting")
-    assert rec["store"] == "$cache"
-    # spec-v3: the recipe records the project-id scope it was produced under.
-    assert rec["scope"] == project_id(str(proj))
     # one instance, recording the params it was produced with.
     assert list(rec["instances"].values()) == [{"who": "x"}]
     artifact_hash = next(iter(rec["instances"]))
 
-    # Artifact metadata back-points at that index (audit only). spec-v3 layout:
-    # <cache>/cached/<project-id>/<cachetype>/<hash>.
-    artifact = cache_root / "cached" / project_id(str(proj)) / "greet" / artifact_hash
+    # Artifact metadata back-points at that index (audit only). spec-v4 layout:
+    # <datacache_dir>/<cachetype>/<hash> — no cached/ prefix, no scope.
+    artifact = cache_root / "greet" / artifact_hash
     md = read_metadata(str(artifact))
     assert md["origin"]["cached_toml"] == os.path.abspath(str(index_path))
 
@@ -175,10 +174,7 @@ def test_cached_hit_does_not_duplicate_or_restamp(cache_root, usage_log, tmp_pat
     index_path = proj / "cached.toml"
     _rec = {r["cachetype"]: r for r in CachedIndex.read(str(index_path)).recipe_records()}["greet"]
     artifact_hash = next(iter(_rec["instances"]))
-    metadata_path = (
-        cache_root / "cached" / project_id(str(proj)) / "greet"
-        / artifact_hash / "metadata.toml"
-    )
+    metadata_path = cache_root / "greet" / artifact_hash / "metadata.toml"
     first_index = index_path.read_bytes()
     first_meta_mtime = metadata_path.stat().st_mtime
 
@@ -198,10 +194,7 @@ def test_metadata_records_provenance(cache_root, usage_log, tmp_path):
         return name
 
     produce(name="v")
-    artifact = (
-        cache_root / "cached" / project_id(str(proj)) / "t"
-        / param_hash({"name": "v"})
-    )
+    artifact = cache_root / "t" / param_hash({"name": "v"})
     md = read_metadata(str(artifact))
     assert md["_META"]["schema"] == 1
     assert md["tool"].startswith("datamanifestpy ")
@@ -232,11 +225,12 @@ def test_last_access_missing_path_is_empty(tmp_path):
 # ----- inspect: enumerate produced artifacts ---------------------------------
 
 def _produce_artifact(cache_root, cachetype, key_table, *, version=""):
-    """Materialize a minimal produced artifact under the cached/ prefix."""
+    """Materialize a minimal produced artifact directly under the datacache_dir
+    root: ``<cachetype>/[<version>/]<hash>`` (spec-v4: no cached/ prefix)."""
     from datamanifest.cache import param_hash
 
     h = param_hash(key_table)
-    parts = ["cached", cachetype] + ([version] if version else []) + [h]
+    parts = [cachetype] + ([version] if version else []) + [h]
     directory = cache_root.joinpath(*parts)
     directory.mkdir(parents=True)
     (directory / "data.txt").write_text("payload")
@@ -261,7 +255,7 @@ def test_enumerate_artifacts_fields(cache_root):
     cache_root.mkdir(parents=True, exist_ok=True)
     prod_dir, key = _produce_artifact(cache_root, "mytype", {"g": "5x5"}, version="v3")
 
-    objs = list(enumerate_artifacts(str(cache_root), prefix="cached"))
+    objs = list(enumerate_artifacts(str(cache_root)))
     assert len(objs) == 1
     obj = objs[0]
     assert obj.kind == "cached"
@@ -276,27 +270,12 @@ def test_enumerate_artifacts_fields(cache_root):
     assert os.path.abspath(str(prod_dir)) == obj.location
 
 
-def test_enumerate_artifacts_scope_from_path(cache_root):
-    cache_root.mkdir(parents=True, exist_ok=True)
-    # A scoped layout: cached/<scope>/<cachetype>/<hash>.
-    from datamanifest.cache import param_hash
-
-    h = param_hash({"g": "1"})
-    directory = cache_root / "cached" / "proj-abc" / "t" / h
-    directory.mkdir(parents=True)
-    (directory / "data.txt").write_text("x")
-    write_config(str(directory), "t", h, {"g": "1"})
-
-    (obj,) = list(enumerate_artifacts(str(cache_root), prefix="cached"))
-    assert obj.scope == "proj-abc"
-
-
 # ----- inspect: delete / move are explicit and produced-only -----------------
 
 def test_delete_object_removes_artifact_and_markers(cache_root):
     cache_root.mkdir(parents=True, exist_ok=True)
     prod_dir, _key = _produce_artifact(cache_root, "t", {"g": "5x5"})
-    (obj,) = list(enumerate_artifacts(str(cache_root), prefix="cached"))
+    (obj,) = list(enumerate_artifacts(str(cache_root)))
 
     delete_object(obj)
     assert not os.path.exists(str(prod_dir))
@@ -312,7 +291,7 @@ def test_delete_object_refuses_non_cached(tmp_path):
 def test_move_object_preserves_key_path(cache_root, tmp_path):
     cache_root.mkdir(parents=True, exist_ok=True)
     prod_dir, _key = _produce_artifact(cache_root, "t", {"g": "5x5"}, version="v2")
-    (obj,) = list(enumerate_artifacts(str(cache_root), prefix="cached"))
+    (obj,) = list(enumerate_artifacts(str(cache_root)))
 
     dest_root = tmp_path / "elsewhere"
     new = move_object(obj, str(dest_root))

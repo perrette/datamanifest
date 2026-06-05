@@ -295,20 +295,14 @@ def test_conformance(fixture_name, fixtures_dir):
                     f"expected {spec['kwargs']!r}"
                 )
 
-    # --- Storage model (store selection + parsed [_STORAGE] roots) ---
+    # --- Storage model (parsed [_STORAGE] roots) ---
+    # The pinned fixture predates spec-v4: its per-dataset ``store`` selection and
+    # ``default_store`` model were retired (spec-v4 replaces them with the
+    # ``datasets_dir`` / ``datacache_dir`` fields + per-dataset ``storage_path``),
+    # so only the structural [_STORAGE] passthrough (roots / _HOST / _PROFILE) is
+    # still asserted here.
     storage = expected.get("storage")
     if storage is not None:
-        default_store = storage["default_store"]
-        assert default_store == "data", (
-            f"{fixture_name}: default_store {default_store!r} != 'data'"
-        )
-        for ds_name, exp_store in storage["datasets"].items():
-            entry = db.datasets[ds_name]
-            eff_store = entry.store or default_store
-            assert eff_store == exp_store, (
-                f"{fixture_name}/{ds_name} store: got {eff_store!r}, "
-                f"expected {exp_store!r}"
-            )
         roots = storage["roots"]
         base = sorted(k for k in db.storage_config if not k.startswith("_"))
         assert base == roots["base"], (

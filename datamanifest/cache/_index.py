@@ -7,13 +7,14 @@ set of *roots* that keeps produced cache artifacts reachable for garbage
 collection.
 
 Schema 2 is **nested**: one ``[[produced]]`` recipe table per
-``(scope, cachetype, version)`` carrying recipe-level metadata
-(``ref`` / ``format`` / ``store``), with one ``[[produced.instances]]`` table per
-produced *variation* recording its parameter ``hash`` and the ``params`` (the
-key table) that produced it. A recipe therefore accumulates **every** variation
-it has produced — calling a recipe with different parameters adds instances, it
-does not overwrite. Schema 1 (a flat table per registry *name* with a single
-``hash`` and no params) is still **read** (each becomes a one-instance recipe).
+``(cachetype, version)`` carrying recipe-level metadata (``ref`` / ``format``),
+with one ``[[produced.instances]]`` table per produced *variation* recording its
+parameter ``hash`` and the ``params`` (the key table) that produced it. A recipe
+therefore accumulates **every** variation it has produced — calling a recipe
+with different parameters adds instances, it does not overwrite. Schema 1 (a flat
+table per registry *name* with a single ``hash`` and no params) is still
+**read** (each becomes a one-instance recipe). (spec-v4 dropped the recipe
+``scope`` and ``store``; any present in an older file are ignored on read.)
 
 Layering: this module imports only the Layer 0 substrate
 (:func:`datamanifest.store.sort_recursive` for canonical key ordering) plus
@@ -39,23 +40,20 @@ __all__ = [
 
 CACHED_INDEX_NAME = "cached.toml"
 
-# Recipe-level fields (one per (scope, cachetype, version)) and the per-variation
+# Recipe-level fields (one per (cachetype, version)) and the per-variation
 # instance fields. Write ordering is canonical/sorted regardless; these document
 # the schema-2 shape.
-CACHED_RECIPE_FIELDS = ("cachetype", "scope", "version", "ref", "format", "store")
+CACHED_RECIPE_FIELDS = ("cachetype", "version", "ref", "format")
 CACHED_INSTANCE_FIELDS = ("hash", "params")
-
-# A produced artifact defaults to the OS-reclaimable ``$cache`` folder.
-DEFAULT_STORE = "$cache"
 
 
 class CachedIndex:
     """Read/register/write a ``cached.toml`` produced-dataset registry (schema 2).
 
     In memory the index is ``recipes``: a dict keyed by the recipe identity
-    ``(scope, cachetype, version)`` whose value is
-    ``{"ref", "format", "store", "instances": {hash: params}}``. :meth:`write`
-    uses the same recursive canonical key ordering
+    ``(cachetype, version)`` whose value is
+    ``{"ref", "format", "instances": {hash: params}}``. :meth:`write` uses the
+    same recursive canonical key ordering
     (:func:`datamanifest.store.sort_recursive`) as the manifest writer — with the
     ``produced`` recipe list pre-sorted by identity and each recipe's instances
     pre-sorted by hash — so a read/write round-trip is byte-stable.
@@ -64,7 +62,7 @@ class CachedIndex:
     SCHEMA = 2
 
     def __init__(self, recipes: dict = None, path: str = ""):
-        # {(scope, cachetype, version): {ref, format, store, instances: {hash: params}}}
+        # {(cachetype, version): {ref, format, instances: {hash: params}}}
         self.recipes = dict(recipes) if recipes else {}
         self.path = path
 
@@ -92,8 +90,7 @@ class CachedIndex:
             for rec in data.get("produced", []):
                 if not isinstance(rec, dict):
                     continue
-                key = (rec.get("scope", ""), rec.get("cachetype", ""),
-                       rec.get("version", ""))
+                key = (rec.get("cachetype", ""), rec.get("version", ""))
                 instances = {}
                 for inst in rec.get("instances", []):
                     h = inst.get("hash", "")
@@ -102,7 +99,6 @@ class CachedIndex:
                 recipes[key] = {
                     "ref": rec.get("ref", ""),
                     "format": rec.get("format", ""),
-                    "store": rec.get("store", DEFAULT_STORE),
                     "instances": instances,
                 }
         else:
@@ -111,11 +107,10 @@ class CachedIndex:
                 if name == "_META" or not isinstance(e, dict):
                     continue
                 ctype, h = e.get("cachetype", ""), e.get("hash", "")
-                key = (e.get("scope", ""), ctype, e.get("version", ""))
+                key = (ctype, e.get("version", ""))
                 recipes[key] = {
                     "ref": e.get("ref", ""),
                     "format": e.get("format", ""),
-                    "store": e.get("store", DEFAULT_STORE),
                     "instances": {h: {}} if h else {},
                 }
         return cls(recipes=recipes, path=target)
@@ -137,49 +132,46 @@ class CachedIndex:
         params: dict = None,
         ref: str = "",
         format: str = "",
-        store: str = DEFAULT_STORE,
-        scope: str = "",
         version: str = "",
     ) -> None:
         """Add (or update) the produced *variation* ``hash`` under its recipe.
 
-        The recipe is identified by ``(scope, cachetype, version)``; the variation
-        by its parameter ``hash`` plus the ``params`` (key table) that produced it.
+        The recipe is identified by ``(cachetype, version)``; the variation by
+        its parameter ``hash`` plus the ``params`` (key table) that produced it.
         Registering accumulates: a new ``hash`` adds an instance rather than
         replacing the recipe, so all variations stay referenced. Recipe-level
-        metadata (``ref`` / ``format`` / ``store``) is refreshed on each register,
-        so e.g. ``ref`` tracks the producing function across a refactor without
+        metadata (``ref`` / ``format``) is refreshed on each register, so e.g.
+        ``ref`` tracks the producing function across a refactor without
         invalidating anything.
         """
-        key = (scope, cachetype, version)
+        key = (cachetype, version)
         rec = self.recipes.get(key)
         if rec is None:
-            rec = {"ref": ref, "format": format, "store": store, "instances": {}}
+            rec = {"ref": ref, "format": format, "instances": {}}
             self.recipes[key] = rec
         else:
-            rec["ref"], rec["format"], rec["store"] = ref, format, store
+            rec["ref"], rec["format"] = ref, format
         rec["instances"][hash] = dict(params or {})
 
-    def has_instance(self, *, scope: str, cachetype: str, version: str,
+    def has_instance(self, *, cachetype: str, version: str,
                      hash: str) -> bool:
         """Whether this index already roots the variation
-        ``(scope, cachetype, version, hash)``."""
-        rec = self.recipes.get((scope, cachetype, version))
+        ``(cachetype, version, hash)``."""
+        rec = self.recipes.get((cachetype, version))
         return bool(rec) and hash in rec["instances"]
 
-    def ref_of(self, *, scope: str, cachetype: str, version: str):
+    def ref_of(self, *, cachetype: str, version: str):
         """The recorded ``ref`` for a recipe, or ``None`` when absent."""
-        rec = self.recipes.get((scope, cachetype, version))
+        rec = self.recipes.get((cachetype, version))
         return rec["ref"] if rec else None
 
-    def scoped_keys(self) -> set:
-        """The set of ``(scope, cachetype, version, hash)`` tuples this index
-        roots — **every** instance of every recipe, scope-aware (so another
-        project's artifact is not counted as referenced even when its
-        ``cachetype``/``hash`` coincide)."""
+    def reachable_keys(self) -> set:
+        """The set of ``(cachetype, version, hash)`` tuples this index roots —
+        **every** instance of every recipe. Reachability (spec-v4) is keyed on
+        ``(cachetype, version, hash)`` alone."""
         return {
-            (scope, cachetype, version, h)
-            for (scope, cachetype, version), rec in self.recipes.items()
+            (cachetype, version, h)
+            for (cachetype, version), rec in self.recipes.items()
             for h in rec["instances"]
         }
 
@@ -188,7 +180,7 @@ class CachedIndex:
         (across all variations)."""
         return {
             f"{cachetype}/{h}"
-            for (_scope, cachetype, _version), rec in self.recipes.items()
+            for (cachetype, _version), rec in self.recipes.items()
             for h in rec["instances"]
             if cachetype and h
         }
@@ -197,35 +189,32 @@ class CachedIndex:
         """The recipes as a list of plain dicts (identity + metadata +
         ``instances`` mapping ``hash -> params``), for inspection."""
         out = []
-        for (scope, cachetype, version), rec in self.recipes.items():
+        for (cachetype, version), rec in self.recipes.items():
             out.append({
-                "scope": scope, "cachetype": cachetype, "version": version,
-                "ref": rec["ref"], "format": rec["format"], "store": rec["store"],
+                "cachetype": cachetype, "version": version,
+                "ref": rec["ref"], "format": rec["format"],
                 "instances": dict(rec["instances"]),
             })
         return out
 
     def to_dict(self) -> dict:
         """Build the schema-2 TOML structure, with ``produced`` pre-sorted by
-        ``(cachetype, version, scope)`` and each recipe's ``instances`` by hash
+        ``(cachetype, version)`` and each recipe's ``instances`` by hash
         (canonical key sorting is applied on top by :meth:`write`)."""
         produced = []
-        for key in sorted(self.recipes, key=lambda k: (k[1], k[2], k[0])):
-            scope, cachetype, version = key
+        for key in sorted(self.recipes):
+            cachetype, version = key
             rec = self.recipes[key]
             entry = {
                 "cachetype": cachetype,
                 "ref": rec["ref"],
                 "format": rec["format"],
-                "store": rec["store"],
                 "instances": [
                     ({"hash": h, "params": dict(rec["instances"][h])}
                      if rec["instances"][h] else {"hash": h})
                     for h in sorted(rec["instances"])
                 ],
             }
-            if scope:
-                entry["scope"] = scope
             if version:
                 entry["version"] = version
             produced.append(entry)

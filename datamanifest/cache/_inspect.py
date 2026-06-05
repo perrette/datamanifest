@@ -2,14 +2,14 @@
 
 This module is the cache-layer mechanics half of the ``datamanifest list``
 maintenance surface (spec-v3, replacing the old automatic ``gc`` collector):
-given a single ``$cache`` root, it enumerates the **produced** artifacts under
-it as field-bearing :class:`CacheObject` records (``kind`` / ``key`` / ``hash`` /
-``cachetype`` / ``version`` / ``scope`` / ``format`` / ``location`` / ``size`` /
+given a single ``datacache_dir`` root, it enumerates the **produced** artifacts
+under it as field-bearing :class:`CacheObject` records (``kind`` / ``key`` /
+``hash`` / ``cachetype`` / ``version`` / ``format`` / ``location`` / ``size`` /
 ``created`` / ``last_access``) and deletes or moves an explicitly-selected
 subset.
 
-It reads **only** the ``$cache`` folder it is handed — never ``$data`` /
-``$repo``, never ``datasets.toml`` / ``cached.toml`` themselves. Reachability
+It reads **only** the cache folder it is handed — never the datasets folder,
+never ``datasets.toml`` / ``cached.toml`` themselves. Reachability
 (``referenced``) is **not** decided here: the CLI composition root derives the
 referenced-key set from the manifests / indexes and tags each object. This
 module never collects on its own — the only deletion is the explicit
@@ -17,8 +17,8 @@ module never collects on its own — the only deletion is the explicit
 never reclaimed out from under anyone (the hole that retired the old GC).
 
 A **produced** artifact is a directory holding a ``config.toml`` sidecar: that is
-exactly what distinguishes a ``@cached`` output from a *fetched* ``store="$cache"``
-dataset (which has no ``config.toml``). So a fetched ``$cache`` dataset is never
+exactly what distinguishes a ``@cached`` output from a *fetched* dataset (which
+has no ``config.toml``). So a fetched dataset sharing the folder is never
 enumerated here and never deleted.
 
 Layering: imports only the Layer 0 substrate (:func:`materialize.remove_path`)
@@ -67,9 +67,6 @@ class CacheObject:
         dataset name for fetched ones.
     hash, cachetype, version:
         Produced-artifact identity (empty for fetched objects).
-    scope:
-        The project-id scope segment the artifact lives under (empty for the
-        default ``datasets/`` scope).
     format:
         Serialization format (file extension of the stored value).
     size:
@@ -89,14 +86,14 @@ class CacheObject:
 
     __slots__ = (
         "kind", "location", "key", "hash", "cachetype", "version",
-        "scope", "format", "size", "created", "last_access", "referenced",
-        "name", "present", "params",
+        "format", "size", "created", "last_access", "referenced",
+        "name", "present", "params", "storage_path",
     )
 
     def __init__(
         self, *, kind, location, key="", hash="", cachetype="", version="",
-        scope="", format="", size=0, created="", last_access="",
-        referenced=None, name="", present=True, params=None,
+        format="", size=0, created="", last_access="",
+        referenced=None, name="", present=True, params=None, storage_path="",
     ):
         self.kind = kind
         self.location = location
@@ -104,8 +101,11 @@ class CacheObject:
         self.hash = hash
         self.cachetype = cachetype
         self.version = version
-        self.scope = scope
         self.format = format
+        # For a fetched dataset: its ``storage_path`` field. Non-empty ⇒ the
+        # dataset deviates from the global ``$datasets_dir/$key`` default (a
+        # custom / user-managed location) — surfaced by ``list``.
+        self.storage_path = storage_path
         self.size = size
         self.created = created
         self.last_access = last_access
@@ -191,30 +191,10 @@ def _created(artifact_dir: str) -> str:
     return iso_from_mtime(artifact_dir)
 
 
-def _scope_of(artifact_dir, cache_root, *, prefix, version) -> str:
-    """Derive the scope segment(s) of *artifact_dir* relative to *cache_root*.
-
-    The composed layout is ``<cache_root>[/<subpath>]/<prefix>/[<scope>/]
-    <cachetype>/[<version>/]<hash>``. Knowing *prefix* and whether a *version*
-    segment is present, the scope is whatever path components sit between the
-    prefix and the trailing ``<cachetype>/[<version>/]<hash>`` key.
-    """
-    rel = os.path.relpath(artifact_dir, cache_root)
-    parts = [p for p in rel.split(os.sep) if p not in ("", ".")]
-    pp = [p for p in prefix.split("/") if p] if prefix else []
-    if parts[: len(pp)] == pp:
-        parts = parts[len(pp):]
-    tail = 3 if version else 2  # cachetype[/version]/hash
-    scope_parts = parts[: max(0, len(parts) - tail)]
-    return "/".join(scope_parts)
-
-
-def enumerate_artifacts(cache_root: str, *, prefix: str = "cached"):
+def enumerate_artifacts(cache_root: str):
     """Yield a :class:`CacheObject` for every produced artifact under
-    *cache_root*.
+    *cache_root* (the ``datacache_dir``).
 
-    *prefix* is the content prefix produced artifacts compose under (default
-    ``"cached"``); it is stripped when deriving each object's ``scope``.
     ``referenced`` is left ``None`` — the CLI composition root resolves it.
     """
     for artifact_dir, key in find_produced_artifacts(cache_root):
@@ -234,9 +214,6 @@ def enumerate_artifacts(cache_root: str, *, prefix: str = "cached"):
             hash=h,
             cachetype=cachetype,
             version=version,
-            scope=_scope_of(
-                artifact_dir, cache_root, prefix=prefix, version=version,
-            ),
             format=_guess_format(artifact_dir),
             size=_dir_size(artifact_dir),
             created=_created(artifact_dir),

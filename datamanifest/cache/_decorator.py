@@ -2,21 +2,20 @@
 
 ``cached`` is the ergonomic surface over the produced-dataset machinery: it
 wraps a *producing function* (one that returns a value) so that, keyed by the
-call's keyword arguments, the result is materialized once into the ``$cache``
-folder and reloaded on every subsequent call. The on-disk artifact is a
-directory ``<cache>/cached/<project-id>/<cachetype>/[<version>/]<param_hash>/``
-(spec-v3: the ``cached/`` content prefix + project-id scope, composed via
-:func:`datamanifest.store.locations.composed_path`) holding the serialized value
+call's keyword arguments, the result is materialized once into the
+``datacache_dir`` folder and reloaded on every subsequent call. The on-disk
+artifact is a directory ``<datacache_dir>/<cachetype>/[<version>/]<param_hash>/``
+(spec-v4: the manifest's ``datacache_dir``, default ``cached`` ⇒ repo-local
+``./cached/`` — no scope, no prefix) holding the serialized value
 (``<basename>.<ext>``) plus the self-describing ``config.toml`` /
 ``metadata.toml`` sidecars.
 
 Layering: this module imports **only** the Layer 0 substrate
 (:mod:`datamanifest.store`) plus stdlib — never the fetch layer (the manifest /
 download modules). The materialize primitive and the loader ladder are consumed
-from ``store``; the artifact directory is composed via
-``store.locations.composed_path(kind="cached")`` (bare ``$cache`` root + the
-``cached/`` prefix + project-id scope). The produce path does **not** route
-through the fetch download path.
+from ``store``; the artifact directory is resolved via
+:func:`datamanifest.store.locations.datacache_dir`. The produce path does
+**not** route through the fetch download path.
 """
 
 import functools
@@ -55,7 +54,6 @@ class Recipe(NamedTuple):
     cachetype: str
     format: str
     version: str
-    store: str
 
 
 # Process-local registry of decorated module-level ``@cached`` recipes, keyed by
@@ -147,8 +145,6 @@ def _register_recipe(recipe):
 
 DATA_NAME_STEM = "data"
 
-# The default folder a produced artifact materializes into (spec: store="$cache").
-DEFAULT_STORE = "$cache"
 
 # The default serialization format when none is given. Pickle is Python's
 # general-purpose self-saver: any picklable return value round-trips without the
@@ -263,28 +259,26 @@ def _produced_key(cachetype, version, hash_) -> str:
     return os.path.join(*parts)
 
 
-def _artifact_dir(*, cache_dir, store, cachetype, version, hash_,
-                  project_root, storage_config, scope=None) -> str:
-    """Resolve a produced artifact's directory (spec-v3).
+def _artifact_dir(*, cache_dir, cachetype, version, hash_,
+                  project_root, storage_config) -> str:
+    """Resolve a produced artifact's directory (spec-v4).
 
-    Default composition (:func:`datamanifest.store.locations.composed_path` with
-    ``kind="cached"``): ``<cache>/cached/<project-id>/<cachetype>/[<version>/]<hash>``
-    — the bare *store* root (default ``$cache``), the ``cached/`` content prefix,
-    the project-id scope, then the per-artifact key. *project_root* /
-    *storage_config* are threaded to the resolver, and ``DATAMANIFEST_CACHE_DIR``
-    / ``DATAMANIFEST_DIR`` still apply through it.
+    Default composition: ``<datacache_dir>/<cachetype>/[<version>/]<hash>`` —
+    the manifest's ``datacache_dir`` (default ``cached`` ⇒ repo-local
+    ``./cached/``) plus the per-artifact key. No scope, no prefix. *project_root*
+    / *storage_config* are threaded to the resolver, and
+    ``DATAMANIFEST_DATACACHE_DIR`` applies through it.
 
     An explicit per-call *cache_dir* is used **verbatim**
-    (``<cache_dir>/<cachetype>/[<version>/]<hash>``), bypassing the folder /
-    prefix / scope composition entirely.
+    (``<cache_dir>/<cachetype>/[<version>/]<hash>``), bypassing folder resolution.
     """
     key_path = _produced_key(cachetype, version, hash_)
     if cache_dir:
         return os.path.join(cache_dir, key_path)
-    return locations.composed_path(
-        store or DEFAULT_STORE, key_path, kind="cached", scope=scope,
+    base = locations.datacache_dir(
         project_root=project_root, storage_config=storage_config,
     )
+    return os.path.join(base, key_path)
 
 
 def _discover_manifest(project_root):
@@ -349,16 +343,15 @@ def _locate_cached_toml(cached_toml, project_root) -> str:
 
 
 def _register_produced(
-    cached_toml_path, *, cachetype, hash_, params, ref, format, scope="",
-    version="",
+    cached_toml_path, *, cachetype, hash_, params, ref, format, version="",
 ) -> str:
     """Register a freshly-produced variation into its ``cached.toml`` and record
     that index in the depot usage log. Returns the index path written.
 
     Reads any existing index (so a register **adds** this variation without
     dropping the rest), records the parameter ``hash`` + ``params`` under the
-    recipe ``(scope, cachetype, version)``, writes canonically, and stamps the
-    usage log so GC can discover this root.
+    recipe ``(cachetype, version)``, writes canonically, and stamps the usage
+    log so GC can discover this root.
     """
     index = CachedIndex.read_or_empty(cached_toml_path)
     index.register(
@@ -367,8 +360,6 @@ def _register_produced(
         params=params,
         ref=ref,
         format=format or "",
-        store=DEFAULT_STORE,
-        scope=scope,
         version=version,
     )
     written = index.write(cached_toml_path)
@@ -377,7 +368,7 @@ def _register_produced(
 
 
 def _heal_on_hit(
-    cached_toml_path, *, cachetype, hash_, params, ref, format, scope, version,
+    cached_toml_path, *, cachetype, hash_, params, ref, format, version,
 ) -> None:
     """Self-heal the registry on a cache hit (best-effort, never raises).
 
@@ -390,17 +381,16 @@ def _heal_on_hit(
     try:
         index = CachedIndex.read_or_empty(cached_toml_path)
         present = index.has_instance(
-            scope=scope, cachetype=cachetype, version=version, hash=hash_,
+            cachetype=cachetype, version=version, hash=hash_,
         )
         ref_current = index.ref_of(
-            scope=scope, cachetype=cachetype, version=version,
+            cachetype=cachetype, version=version,
         ) == ref
         if present and ref_current:
             return
         index.register(
             cachetype=cachetype, hash=hash_, params=params, ref=ref,
-            format=format or "", store=DEFAULT_STORE, scope=scope,
-            version=version,
+            format=format or "", version=version,
         )
         record_path(index.write(cached_toml_path))
     except Exception:  # noqa: BLE001 - a hit must never fail on index issues
@@ -415,8 +405,6 @@ def cached(
     key=None,
     basename="",
     version="",
-    scope=None,
-    store=DEFAULT_STORE,
     project_root="",
     storage_config=None,
     cached_toml="",
@@ -430,8 +418,8 @@ def cached(
     its keyword arguments are the hash inputs. On each call the key table is
     derived from those kwargs (minus ``_``-prefixed control keys, or via the
     *key* selector), :func:`param_hash`-ed, and composed (spec-v3) under the
-    *store* folder (default ``$cache``) as
-    ``<cache>/cached/<project-id>/<cachetype>/[<version>/]<hash>``. If a
+    manifest's ``datacache_dir`` folder (default ``cached`` ⇒ repo-local
+    ``./cached/``) as ``<datacache_dir>/<cachetype>/[<version>/]<hash>``. If a
     complete, hash-valid artifact already exists it is **loaded** (via *format*'s
     default loader) and returned; otherwise the function **runs**, its result is
     serialized into the artifact directory next to the ``config.toml`` /
@@ -440,9 +428,9 @@ def cached(
     The wrapper gains two per-call escape hatches: ``cached: bool = True``
     (``cached=False`` forces a recompute regardless of an existing hit) and
     ``cache_dir: str = ""`` (an explicit directory used **verbatim** as
-    ``<cache_dir>/<cachetype>/[<version>/]<hash>``, bypassing the folder /
-    prefix / scope composition). Positional arguments are rejected (produced
-    datasets are identified by their keyword parameters).
+    ``<cache_dir>/<cachetype>/[<version>/]<hash>``, bypassing folder
+    resolution). Positional arguments are rejected (produced datasets are
+    identified by their keyword parameters).
 
     Parameters
     ----------
@@ -473,20 +461,8 @@ def cached(
         is **never** part of the parameter hash — same kwargs hash to the same
         ``<hash>`` with or without a version. Bumping it isolates artifacts
         across recipe revisions (e.g. preventing stale cross-branch hits).
-    scope:
-        The ownership segment the artifact lands under
-        (``<cache>/cached/<scope>/…``). ``None`` (default) resolves it via the
-        ladder ``DATAMANIFEST_SCOPE_CACHED`` → ``[_STORAGE._SCOPE].cached`` →
-        the project id (``pyproject.toml`` ``[project].name``, else a path hash).
-        An explicit value wins (highest priority) — e.g. ``scope="shared"`` to
-        deliberately share/dedup a cache across projects, or ``scope=""`` for a
-        single global, unscoped store. The same resolved value drives both the
-        on-disk path and the ``cached.toml`` entry, so they cannot diverge.
-    store:
-        Storage selector the artifact lands under (default ``"$cache"``). An
-        explicit override wins.
     project_root, storage_config:
-        Threaded through to the ``$``-folder resolver / git provenance (optional;
+        Threaded through to the ``$``-symbol resolver / git provenance (optional;
         no ``Database`` is required).
     cached_toml:
         Explicit path to the ``cached.toml`` index this artifact is registered
@@ -498,8 +474,8 @@ def cached(
 
     On a **produce** (miss), the artifact is registered into the resolved
     ``cached.toml`` (``cachetype`` / ``hash`` / ``ref`` = ``module:qualname`` /
-    ``format`` / ``store="$cache"`` / the ``scope`` / the ``version``
-    when set), that index is recorded in the depot usage log, and
+    ``format`` / the ``version`` when set), that index is recorded in the depot
+    usage log, and
     ``metadata.toml``'s ``[origin].cached_toml`` back-pointer names it.
     A cache **hit** does not re-stamp ``metadata.toml``, but it **self-heals the
     registry**: if the artifact is present yet its ``cached.toml`` entry is
@@ -529,23 +505,17 @@ def cached(
             root, manifest_toml = _discover_manifest(project_root)
             # Storage resolution is centralized in the manifest's [_STORAGE]: when
             # the caller passes no storage_config, load it from the discovered
-            # manifest (folder roots, _HOST/_PROFILE/_SCOPE/_PREFIX), so $cache and
-            # friends resolve the same for produced artifacts as for fetched data.
+            # manifest (the datacache_dir field + $-symbols / _HOST), so the
+            # produced cache lands under the same datacache_dir the rest of the
+            # tool reads.
             sconf = (
                 storage_config if storage_config is not None
                 else _load_storage_config(manifest_toml)
             )
-            # Resolve the scope **once** (explicit @cached(scope=...) wins, else
-            # the env / [_STORAGE._SCOPE] / project-id ladder) and use the same
-            # value for both the on-disk path and the recorded entry, so they can
-            # never disagree.
-            art_scope = locations.content_scope(
-                "cached", scope=scope, project_root=root, storage_config=sconf,
-            )
             artifact_dir = _artifact_dir(
-                cache_dir=cache_dir, store=store, cachetype=ct,
+                cache_dir=cache_dir, cachetype=ct,
                 version=version, hash_=hash_, project_root=root,
-                storage_config=sconf, scope=art_scope,
+                storage_config=sconf,
             )
             data_path = os.path.join(artifact_dir, _data_name(basename, fmt))
 
@@ -570,7 +540,7 @@ def cached(
                 # lost it, or refresh a drifted recipe ref. Never breaks a hit.
                 _heal_on_hit(
                     index_path, cachetype=ct, hash_=hash_, params=key_table,
-                    ref=ref, format=fmt, scope=art_scope, version=version,
+                    ref=ref, format=fmt, version=version,
                 )
                 return _load_value(data_path, fmt)
 
@@ -583,7 +553,7 @@ def cached(
             written_index = _register_produced(
                 index_path,
                 cachetype=ct, hash_=hash_, params=key_table, ref=ref,
-                format=fmt, scope=art_scope, version=version,
+                format=fmt, version=version,
             )
 
             def write_fn(tmp: str) -> None:
@@ -604,7 +574,7 @@ def cached(
         recipe = Recipe(
             ref=f"{fn.__module__}:{fn.__qualname__}",
             name=name or fn.__name__,
-            cachetype=ct, format=fmt, version=version, store=store,
+            cachetype=ct, format=fmt, version=version,
         )
         _register_recipe(recipe)
         wrapper.recipe = recipe

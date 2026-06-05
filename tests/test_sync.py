@@ -4,15 +4,26 @@ Offline only: every subprocess call (the ssh env-probe, ssh ``mkdir -p``, and
 rsync) is routed through an **injected runner** so no real ssh/rsync/network is
 ever invoked — the runner captures argv and returns canned output. Covers:
 
-- address resolution (fetched by name/alias/doi → ``datasets/…``; produced by
+- address resolution (fetched by name/alias/doi → ``rel == key``; produced by
   ``cachetype/hash``, ``cachetype/version/hash``, and an unambiguous hash prefix;
   ambiguous id raises without ``--batch``);
-- remote-env probe + the ``folder_base`` fallback ladder (probe → ``_HOST`` →
-  default), and the ``$repo`` refusal;
+- remote-env probe + the fallback ladder (probe → ``_HOST`` → ``[_STORAGE]``
+  default), and the local/repo-relative refusal;
 - command construction (rsync+ssh argv, direction, operands, the ``.complete``
   sibling for a file object, the push ``mkdir -p``);
 - ``--dry-run`` reports the selection and never invokes the transfer;
 - the import-rule guard (``cache/`` never imports the fetch layer).
+
+spec-v4 storage model
+---------------------
+Storage is two folder fields in ``[_STORAGE]``: ``datasets_dir`` (fetched) and
+``datacache_dir`` (produced). A *relative* folder resolves under the project root
+⇒ **local / repo-relative ⇒ out of scope for sync**. To make an object syncable
+a test points the folder at a **machine-global absolute** path (the ``proj``
+fixture pins both at ``tmp_path``-rooted absolute dirs). An object's
+machine-independent address (``rel``) is the dataset ``key`` (fetched) or
+``cachetype/[version/]hash`` (produced); it re-attaches under the receiver's
+``datasets_dir`` / ``datacache_dir``.
 """
 
 import glob
@@ -23,7 +34,6 @@ import pytest
 from datamanifest import store, sync
 from datamanifest.cache._sidecars import write_config
 from datamanifest.database import Database
-from datamanifest.store.locations import project_id
 
 
 # ----- a recording runner ----------------------------------------------------
@@ -64,18 +74,27 @@ class Runner:
 
 @pytest.fixture
 def proj(tmp_path):
-    """A project dir with a datasets.toml carrying fetched datasets + storage."""
+    """A project dir whose ``[_STORAGE]`` pins datasets_dir / datacache_dir at
+    machine-global (absolute) folders, so fetched datasets and produced
+    artifacts are **syncable**. ``repo_ds`` is pinned under ``$repo`` to exercise
+    the local/repo-relative refusal."""
     d = tmp_path / "proj"
     d.mkdir()
+    data = tmp_path / "data"
+    cache = tmp_path / "cache"
     toml = d / "datasets.toml"
     toml.write_text(
-        """
+        f"""
 [_META]
 schema = 1
 
+[_STORAGE]
+datasets_dir = "{data}"
+datacache_dir = "{cache}"
+
 [_STORAGE._HOST."remote*"]
-data = "/host/data"
-cache = "/host/cache"
+datasets_dir = "/host/data"
+datacache_dir = "/host/cache"
 
 [foo]
 uri = "https://example.com/data/foo.csv"
@@ -84,27 +103,25 @@ doi = "10.1234/foo"
 
 [repo_ds]
 uri = "https://example.com/r.csv"
-store = "$repo"
+storage_path = "$repo/local/r.csv"
 """
     )
     return d
 
 
 @pytest.fixture
-def local_data(tmp_path, monkeypatch):
-    monkeypatch.setenv("DATAMANIFEST_DATA_DIR", str(tmp_path / "data"))
-    monkeypatch.setenv("DATAMANIFEST_CACHE_DIR", str(tmp_path / "cache"))
-    return tmp_path
+def db(proj):
+    # persist=True so the database knows its ``datasets_toml`` path and
+    # ``get_project_root`` returns the project dir (the repo-relative refusal
+    # needs a real project root to compare against).
+    return Database(datasets_toml=str(proj / "datasets.toml"), persist=True)
 
 
-@pytest.fixture
-def db(proj, local_data):
-    return Database(datasets_toml=str(proj / "datasets.toml"), persist=False)
-
-
-def _make_artifact(cache_root, scope, cachetype, h, *, version="", file=False):
-    """Fabricate a produced artifact dir with a config.toml sidecar."""
-    parts = [str(cache_root), "cached", scope, cachetype]
+def _make_artifact(cache_root, cachetype, h, *, version="", file=False):
+    """Fabricate a produced artifact dir with a config.toml sidecar at
+    ``<cache_root>/<cachetype>/[<version>/]<hash>`` (the spec-v4 layout, no
+    scope segment)."""
+    parts = [str(cache_root), cachetype]
     if version:
         parts.append(version)
     parts.append(h)
@@ -118,61 +135,66 @@ def _make_artifact(cache_root, scope, cachetype, h, *, version="", file=False):
     return artifact
 
 
+def _cache_root(db):
+    return store.datacache_dir(
+        project_root=db.get_project_root(), storage_config=db.storage_config,
+    )
+
+
 # ----- address resolution: fetched -------------------------------------------
 
 @pytest.mark.parametrize("ident", ["foo", "foo_alias", "10.1234/foo"])
 def test_fetched_resolves_by_name_alias_doi(db, ident):
     obj = sync.resolve_object(db, ident)
     assert obj.kind == "datasets"
-    # rel = datasets/<key>; key is the source-derived key for foo.
-    assert obj.rel.startswith("datasets" + os.sep)
-    assert obj.rel.endswith(os.path.join("example.com", "data", "foo.csv"))
-    # local_abs is under the $data root with the datasets/ prefix.
+    # rel is the machine-independent address — the dataset key (no datasets/
+    # prefix; that is the receiver's own folder).
+    assert obj.rel == os.path.join("example.com", "data", "foo.csv")
+    # local_abs re-attaches the key under the local datasets_dir.
     assert obj.local_abs.endswith(obj.rel)
 
 
 def test_repo_stored_dataset_refused(db):
+    # repo_ds is pinned under $repo (storage_path = "$repo/local/r.csv") -> it
+    # resolves under the project root -> local / repo-relative -> out of scope.
     with pytest.raises(sync.RemoteRepoError):
         sync.resolve_object(db, "repo_ds")
 
 
 # ----- address resolution: produced ------------------------------------------
 
-def test_produced_resolves_by_cachetype_hash(db, local_data):
-    cache_root = store.resolve_selector("$cache", storage_config=db.storage_config)
+def test_produced_resolves_by_cachetype_hash(db):
+    cache_root = _cache_root(db)
     h = "a" * 64
-    art = _make_artifact(cache_root, project_id(str(db.get_project_root())),
-                         "greet", h)
+    art = _make_artifact(cache_root, "greet", h)
     obj = sync.resolve_object(db, f"greet/{h}")
     assert obj.kind == "cached"
     assert obj.local_abs == os.path.abspath(art)
-    assert obj.rel.startswith("cached" + os.sep)
-    assert obj.rel.endswith(os.path.join("greet", h))
+    # rel is the machine-independent address: cachetype/hash.
+    assert obj.rel == os.path.join("greet", h)
 
 
-def test_produced_resolves_by_cachetype_version_hash(db, local_data):
-    cache_root = store.resolve_selector("$cache", storage_config=db.storage_config)
+def test_produced_resolves_by_cachetype_version_hash(db):
+    cache_root = _cache_root(db)
     h = "b" * 64
-    _make_artifact(cache_root, project_id(str(db.get_project_root())),
-                   "greet", h, version="v3")
+    _make_artifact(cache_root, "greet", h, version="v3")
     obj = sync.resolve_object(db, f"greet/v3/{h}")
     assert obj.kind == "cached"
-    assert obj.rel.endswith(os.path.join("greet", "v3", h))
+    assert obj.rel == os.path.join("greet", "v3", h)
 
 
-def test_produced_resolves_by_unambiguous_hash_prefix(db, local_data):
-    cache_root = store.resolve_selector("$cache", storage_config=db.storage_config)
+def test_produced_resolves_by_unambiguous_hash_prefix(db):
+    cache_root = _cache_root(db)
     h = "c0ffee" + "0" * 58
-    _make_artifact(cache_root, project_id(str(db.get_project_root())), "greet", h)
+    _make_artifact(cache_root, "greet", h)
     obj = sync.resolve_object(db, "greet/c0ffee")
     assert obj.local_abs.endswith(h)
 
 
-def test_ambiguous_produced_id_raises_without_batch(db, local_data):
-    cache_root = store.resolve_selector("$cache", storage_config=db.storage_config)
-    scope = project_id(str(db.get_project_root()))
-    _make_artifact(cache_root, scope, "greet", "dead" + "0" * 60)
-    _make_artifact(cache_root, scope, "greet", "dead" + "1" * 60)
+def test_ambiguous_produced_id_raises_without_batch(db):
+    cache_root = _cache_root(db)
+    _make_artifact(cache_root, "greet", "dead" + "0" * 60)
+    _make_artifact(cache_root, "greet", "dead" + "1" * 60)
     with pytest.raises(sync.AmbiguousIdError):
         sync.resolve_object(db, "greet/dead")
     # --batch returns both.
@@ -183,7 +205,10 @@ def test_ambiguous_produced_id_raises_without_batch(db, local_data):
 # ----- remote env probe + fallback ladder ------------------------------------
 
 def test_remote_env_probe_drives_remote_root(db):
-    runner = Runner(env_output="DATAMANIFEST_DATA_DIR=/remote/data\nPATH=/bin\n")
+    # The probe exports DATAMANIFEST_DATASETS_DIR -> it drives the remote root.
+    runner = Runner(
+        env_output="DATAMANIFEST_DATASETS_DIR=/remote/data\nPATH=/bin\n"
+    )
     obj = sync.resolve_object(db, "foo")
     rabs = sync.remote_abs(obj, "somehost", db=db,
                            project_root=db.get_project_root(), runner=runner)
@@ -196,8 +221,9 @@ def test_remote_env_probe_drives_remote_root(db):
 
 
 def test_falls_back_to_host_override_when_probe_empty(db):
-    # Probe returns no DATAMANIFEST_* vars -> the [_STORAGE._HOST."remote*"]
-    # override (data = /host/data) wins for a matching hostname.
+    # Probe returns no DATAMANIFEST_* vars -> the
+    # [_STORAGE._HOST."remote*"] override (datasets_dir = /host/data) wins for a
+    # matching hostname.
     runner = Runner(env_output="PATH=/usr/bin\n")
     obj = sync.resolve_object(db, "foo")
     rabs = sync.remote_abs(obj, "remote-box", db=db,
@@ -205,23 +231,24 @@ def test_falls_back_to_host_override_when_probe_empty(db):
     assert rabs.startswith("/host/data" + os.sep)
 
 
-def test_falls_back_to_default_when_probe_fails_and_no_host(db, tmp_path):
-    # Probe fails (non-zero) and the host matches no _HOST glob -> shared
-    # default (here pinned by DATAMANIFEST_DATA_DIR via the local_data fixture
-    # is NOT used for the remote: an empty remote env means the remote default
-    # is platformdirs). Use a host with no override.
+def test_falls_back_to_default_when_probe_fails_and_no_host(db):
+    # Probe fails (non-zero) and the host matches no _HOST glob -> the shared
+    # default folder, i.e. the [_STORAGE].datasets_dir base value resolved
+    # through the ladder (no remote DATAMANIFEST_* and no host override).
     runner = Runner(env_returncode=255)
     obj = sync.resolve_object(db, "foo")
     rabs = sync.remote_abs(obj, "unknown-host", db=db,
                            project_root=db.get_project_root(), runner=runner)
-    # No remote DATAMANIFEST_*; remote root is the platformdirs default.
-    import platformdirs
-    assert rabs.startswith(platformdirs.user_data_dir("datamanifest"))
+    default_root = store.datasets_dir(
+        project_root=db.get_project_root(), storage_config=db.storage_config,
+        env={}, host="unknown-host",
+    )
+    assert rabs == os.path.join(default_root, obj.rel)
 
 
 # ----- command construction ---------------------------------------------------
 
-def test_push_dir_object_argv_and_mkdir(db, local_data):
+def test_push_dir_object_argv_and_mkdir(db):
     # Materialize foo as a directory object locally.
     obj = sync.resolve_object(db, "foo")
     os.makedirs(obj.local_abs, exist_ok=True)
@@ -229,7 +256,7 @@ def test_push_dir_object_argv_and_mkdir(db, local_data):
     obj = sync.resolve_object(db, "foo")  # re-resolve so is_dir is True
     assert obj.is_dir
 
-    runner = Runner(env_output="DATAMANIFEST_DATA_DIR=/remote/data\n")
+    runner = Runner(env_output="DATAMANIFEST_DATASETS_DIR=/remote/data\n")
     plan = sync.transfer(db, obj, "host1", direction="push",
                          project_root=db.get_project_root(), runner=runner)
     # push issues the remote mkdir -p of the parent.
@@ -245,7 +272,7 @@ def test_push_dir_object_argv_and_mkdir(db, local_data):
     assert rsync[0][-1] == f"host1:{plan['remote']}"
 
 
-def test_push_file_object_transfers_complete_sibling(db, local_data):
+def test_push_file_object_transfers_complete_sibling(db):
     # foo as a file object (no directory): sibling <file>.complete must go too.
     obj = sync.resolve_object(db, "foo")
     os.makedirs(os.path.dirname(obj.local_abs), exist_ok=True)
@@ -255,7 +282,7 @@ def test_push_file_object_transfers_complete_sibling(db, local_data):
     obj = sync.resolve_object(db, "foo")
     assert not obj.is_dir
 
-    runner = Runner(env_output="DATAMANIFEST_DATA_DIR=/remote/data\n")
+    runner = Runner(env_output="DATAMANIFEST_DATASETS_DIR=/remote/data\n")
     plan = sync.transfer(db, obj, "h", direction="push",
                          project_root=db.get_project_root(), runner=runner)
     rsync = runner.rsync_calls()
@@ -265,9 +292,9 @@ def test_push_file_object_transfers_complete_sibling(db, local_data):
     assert rsync[1][-1] == f"h:{plan['remote']}.complete"
 
 
-def test_pull_direction_and_local_mkdir(db, local_data):
+def test_pull_direction_and_local_mkdir(db):
     obj = sync.resolve_object(db, "foo")  # not present -> treated as file
-    runner = Runner(env_output="DATAMANIFEST_DATA_DIR=/remote/data\n")
+    runner = Runner(env_output="DATAMANIFEST_DATASETS_DIR=/remote/data\n")
     plan = sync.transfer(db, obj, "h", direction="pull",
                          project_root=db.get_project_root(), runner=runner)
     # pull makes the local parent and never issues a remote mkdir.
@@ -281,9 +308,9 @@ def test_pull_direction_and_local_mkdir(db, local_data):
 
 # ----- dry run ----------------------------------------------------------------
 
-def test_dry_run_reports_and_does_not_transfer(db, local_data):
+def test_dry_run_reports_and_does_not_transfer(db):
     obj = sync.resolve_object(db, "foo")
-    runner = Runner(env_output="DATAMANIFEST_DATA_DIR=/remote/data\n")
+    runner = Runner(env_output="DATAMANIFEST_DATASETS_DIR=/remote/data\n")
     plan = sync.transfer(db, obj, "h", direction="push",
                          project_root=db.get_project_root(), runner=runner,
                          dry_run=True)

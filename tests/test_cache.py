@@ -1,7 +1,7 @@
 """Tests for the Layer 1b produce-or-load cache layer (Phase 1).
 
-Offline only: a ``tmp_path`` cache root (via ``DATAMANIFEST_CACHE_DIR``) and the
-trivial ``txt`` / ``json`` formats.
+Offline only: a ``tmp_path`` cache root (via ``DATAMANIFEST_DATACACHE_DIR``) and
+the trivial ``txt`` / ``json`` formats.
 """
 
 import json
@@ -78,24 +78,17 @@ def test_key_table_drops_underscore_prefixed():
 
 @pytest.fixture
 def cache_root(tmp_path, monkeypatch):
+    """The spec-v4 ``datacache_dir`` root. A bare ``@cached`` (no project_root,
+    cwd under ``tmp_path`` with no manifest/pyproject up the tree) composes its
+    artifact directly under this folder as ``<cachetype>/[<version>/]<hash>`` —
+    no ``cached/`` prefix and no scope segment."""
     root = tmp_path / "cache"
-    monkeypatch.setenv("DATAMANIFEST_CACHE_DIR", str(root))
+    monkeypatch.setenv("DATAMANIFEST_DATACACHE_DIR", str(root))
     # Isolate Phase-2 side effects of a produce: the depot usage log and the
     # cwd-fallback cached.toml a bare @cached (no project_root) registers into.
     monkeypatch.setenv("DATAMANIFEST_USAGE_LOG", str(tmp_path / "usage.toml"))
     monkeypatch.chdir(tmp_path)
     return root
-
-
-@pytest.fixture
-def scope_base(cache_root):
-    """The spec-v3 project-scoped base a bare ``@cached`` (no ``project_root``)
-    materializes under: ``<cache>/cached/<project-id>/``. The project-id of a
-    bare produce is the path-hash of the cwd (here ``tmp_path``, chdir'd into by
-    the ``cache_root`` fixture)."""
-    from datamanifest.store.locations import project_id
-
-    return cache_root / "cached" / project_id("")
 
 
 def test_cached_rejects_positional_args(cache_root):
@@ -107,7 +100,7 @@ def test_cached_rejects_positional_args(cache_root):
         produce("positional")
 
 
-def test_cached_round_trip_miss_then_hit(cache_root, scope_base):
+def test_cached_round_trip_miss_then_hit(cache_root):
     calls = {"n": 0}
 
     @cached(cachetype="greeting", format="txt")
@@ -121,7 +114,7 @@ def test_cached_round_trip_miss_then_hit(cache_root, scope_base):
     assert calls["n"] == 1
 
     h = param_hash({"name": "world"})
-    artifact_dir = scope_base / "greeting" / h
+    artifact_dir = cache_root / "greeting" / h
     assert (artifact_dir / "data.txt").read_text() == "hello world"
     assert (artifact_dir / "config.toml").exists()
     assert (artifact_dir / "metadata.toml").exists()
@@ -152,18 +145,18 @@ def test_cached_round_trip_miss_then_hit(cache_root, scope_base):
     assert meta_after == meta_before
 
 
-def test_cached_distinct_params_distinct_artifacts(cache_root, scope_base):
+def test_cached_distinct_params_distinct_artifacts(cache_root):
     @cached(cachetype="g", format="txt")
     def produce(*, name):
         return f"hi {name}"
 
     produce(name="a")
     produce(name="b")
-    assert (scope_base / "g" / param_hash({"name": "a"}) / "data.txt").exists()
-    assert (scope_base / "g" / param_hash({"name": "b"}) / "data.txt").exists()
+    assert (cache_root / "g" / param_hash({"name": "a"}) / "data.txt").exists()
+    assert (cache_root / "g" / param_hash({"name": "b"}) / "data.txt").exists()
 
 
-def test_cached_underscore_kwargs_excluded_from_hash(cache_root, scope_base):
+def test_cached_underscore_kwargs_excluded_from_hash(cache_root):
     seen = {}
 
     @cached(cachetype="g", format="json")
@@ -174,14 +167,14 @@ def test_cached_underscore_kwargs_excluded_from_hash(cache_root, scope_base):
     produce(name="x", _debug=True)
     # The hash key ignores _debug; the artifact lands at hash({"name":"x"}).
     h = param_hash({"name": "x"})
-    artifact = scope_base / "g" / h / "data.json"
+    artifact = cache_root / "g" / h / "data.json"
     assert artifact.exists()
     with open(artifact) as fh:
         assert json.load(fh) == {"name": "x"}
     assert seen["debug"] is True  # but the body still saw the runtime knob
 
 
-def test_cached_escape_hatch_forces_recompute(cache_root, scope_base):
+def test_cached_escape_hatch_forces_recompute(cache_root):
     calls = {"n": 0}
 
     @cached(cachetype="g", format="txt")
@@ -197,10 +190,10 @@ def test_cached_escape_hatch_forces_recompute(cache_root, scope_base):
     assert calls["n"] == 2
     # The re-materialized artifact reflects the recompute.
     h = param_hash({"name": "z"})
-    assert (scope_base / "g" / h / "data.txt").read_text() == "z-2"
+    assert (cache_root / "g" / h / "data.txt").read_text() == "z-2"
 
 
-def test_cached_key_selector_narrows_table(cache_root, scope_base):
+def test_cached_key_selector_narrows_table(cache_root):
     @cached(cachetype="g", format="txt", key=["name"])
     def produce(*, name, region):
         return f"{name}/{region}"
@@ -208,30 +201,30 @@ def test_cached_key_selector_narrows_table(cache_root, scope_base):
     produce(name="n", region="r1")
     # Only `name` is hashed; the artifact dir keys on {"name": "n"} alone.
     h = param_hash({"name": "n"})
-    artifact_dir = scope_base / "g" / h
+    artifact_dir = cache_root / "g" / h
     assert (artifact_dir / "data.txt").exists()
     assert config_key_table(read_config(str(artifact_dir))) == {"name": "n"}
 
 
-# ----- spec-v3 path composition: cached/ prefix + project-id scope -----------
+# ----- spec-v4 path composition: <datacache_dir>/<cachetype>/<hash> ----------
 
-def test_cached_produce_lands_under_cached_project_scope(cache_root, scope_base):
+def test_cached_produce_lands_directly_under_datacache_dir(cache_root):
     @cached(cachetype="t", format="txt")
     def produce(*, name):
         return name
 
     produce(name="v")
     h = param_hash({"name": "v"})
-    # <cache>/cached/<project-id>/t/<hash>/data.txt
-    assert (scope_base / "t" / h / "data.txt").read_text() == "v"
-    # the cached/ prefix and the project-id scope are real path segments
-    assert scope_base.parent.name == "cached"
-    assert scope_base.parent.parent == cache_root
+    # <datacache_dir>/<cachetype>/<hash>/data.txt — no cached/ prefix, no scope.
+    artifact_dir = cache_root / "t" / h
+    assert (artifact_dir / "data.txt").read_text() == "v"
+    # The cachetype dir is an immediate child of the datacache_dir root.
+    assert artifact_dir.parent.parent == cache_root
 
 
 # ----- default format: pickle ------------------------------------------------
 
-def test_cached_default_format_is_pickle(cache_root, scope_base):
+def test_cached_default_format_is_pickle(cache_root):
     """A format-less @cached self-saves with pickle, so any picklable value
     (here a bare int — the original failing case) round-trips."""
     calls = {"n": 0}
@@ -246,7 +239,7 @@ def test_cached_default_format_is_pickle(cache_root, scope_base):
     assert calls["n"] == 1
 
     h = param_hash({"name": "x"})
-    artifact_dir = scope_base / "memory" / h
+    artifact_dir = cache_root / "memory" / h
     # The serialized value is a pickle next to the sidecars.
     assert (artifact_dir / "data.pickle").exists()
     config = read_config(str(artifact_dir))
@@ -258,7 +251,7 @@ def test_cached_default_format_is_pickle(cache_root, scope_base):
     assert calls["n"] == 1
 
 
-def test_cached_bare_value_round_trips(cache_root, scope_base):
+def test_cached_bare_value_round_trips(cache_root):
     @cached(cachetype="memory")
     def produce():
         return 42
@@ -406,7 +399,7 @@ def test_cachetype_redecoration_same_ref_is_not_a_conflict(clean_registry):
 
 # ----- hit requires the data file on disk ------------------------------------
 
-def test_cached_recomputes_when_data_file_absent(cache_root, scope_base):
+def test_cached_recomputes_when_data_file_absent(cache_root):
     """A complete, hash-valid artifact whose data file for *this* format is
     missing is not a hit — the recipe recomputes instead of failing to read.
     Guards the collision case where two recipes share a cachetype + hash."""
@@ -419,7 +412,7 @@ def test_cached_recomputes_when_data_file_absent(cache_root, scope_base):
 
     assert produce(name="a") == "v1"
     h = param_hash({"name": "a"})
-    artifact = scope_base / "g" / h
+    artifact = cache_root / "g" / h
     assert (artifact / "data.txt").exists()
 
     # Drop the data file but leave the .complete marker + valid config.toml.
@@ -435,7 +428,7 @@ def test_cached_recomputes_when_data_file_absent(cache_root, scope_base):
 
 # ----- registry self-heals on hit --------------------------------------------
 
-def test_cached_hit_reregisters_when_index_deleted(cache_root, scope_base):
+def test_cached_hit_reregisters_when_index_deleted(cache_root):
     """Deleting cached.toml by hand does not lose the registration: the next
     cache hit re-adds the entry, so the index rebuilds itself by re-running."""
     from datamanifest.cache import CachedIndex
@@ -446,12 +439,12 @@ def test_cached_hit_reregisters_when_index_deleted(cache_root, scope_base):
 
     produce(name="a")
     index_path = os.path.join(os.getcwd(), "cached.toml")
-    assert CachedIndex.read(index_path).scoped_keys()
+    assert CachedIndex.read(index_path).reachable_keys()
 
     # Delete the index by hand; the artifact itself stays on disk.
     os.remove(index_path)
     h = param_hash({"name": "a"})
-    assert (scope_base / "g" / h / "data.txt").exists()
+    assert (cache_root / "g" / h / "data.txt").exists()
 
     # A hit (artifact present + valid) self-heals the registry.
     assert produce(name="a") == "hi a"
@@ -459,7 +452,7 @@ def test_cached_hit_reregisters_when_index_deleted(cache_root, scope_base):
     assert "g" in cts
 
 
-def test_cached_hit_does_not_rewrite_index_when_present(cache_root, scope_base):
+def test_cached_hit_does_not_rewrite_index_when_present(cache_root):
     """A hit whose entry is already registered does not rewrite the index."""
     @cached(cachetype="g", format="txt")
     def produce(*, name):
@@ -473,13 +466,12 @@ def test_cached_hit_does_not_rewrite_index_when_present(cache_root, scope_base):
     assert os.stat(index_path).st_mtime_ns == mtime
 
 
-# ----- spec-v3 scope field ---------------------------------------------------
+# ----- cached.toml records each variation's params ---------------------------
 
-def test_cached_registers_scope_and_params(cache_root, scope_base):
-    """The cached.toml recipe records the project ``scope`` and each variation's
-    ``params`` (the kwargs it was produced with)."""
+def test_cached_registers_params(cache_root):
+    """The cached.toml recipe records each variation's ``params`` (the kwargs it
+    was produced with) under its ``(cachetype, version)`` identity."""
     from datamanifest.cache import CachedIndex
-    from datamanifest.store.locations import project_id
 
     @cached(cachetype="t", format="txt")
     def produce(*, name):
@@ -488,62 +480,20 @@ def test_cached_registers_scope_and_params(cache_root, scope_base):
     produce(name="v")
     index = CachedIndex.read(os.path.join(os.getcwd(), "cached.toml"))
     rec = {r["cachetype"]: r for r in index.recipe_records()}["t"]
-    assert rec["scope"] == project_id("")
     assert list(rec["instances"].values()) == [{"name": "v"}]
 
 
-def test_cached_discovers_project_root_for_scope(cache_root, tmp_path, monkeypatch):
-    """When no project_root is passed, it is discovered by walking up for a
-    pyproject.toml, so the scope resolves to ``[project].name`` instead of a
-    path hash."""
-    from datamanifest.cache import CachedIndex
-
-    proj = tmp_path / "proj"
-    sub = proj / "deep" / "nested"
-    sub.mkdir(parents=True)
-    (proj / "pyproject.toml").write_text('[project]\nname = "myproj"\n')
-    monkeypatch.chdir(sub)
-
-    @cached(cachetype="t", format="txt")
-    def produce(*, name):
-        return name
-
-    produce(name="v")
-    h = param_hash({"name": "v"})
-    # Scope segment in the on-disk path is the discovered project name.
-    assert (cache_root / "cached" / "myproj" / "t" / h / "data.txt").exists()
-    # cached.toml lands at the discovered project root and records scope=myproj.
-    index = CachedIndex.read(str(proj / "cached.toml"))
-    assert {r["scope"] for r in index.recipe_records()} == {"myproj"}
-
-
-def test_cached_scope_override_param(cache_root, scope_base):
-    """An explicit @cached(scope=...) drives BOTH the on-disk path and the
-    recorded entry — they cannot diverge (the highest-priority scope)."""
-    from datamanifest.cache import CachedIndex
-
-    @cached(cachetype="t", format="txt", scope="shared")
-    def produce(*, name):
-        return name
-
-    produce(name="v")
-    h = param_hash({"name": "v"})
-    # Path lands under the explicit scope.
-    assert (cache_root / "cached" / "shared" / "t" / h / "data.txt").exists()
-    # Entry records the SAME scope (path and entry agree).
-    index = CachedIndex.read(os.path.join(os.getcwd(), "cached.toml"))
-    assert {r["scope"] for r in index.recipe_records()} == {"shared"}
-    assert index.has_instance(scope="shared", cachetype="t", version="", hash=h)
-
-
-def test_cached_honors_manifest_storage_config(tmp_path, monkeypatch):
-    """@cached resolves $cache from the nearest manifest's [_STORAGE] — the same
-    centralized storage config the fetch side uses — with no env var needed."""
+def test_cached_honors_manifest_datacache_dir(tmp_path, monkeypatch):
+    """@cached resolves datacache_dir from the nearest manifest's [_STORAGE] —
+    the same centralized storage config the fetch side uses — with no env var
+    needed. A relative datacache_dir is anchored at the project root."""
     proj = tmp_path / "proj"
     proj.mkdir()
     scratch = tmp_path / "scratch"
-    (proj / "datasets.toml").write_text(f'[_STORAGE]\ncache = "{scratch}"\n')
-    for var in ("DATAMANIFEST_CACHE_DIR", "DATAMANIFEST_DIR", "DATAMANIFEST_DATA_DIR"):
+    (proj / "datasets.toml").write_text(
+        f'[_STORAGE]\ndatacache_dir = "{scratch}"\n'
+    )
+    for var in ("DATAMANIFEST_DATACACHE_DIR", "DATAMANIFEST_DATASETS_DIR"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("DATAMANIFEST_USAGE_LOG", str(tmp_path / "usage.toml"))
     monkeypatch.chdir(proj)
@@ -554,35 +504,14 @@ def test_cached_honors_manifest_storage_config(tmp_path, monkeypatch):
 
     produce(name="v")
     h = param_hash({"name": "v"})
-    # Artifact landed under the manifest's [_STORAGE] cache (scope is a path hash
-    # here — no pyproject name), not the platformdirs default.
-    assert list(scratch.glob(f"cached/*/t/{h}/data.txt")), \
-        f"expected the produced artifact under {scratch}"
+    # Artifact landed under the manifest's [_STORAGE] datacache_dir, directly as
+    # <datacache_dir>/<cachetype>/<hash> (no cached/ prefix, no scope).
+    assert (scratch / "t" / h / "data.txt").read_text() == "v"
 
 
-def test_cached_scope_env_override_path_and_entry_agree(cache_root, scope_base,
-                                                        monkeypatch):
-    """A DATAMANIFEST_SCOPE_CACHED override reaches the entry too (the bug:
-    previously only the path honored it, the entry kept the project id)."""
-    from datamanifest.cache import CachedIndex
+# ----- spec-v4 recipe version ------------------------------------------------
 
-    monkeypatch.setenv("DATAMANIFEST_SCOPE_CACHED", "envscope")
-
-    @cached(cachetype="t", format="txt")
-    def produce(*, name):
-        return name
-
-    produce(name="v")
-    h = param_hash({"name": "v"})
-    assert (cache_root / "cached" / "envscope" / "t" / h / "data.txt").exists()
-    index = CachedIndex.read(os.path.join(os.getcwd(), "cached.toml"))
-    # The recorded scope matches the path's scope — reachability stays consistent.
-    assert index.has_instance(scope="envscope", cachetype="t", version="", hash=h)
-
-
-# ----- spec-v3 recipe version ------------------------------------------------
-
-def test_cached_version_adds_path_segment_not_in_hash(cache_root, scope_base):
+def test_cached_version_adds_path_segment_not_in_hash(cache_root):
     @cached(cachetype="t", format="txt", version="v3")
     def produce(*, name):
         return name
@@ -591,7 +520,7 @@ def test_cached_version_adds_path_segment_not_in_hash(cache_root, scope_base):
     # version does not change the param hash ...
     h = param_hash({"name": "w"})
     # ... it inserts a <cachetype>/<version>/<hash> segment.
-    artifact_dir = scope_base / "t" / "v3" / h
+    artifact_dir = cache_root / "t" / "v3" / h
     assert (artifact_dir / "data.txt").read_text() == "w"
     # version is recorded in config.toml's [_META] (never in the key table).
     config = read_config(str(artifact_dir))
@@ -600,7 +529,7 @@ def test_cached_version_adds_path_segment_not_in_hash(cache_root, scope_base):
     assert config_is_valid(str(artifact_dir))
 
 
-def test_cached_version_same_hash_as_unversioned(cache_root, scope_base):
+def test_cached_version_same_hash_as_unversioned(cache_root):
     @cached(cachetype="t", format="txt")
     def plain(*, name):
         return name
@@ -614,11 +543,11 @@ def test_cached_version_same_hash_as_unversioned(cache_root, scope_base):
     h = param_hash({"name": "k"})
     # Same kwargs hash to the same <hash> with or without a version; the version
     # only differs as a path segment.
-    assert (scope_base / "t" / h / "data.txt").exists()
-    assert (scope_base / "t" / "v9" / h / "data.txt").exists()
+    assert (cache_root / "t" / h / "data.txt").exists()
+    assert (cache_root / "t" / "v9" / h / "data.txt").exists()
 
 
-# ----- spec-v3 explicit per-call cache_dir bypass ----------------------------
+# ----- spec-v4 explicit per-call cache_dir bypass ----------------------------
 
 def test_cached_cache_dir_is_verbatim(cache_root, tmp_path):
     @cached(cachetype="t", format="txt", version="v2")
@@ -630,13 +559,13 @@ def test_cached_cache_dir_is_verbatim(cache_root, tmp_path):
     h = param_hash({"name": "q"})
     # <cache_dir>/<cachetype>/[<version>/]<hash> — no cached/ prefix, no scope.
     assert (explicit / "t" / "v2" / h / "data.txt").read_text() == "q"
-    # nothing landed under the composed $cache root.
-    assert not (cache_root / "cached").exists()
+    # nothing landed under the composed datacache_dir root.
+    assert not (cache_root / "t").exists()
 
 
 # ----- invalidation: a stale/corrupt sidecar is not a hit --------------------
 
-def test_cached_recomputes_on_invalid_config(cache_root, scope_base):
+def test_cached_recomputes_on_invalid_config(cache_root):
     import tomli_w
 
     calls = {"n": 0}
@@ -649,7 +578,7 @@ def test_cached_recomputes_on_invalid_config(cache_root, scope_base):
     produce(name="q")
     assert calls["n"] == 1
     h = param_hash({"name": "q"})
-    artifact_dir = scope_base / "g" / h
+    artifact_dir = cache_root / "g" / h
     assert config_is_valid(str(artifact_dir))
 
     # Tamper the recorded hash so config_is_valid() no longer matches the key
@@ -670,7 +599,7 @@ def test_cached_recomputes_on_invalid_config(cache_root, scope_base):
 
 # ----- real-format round-trips (writer <-> loader ladder), optional deps -----
 
-def test_cached_round_trip_csv(cache_root, scope_base):
+def test_cached_round_trip_csv(cache_root):
     pd = pytest.importorskip("pandas")
     from pandas.testing import assert_frame_equal
 
@@ -681,10 +610,10 @@ def test_cached_round_trip_csv(cache_root, scope_base):
     df_miss = produce(n=3)          # miss: returns the produced frame, writes CSV
     df_hit = produce(n=3)           # hit: loads via pandas.read_csv(comment="#")
     assert_frame_equal(df_miss, df_hit)
-    assert (scope_base / "frame" / param_hash({"n": 3}) / "data.csv").exists()
+    assert (cache_root / "frame" / param_hash({"n": 3}) / "data.csv").exists()
 
 
-def test_cached_round_trip_nc(cache_root, scope_base):
+def test_cached_round_trip_nc(cache_root):
     xr = pytest.importorskip("xarray")
     pytest.importorskip("netCDF4")
     import numpy as np
@@ -699,4 +628,4 @@ def test_cached_round_trip_nc(cache_root, scope_base):
         assert list(ds_hit["t"].values) == [0.0, 1.0, 2.0, 3.0]
     finally:
         ds_hit.close()
-    assert (scope_base / "grid" / param_hash({"n": 4}) / "data.nc").exists()
+    assert (cache_root / "grid" / param_hash({"n": 4}) / "data.nc").exists()

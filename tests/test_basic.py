@@ -1156,52 +1156,55 @@ def test_load_dataset_extracted_archive_returns_dir(tmp_path):
 
 # ----- Item 16: local_path, skip_download, project-root resolution -----
 
-def test_get_dataset_path_local_path_absolute(tmp_path):
-    """Absolute local_path is returned verbatim, ignoring datasets_folder."""
+def test_get_dataset_path_storage_path_absolute(tmp_path):
+    """An exact (no-$key) absolute storage_path is returned verbatim."""
     from datamanifest.database import get_dataset_path, init_dataset_entry
 
-    entry = init_dataset_entry(key="mydata", local_path="/abs/path/to/data.csv")
+    entry = init_dataset_entry(key="mydata", storage_path="/abs/path/to/data.csv")
     path = get_dataset_path(entry, datasets_folder=str(tmp_path), project_root="/ignored")
     assert path == "/abs/path/to/data.csv"
 
 
-def test_get_dataset_path_local_path_relative(tmp_path):
-    """Relative local_path is joined to project_root when available."""
+def test_get_dataset_path_storage_path_relative(tmp_path):
+    """A relative storage_path is anchored to project_root when available."""
     from datamanifest.database import get_dataset_path, init_dataset_entry
 
-    entry = init_dataset_entry(key="mydata", local_path="data/foo.csv")
+    entry = init_dataset_entry(key="mydata", storage_path="data/foo.csv")
     path = get_dataset_path(entry, project_root=str(tmp_path))
     assert path == str(tmp_path / "data" / "foo.csv")
 
 
-def test_get_dataset_path_local_path_no_root():
-    """Relative local_path is returned as-is when project_root is empty."""
+def test_get_dataset_path_storage_path_no_root():
+    """A relative storage_path is returned as-is when project_root is empty."""
     from datamanifest.database import get_dataset_path, init_dataset_entry
 
-    entry = init_dataset_entry(key="mydata", local_path="data/foo.csv")
+    entry = init_dataset_entry(key="mydata", storage_path="data/foo.csv")
     path = get_dataset_path(entry, project_root="")
     assert path == "data/foo.csv"
 
 
-def test_get_dataset_path_v3_datasets_prefix(tmp_path, monkeypatch):
-    """spec-v3: a fetched path composes as ``<bare-root>/datasets/<key>`` for the
-    built-in ``$data`` / ``$cache`` stores (no ``/Datasets`` suffix, no
-    ``datasets_folder`` override)."""
+def test_get_dataset_path_v4_default_is_repo_local(tmp_path):
+    """spec-v4: the default storage_path ``$datasets_dir/$key`` ⇒ repo-local
+    ``<project_root>/datasets/<key>`` with no configuration."""
     from datamanifest.database import get_dataset_path, init_dataset_entry
-
-    data_dir = tmp_path / "appdata"
-    cache_dir = tmp_path / "appcache"
-    monkeypatch.setenv("DATAMANIFEST_DATA_DIR", str(data_dir))
-    monkeypatch.setenv("DATAMANIFEST_CACHE_DIR", str(cache_dir))
 
     entry = init_dataset_entry("https://example.com/host/f.csv")
     assert get_dataset_path(entry, project_root=str(tmp_path)) == str(
-        data_dir / "datasets" / entry.key
+        tmp_path / "datasets" / entry.key
     )
 
-    centry = init_dataset_entry("https://example.com/host/f.csv", store="$cache")
-    assert get_dataset_path(centry, project_root=str(tmp_path)) == str(
-        cache_dir / "datasets" / centry.key
+
+def test_get_dataset_path_v4_datasets_dir_env(tmp_path, monkeypatch):
+    """spec-v4: ``DATAMANIFEST_DATASETS_DIR`` overrides the datasets folder; the
+    path is ``<datasets_dir>/<key>`` (no ``datasets/`` prefix)."""
+    from datamanifest.database import get_dataset_path, init_dataset_entry
+
+    data_dir = tmp_path / "appdata"
+    monkeypatch.setenv("DATAMANIFEST_DATASETS_DIR", str(data_dir))
+
+    entry = init_dataset_entry("https://example.com/host/f.csv")
+    assert get_dataset_path(entry, project_root=str(tmp_path)) == str(
+        data_dir / entry.key
     )
 
 
@@ -1315,23 +1318,3 @@ def test_default_db_missing_toml():
         _db_module._default_db = None
 
 
-def test_legacy_read_probe(tmp_path, monkeypatch):
-    """A dataset present only in the legacy ~/.cache/Datasets resolves there
-    (read-only), and an explicit DATAMANIFEST_DATA_DIR disables the probe."""
-    from datamanifest.database import Database, resolve_existing_path
-
-    legacy = tmp_path / "cache" / "Datasets"
-    (legacy / "host").mkdir(parents=True)
-    (legacy / "host" / "f.txt").write_text("x")
-    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
-    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))  # empty new store
-    monkeypatch.delenv("DATAMANIFEST_DATA_DIR", raising=False)
-
-    db = Database(persist=False)
-    db.register_dataset("", name="d", key="host/f.txt", skip_checksum=True, persist=False)
-
-    assert resolve_existing_path(db, db.datasets["d"]) == str(legacy / "host" / "f.txt")
-
-    # Explicit data-dir choice points elsewhere and skips the legacy probe.
-    monkeypatch.setenv("DATAMANIFEST_DATA_DIR", str(tmp_path / "data"))
-    assert resolve_existing_path(db, db.datasets["d"]) != str(legacy / "host" / "f.txt")
