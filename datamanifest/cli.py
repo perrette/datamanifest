@@ -591,6 +591,48 @@ def _cmd_refresh(args):
     # reconcile considers every object). Size/created aren't needed.
     objects = _enumerate_objects(db, heavy=frozenset())
     _refresh(objects, db, dry_run=args.dry_run)
+    if getattr(args, "scan", False):
+        _refresh_scan_pools(db, dry_run=args.dry_run)
+
+
+def _refresh_scan_pools(db, *, dry_run):
+    """``refresh --scan``: probe the read pools (which default to the well-known
+    legacy locations) for datasets that exist there but aren't local yet, and
+    **adopt** them — record the pooled location in the state file (checksum-gated,
+    no downloads or copies). The active counterpart to ``where --scan``."""
+    from .cache import CACHED_INDEX_NAME, CachedIndex
+    from .database import resolve_existing_path, resolve_from_pools
+
+    project_root = db.get_project_root()
+    base = os.path.dirname(db.datasets_toml) if db.datasets_toml else os.getcwd()
+    index_path = os.path.join(base or ".", CACHED_INDEX_NAME)
+    index = CachedIndex.read_or_empty(index_path)
+    adopted = 0
+    for name, entry in db.datasets.items():
+        if entry.skip_download or not entry.key:
+            continue
+        try:
+            resolved = resolve_existing_path(db, entry)
+            if os.path.isfile(resolved) or os.path.isdir(resolved):
+                continue                      # already local / recorded
+        except Exception:  # noqa: BLE001
+            pass
+        pooled = resolve_from_pools(db, entry)   # checksum-gated pool hit, or ""
+        if not pooled:
+            continue
+        verb = "Would adopt" if dry_run else "Adopted"
+        print(f"{verb} (pool): {name} → {pooled}")
+        if not dry_run:
+            sha = "" if (db.skip_checksum or entry.skip_checksum) else (entry.sha256 or "")
+            index.register_dataset(
+                key=entry.key,
+                storage_path=_record_portable(pooled, project_root), sha256=sha,
+            )
+        adopted += 1
+    if not dry_run and adopted:
+        index.write(index_path)
+    verb = "would adopt" if dry_run else "adopted"
+    print(f"Read pools: {verb} {adopted} dataset(s)")
 
 
 def _match_cached_by_id(ident, objects):
@@ -1693,6 +1735,12 @@ def main():
     p_refresh.add_argument(
         "--dry-run", action="store_true",
         help="Preview the reconciliation without writing the state file",
+    )
+    p_refresh.add_argument(
+        "--scan", action="store_true",
+        help="Also probe the read pools (incl. the well-known legacy locations) "
+             "and adopt datasets present there but not local yet (checksum-gated; "
+             "no downloads or copies) — the active twin of `where --scan`",
     )
     p_refresh.set_defaults(func=_cmd_refresh)
 

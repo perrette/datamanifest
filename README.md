@@ -113,7 +113,7 @@ datamanifest COMMAND [OPTIONS]
 | Command | Description |
 |---|---|
 | `list [SEARCH ...] [--cached\|--datasets] [--present\|--missing\|--all] [--orphan] [--dirty] [--hash P ...] [--older-than AGE] [--format F] [--fields ...] [--delete\|--move DIR] [--dry-run]` | List datasets and cached artifacts, with their state↔disk status; with `--delete`/`--move` becomes the maintenance command. The filtered selection applies directly (`--dry-run` previews); `--delete`/`--move` act on both artifacts and fetched datasets (protected data is skipped) |
-| `refresh [--dry-run]` | Reconcile the state file (`.datamanifest-state.toml`) with disk: relocate stale records, drop missing ones, adopt present-but-untracked datasets. Edits only local state — no downloads/moves — so it applies by default; `--dry-run` previews (use `list --dirty` to see what would change) |
+| `refresh [--scan] [--dry-run]` | Reconcile the state file (`.datamanifest-state.toml`) with disk: relocate stale records, drop missing ones, adopt present-but-untracked datasets. `--scan` also probes the read pools (incl. legacy locations) and adopts pool-present datasets (checksum-gated; no downloads/copies) — the active twin of `where --scan`. Edits only local state, so it applies by default; `--dry-run` previews |
 | `download [NAME ...] [--all] [--overwrite] [--delegate\|--no-delegate]` | Download specific datasets or all of them; `--no-delegate` disables the cross-language fetch rung for the run |
 | `path NAME` | Print the resolved on-disk path (composable in shell) |
 | `add URI [--name N] [--no-download] [--extract] [--delegate\|--no-delegate]` | Register and (by default) download a dataset |

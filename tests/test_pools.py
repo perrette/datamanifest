@@ -141,3 +141,23 @@ def test_cached_reuses_pooled_artifact(tmp_path, monkeypatch):
 
     assert f(x=1) == "from-pool"          # loaded from the pool …
     assert calls["n"] == 0                # … not recomputed
+
+
+def test_refresh_scan_adopts_pool_dataset(tmp_path):
+    """`refresh --scan` records a pool-present-but-not-local dataset in the state
+    file (checksum-gated, no download)."""
+    from datamanifest.cache import CachedIndex
+    from datamanifest.cli import _refresh_scan_pools
+
+    pool = tmp_path / "pool"
+    (pool / "example.com").mkdir(parents=True)
+    (pool / "example.com" / "a.csv").write_bytes(b"x\n")
+
+    db = _project(tmp_path, pool_dir=str(pool))
+    # Dry run records nothing.
+    _refresh_scan_pools(db, dry_run=True)
+    assert not (tmp_path / ".datamanifest-state.toml").exists()
+    # Apply adopts it.
+    _refresh_scan_pools(db, dry_run=False)
+    idx = CachedIndex.read(tmp_path / ".datamanifest-state.toml")
+    assert idx.dataset_path_of("example.com/a.csv")
