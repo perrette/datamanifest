@@ -95,6 +95,27 @@ def test_missing_is_flagged_and_dropped_by_refresh(tmp_path):
     assert idx.dataset_path_of(key) == ""
 
 
+def test_untracked_dataset_is_adopted_by_refresh(tmp_path):
+    db = _project(tmp_path)
+    download_dataset(db, "a")
+    key = db.datasets["a"].key
+
+    # Present on disk but not recorded (e.g. fetched before the state file
+    # existed): drop the entry, keep the bytes.
+    state = tmp_path / ".datamanifest-state.toml"
+    idx = CachedIndex.read(state)
+    idx.remove_dataset(key)
+    idx.write()
+
+    obj = _dataset_obj(db)
+    assert obj.present and obj.dirty == "untracked"
+
+    # --refresh --yes adopts it (records its location); no re-download.
+    _refresh(_enumerate_objects(db), _args(refresh=True, yes=True), db)
+    assert _dataset_obj(db).dirty == ""
+    assert CachedIndex.read(state).dataset_path_of(key)      # recorded again
+
+
 def test_dataset_delete_removes_bytes_and_entry(tmp_path):
     db = _project(tmp_path)
     path = download_dataset(db, "a")

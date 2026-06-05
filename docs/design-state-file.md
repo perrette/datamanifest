@@ -131,9 +131,14 @@ filter.
 
 **Actions** (explicit, on the selected objects):
 - **`--refresh`** — fix the **state file only** (no downloads, no file moves):
-  refresh *relocated* entries to their actual location and **drop** *stale /
-  missing* entries. A pure state↔disk reconcile. (Untracked artifacts are picked
-  up by active access, not here.)
+  refresh *relocated* entries to their actual location, **drop** *missing*
+  entries, and **adopt** *untracked* datasets (record a present-but-unrecorded
+  dataset's location — e.g. data fetched before the state file existed). A pure
+  state↔disk reconcile. A cached *orphan* (a produced artifact with no recipe
+  rooting it) is **not** adopted — that is its own concept, surfaced by
+  ``--orphan``, not a dataset to track. (Active access — download / ``@cached`` —
+  also adopts an untracked object on use; ``--refresh`` is the passive, bulk way
+  to do it without re-fetching.)
 - **`--delete`** — remove the selected objects' **bytes and** their entries
   (works across a filtered set). The only byte-removing action.
 

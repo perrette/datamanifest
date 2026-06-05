@@ -207,10 +207,10 @@ def _enumerate_objects(db, heavy=frozenset({"size"})):
                         referenced=True, dirty="missing",
                     )
 
-    for ident, obj in found.items():
-        if obj.present and ident not in recorded_keys:
-            # On disk but the state file roots nothing for it.
-            obj.dirty = "untracked"
+    # A present cached artifact the state file doesn't root is an **orphan**
+    # (referenced=False) — its own concept, surfaced by --orphan; it is not
+    # tagged "untracked" (untracked is a dataset-only adoption state).
+    for obj in found.values():
         objects.append(obj)
 
     # --- fetched datasets -----------------------------------------------------
@@ -693,9 +693,10 @@ def _remove_path_and_markers(path):
 def _refresh(objects, args, db):
     """``--refresh``: reconcile the state file with disk (no downloads, no file
     moves). For the selected objects it repoints a *relocated* entry to where the
-    bytes actually are and drops a *missing* entry whose bytes are gone. Untracked
-    objects are left for active access (download / ``@cached``) to register; clean
-    ones are untouched. Defaults to a dry run; ``--yes`` applies.
+    bytes actually are, drops a *missing* entry whose bytes are gone, and
+    **adopts** an *untracked* dataset (records the present-but-unrecorded dataset's
+    location). A cached orphan is left as an orphan (not adopted as a GC root);
+    clean objects are untouched. Defaults to a dry run; ``--yes`` applies.
     """
     from .cache import CACHED_INDEX_NAME, CachedIndex
 
@@ -739,7 +740,22 @@ def _refresh(objects, args, db):
                         index.remove_dataset(entry.key)
             changed += 1
         elif dirty == "untracked":
-            print(f"Left untracked (register by re-fetching/producing): {obj.key}")
+            entry = db.datasets.get(obj.key) if obj.kind == "datasets" else None
+            if entry is not None:
+                # Adopt a present-but-unrecorded dataset: record its location.
+                # No re-hash here (refresh touches no bytes); the actual sha256 is
+                # recorded on the next download / verify.
+                verb = "Adopted" if do_it else "Would adopt"
+                print(f"{verb} (untracked): {obj.key} -> {obj.location}")
+                if do_it:
+                    index.register_dataset(
+                        key=entry.key,
+                        storage_path=_record_portable(obj.location, project_root),
+                    )
+                changed += 1
+            else:
+                # A cached orphan — left as an orphan (not adopted as a root).
+                print(f"Left orphan (untracked artifact; not adopted): {obj.key}")
 
     if do_it and changed:
         index.write(index_path)
@@ -1162,8 +1178,8 @@ def main():
     _act_excl.add_argument(
         "--refresh", action="store_true",
         help="Reconcile the state file with disk for the selected objects "
-             "(relocate stale records, drop missing ones; no downloads or moves; "
-             "dry run unless --yes)",
+             "(relocate stale records, drop missing ones, adopt present-but-"
+             "untracked datasets; no downloads or moves; dry run unless --yes)",
     )
     act_group.add_argument(
         "--yes", "-y", action="store_true",
