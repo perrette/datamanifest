@@ -934,6 +934,26 @@ def record_dataset_state(db: "Database", entry: "DatasetEntry", path: str) -> No
                      exc_info=True)
 
 
+def remove_dataset_state(db: "Database", entry: "DatasetEntry") -> None:
+    """Drop a fetched dataset's record from the state file (best-effort) — called
+    when its bytes are removed, so no stale entry lingers."""
+    base = _state_base(db)
+    if not base or not entry.key:
+        return
+    try:
+        from .cache import CachedIndex
+
+        state_path = CachedIndex.locate(base)
+        if not os.path.isfile(state_path):
+            return
+        idx = CachedIndex.read(state_path)
+        if idx.remove_dataset(entry.key):
+            idx.write()
+    except Exception:  # noqa: BLE001 - best-effort inventory upkeep
+        logger.debug("could not prune state for dataset %s", entry.key,
+                     exc_info=True)
+
+
 # ----- Checksum, update, delete (Databases.jl:464-617) -----
 def _maybe_persist_database(db: "Database", persist: bool = True) -> None:
     if persist and db.datasets_toml:
@@ -1157,6 +1177,7 @@ def delete_dataset(
     resolved_name, entry = search_dataset(db, name)
     if not keep_cache:
         _remove_dataset_from_disk(db, entry)
+        remove_dataset_state(db, entry)     # no stale state record after the bytes go
     del db.datasets[resolved_name]
     if persist and db.datasets_toml:
         db.write(db.datasets_toml)

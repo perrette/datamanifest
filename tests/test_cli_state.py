@@ -146,6 +146,33 @@ def test_dataset_move_repoints_state_not_manifest(tmp_path):
     assert (tmp_path / "datamanifest.toml").read_text() == before
 
 
+def test_remove_prunes_state_record(tmp_path):
+    """`remove` (delete entry + bytes) also drops the dataset's state record, so
+    no stale entry lingers in the state file."""
+    from datamanifest.database import delete_dataset
+
+    db = _project(tmp_path)
+    download_dataset(db, "a")
+    key = db.datasets["a"].key
+    state = tmp_path / ".datamanifest-state.toml"
+    assert CachedIndex.read(state).dataset_path_of(key)        # recorded after download
+
+    delete_dataset(db, "a")
+    assert CachedIndex.read(state).dataset_path_of(key) == ""  # pruned
+
+
+def test_remove_keep_cache_keeps_state_record(tmp_path):
+    """`remove --keep-cache` keeps the bytes, so it keeps the state record too."""
+    from datamanifest.database import delete_dataset
+
+    db = _project(tmp_path)
+    download_dataset(db, "a")
+    key = db.datasets["a"].key
+    delete_dataset(db, "a", keep_cache=True)
+    state = tmp_path / ".datamanifest-state.toml"
+    assert CachedIndex.read(state).dataset_path_of(key)        # still recorded
+
+
 def test_skip_download_dataset_is_protected(tmp_path):
     db = _project(tmp_path, skip_download=True)
     download_dataset(db, "a")            # skip_download: the URI file is the data
