@@ -80,7 +80,7 @@ Where things live is configured **once** in `datamanifest.toml` ([Storage model]
 
 `datamanifest list` shows cached results grouped by function with their parameters; `datamanifest list --orphan --delete` cleans up.
 
-Advanced details — how the cache identity (`cachetype`) is derived, conflict detection, and the `cached.toml` index format — are in the [design notes](docs/design-notes.md).
+Advanced details — how the cache identity (`cachetype`) is derived, conflict detection, and the [state file](#state-file-datamanifest-statetoml) that records where each object lives — are in the [design notes](docs/design-notes.md) and the [state-file design note](docs/design-state-file.md).
 
 ## CLI usage
 
@@ -90,7 +90,7 @@ datamanifest COMMAND [OPTIONS]
 
 | Command | Description |
 |---|---|
-| `list [--present\|--missing\|--all] [--kind K] [--orphan] [--older-than AGE] [--format F] [--fields ...] [--delete\|--move DIR] [--yes]` | List datasets and cached artifacts; with `--delete`/`--move` becomes the maintenance command (dry run by default; `--yes` to apply) |
+| `list [SEARCH ...] [--cached\|--datasets] [--present\|--missing\|--all] [--orphan] [--dirty] [--hash P ...] [--older-than AGE] [--format F] [--fields ...] [--delete\|--move DIR\|--refresh] [--yes]` | List datasets and cached artifacts, with their state↔disk status; with `--delete`/`--move`/`--refresh` becomes the maintenance command (dry run by default; `--yes` to apply). `--delete`/`--move` act on both artifacts and fetched datasets (protected data is skipped); `--refresh` reconciles the state file with disk (no downloads/moves) |
 | `download [NAME ...] [--all] [--overwrite] [--delegate\|--no-delegate]` | Download specific datasets or all of them; `--no-delegate` disables the cross-language fetch rung for the run |
 | `path NAME` | Print the resolved on-disk path (composable in shell) |
 | `add URI [--name N] [--no-download] [--extract] [--delegate\|--no-delegate]` | Register and (by default) download a dataset |
@@ -129,9 +129,13 @@ datamanifest update-checksums --dry-run   # preview which would change
 datamanifest update-checksums             # write the new checksums
 
 # Inspect and clean up @cached artifacts
-datamanifest list --kind cached --orphan          # dry-run: list orphaned cached artifacts
-datamanifest list --kind cached --orphan --delete --yes  # delete them
+datamanifest list --cached --orphan               # dry-run: list orphaned cached artifacts
+datamanifest list --cached --orphan --delete --yes  # delete them
 datamanifest list --older-than 30d --delete       # preview artifacts older than 30 days
+
+# Reconcile the state file with disk (after moving data around by hand)
+datamanifest list --dirty                          # show objects whose record ≠ disk
+datamanifest list --dirty --refresh --yes          # relocate stale records, drop missing ones
 
 # Where is the active manifest?
 datamanifest where
@@ -140,7 +144,7 @@ datamanifest where
 datamanifest push foo user@hpc --dry-run            # preview: resolved paths + size
 datamanifest push foo user@hpc                      # push the dataset `foo` to the host
 datamanifest pull esm_anomaly/83425a3 user@hpc      # pull a produced artifact by hash prefix
-datamanifest list --kind cached --push user@hpc     # bulk: push the filtered set
+datamanifest list --cached --push user@hpc          # bulk: push the filtered set
 ```
 
 ## Features
@@ -174,7 +178,8 @@ datamanifest list --kind cached --push user@hpc     # bulk: push the filtered se
 | Verify-once integrity (checksum only at fetch; `.complete` entry skips re-hash) | yes |
 | Canonical key ordering (stable, cross-tool byte-identical output) | yes |
 | Produce-or-load cache (`@cached`: parameter-hash keying, optional `version=`, `config.toml`/`metadata.toml` sidecars) | yes |
-| `cached.toml` index + `datamanifest list` inspect/maintenance (`--orphan`, `--delete`, `--move`) | yes |
+| `.datamanifest-state.toml` state file (git-ignored inventory of fetched **and** produced object locations + checksums; read-first resolution; dirty states) | yes |
+| `datamanifest list` inspect/maintenance (`--orphan`, `--dirty`, `--delete`, `--move`, `--refresh`) over artifacts and datasets | yes |
 | Cross-machine sync (`push`/`pull` a stored object over rsync+ssh; writes no manifest; idempotent) | yes |
 
 ## Storage model
@@ -248,6 +253,45 @@ datasets_dir  = "$user_data_dir/myproj"
 datacache_dir = "$user_cache_dir/myproj"
 ```
 
+## State file (`.datamanifest-state.toml`)
+
+`datamanifest.toml` is the **spec** — *what* to track and *how* to obtain it,
+hand-authored and git-committed. Next to it the tool maintains a **state file**,
+`.datamanifest-state.toml` — a per-object inventory of *where* each object
+actually landed **on this machine**: every fetched dataset's resolved
+`storage_path` (+ its actual `sha256`, unless `skip_checksum`) and every
+`@cached` artifact's location, under two namespaces:
+
+```toml
+[_META]
+schema = 5
+
+[datacache."mypkg.run@v3"]
+ref = "mypkg.run:run"
+format = "pickle"
+[datacache."mypkg.run@v3".instances]
+"83b2…" = "cached/mypkg.run/v3/83b2…"
+
+[datasets."example.com/a.csv"]
+storage_path = "datasets/example.com/a.csv"
+sha256 = "abc123…"
+```
+
+It is **git-ignored, regenerable local state** (it says nothing about *how* to
+re-obtain anything), so add `.datamanifest-state.toml` to your `.gitignore`. The
+state file is **read-first**: resolving a dataset checks its recorded location
+before any derivation, so a moved object is found where it really lives. It is
+maintained non-destructively — active access self-heals it (registers, relocates;
+never deletes), and `list` surfaces a **dirty** marker (`missing` / `relocated` /
+`untracked`) when a record disagrees with disk. `list --refresh` reconciles it
+(relocate stale records, drop missing ones; no downloads or moves); `list
+--delete` / `--move` act on the bytes and update the record (the spec is never
+edited). Writes always follow the current directive — the recorded location only
+helps *find* existing bytes, never directs a write.
+
+The previous filename `cached.toml` (produced artifacts only) is still read and
+is rewritten to `.datamanifest-state.toml` on the next write.
+
 ## Cross-machine sync
 
 Move a stored object between machines instead of re-downloading or recomputing it. Every
@@ -259,7 +303,7 @@ produced artifact by `cachetype[/version]/hash` — and lands under the receiver
 datamanifest push foo user@hpc             # copy dataset `foo` to the host (rsync over ssh)
 datamanifest pull esm_anomaly/83425a3 hpc  # pull a produced artifact by hash prefix
 datamanifest push foo user@hpc --dry-run   # preview resolved paths + size, transfer nothing
-datamanifest list --kind cached --push user@hpc   # bulk: push a filtered selection
+datamanifest list --cached --push user@hpc        # bulk: push a filtered selection
 ```
 
 - **Transport is rsync over SSH**, and the SSH target (`user@host`) is both the transport and

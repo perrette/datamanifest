@@ -1,6 +1,16 @@
 # Design note: the state file — one inventory for fetched **and** produced data
 
-Status: proposed (for the spec to formalize). Supersedes nothing yet; additive.
+Status: **implemented** (schema 5; the Python port ships it). Kept as the design
+rationale for the spec to formalize. Additive over schema 4.
+
+What shipped: ``.datamanifest-state.toml`` with the ``datacache`` / ``datasets``
+namespaces; systematic ``storage_path`` + ``sha256``-on-download recording;
+read-first resolution; non-destructive self-heal with ``missing`` / ``relocated``
+/ ``untracked`` dirty states; ``list --dirty`` / ``--refresh`` and unified
+``--delete`` / ``--move`` over datasets (with the user-managed / ``skip_download``
+guard); atomic (temp + rename) writes; legacy ``cached.toml`` read + forward
+migration. Deferred items below remain deferred (the ``modified`` sha state,
+moving fields out of the spec, multiple recorded locations).
 
 ## The split: spec vs state
 
