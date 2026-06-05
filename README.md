@@ -37,20 +37,21 @@ pip install "datamanifestpy[all]"       # all of the above
 ## Quick start
 
 ```bash
-datamanifest init                              # create datamanifest.toml here
-datamanifest add https://example.com/data.csv  # register + download + record sha256
-datamanifest list                              # what's tracked, and where it lives
-datamanifest path data.csv                     # resolve the on-disk path (for a script)
-datamanifest storage                           # where data goes on this host; `storage set` to change
+datamanifest init                  # create datamanifest.toml here
+datamanifest add "https://www.metoffice.gov.uk/hadobs/hadcrut5/data/HadCRUT.5.0.2.0/analysis/diagnostics/HadCRUT.5.0.2.0.analysis.summary_series.global.annual.csv" \
+    --name temperature             # register + download + record sha256
+datamanifest list                  # what's tracked, and where it lives
+datamanifest path temperature      # resolve the on-disk path (for a script)
+datamanifest storage               # where data goes on this host; `storage set` to change
 ```
 
 The `add` above wrote one entry to `datamanifest.toml` — a plain TOML file you
 can read and edit by hand:
 
 ```toml
-["example.com/data"]
-sha256 = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
-uri = "https://example.com/data.csv"
+[temperature]
+sha256 = "a1441ab5aef8f3baf43cca417bca271f6d674d4f235ea01129f0432c948882e0"
+uri = "https://www.metoffice.gov.uk/hadobs/hadcrut5/data/HadCRUT.5.0.2.0/analysis/diagnostics/HadCRUT.5.0.2.0.analysis.summary_series.global.annual.csv"
 ```
 
 **Commit `datamanifest.toml`** — it's the recipe (what to fetch and how). The
@@ -122,11 +123,10 @@ datamanifest update-checksums           # recompute them after regenerating data
 python analysis.py --data "$(datamanifest path file.nc)"   # composable in shell
 ```
 
-A concrete run — the HadCRUT5 global temperature series and the Mauna Loa CO₂
-record:
+A concrete run — continuing from the [quick start](#quick-start)'s HadCRUT5
+temperature series, add the Mauna Loa CO₂ record next to it:
 
 ```console
-$ datamanifest add "https://www.metoffice.gov.uk/hadobs/hadcrut5/data/HadCRUT.5.0.2.0/analysis/diagnostics/HadCRUT.5.0.2.0.analysis.summary_series.global.annual.csv" --name temperature
 $ datamanifest add "https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv" --name co2
 $ datamanifest list
 Datasets
