@@ -255,6 +255,28 @@ def test_search_by_repo_name_alias():
     assert key == "jesstierney/lgmDA"
 
 
+def test_search_ambiguous_doi_raises():
+    # Several datasets sharing one DOI (e.g. a Zenodo `--split` import): resolving
+    # by that DOI is ambiguous and must fail loud, naming the candidates — not
+    # silently return an arbitrary one.
+    import pytest
+
+    from datamanifest.database import Database, search_dataset
+
+    db = Database(persist=False)
+    db.datasets_toml = ""
+    db.register_dataset("https://h/a.csv", name="a",
+                        doi="10.5281/zenodo.99", persist=False)
+    db.register_dataset("https://h/b.csv", name="b",
+                        doi="10.5281/zenodo.99", persist=False)
+
+    with pytest.raises(ValueError, match="Ambiguous"):
+        search_dataset(db, "10.5281/zenodo.99")
+    # The shared DOI is ambiguous, but each dataset name still resolves cleanly.
+    assert search_dataset(db, "a")[0] == "a"
+    assert search_dataset(db, "b")[0] == "b"
+
+
 def test_search_missing_raises():
     from datamanifest.database import search_dataset
     db = _fixture_db()

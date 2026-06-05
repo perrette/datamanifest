@@ -135,3 +135,13 @@ tooling.
      entries are `skip_download`-protected everywhere it matters). Julia should
      replicate that protection, or disambiguate with the language-neutral marker if
      the spec adds one.
+
+3. **An ambiguous identifier is a fail-loud error.** `search_dataset` resolving an
+   identifier (name / alias / **DOI**) that matches **more than one** dataset now
+   **raises**, naming the candidates, instead of silently returning the first match
+   + a warning. This matters because a DOI may be shared across several datasets (a
+   Zenodo `--split` import), and silently acting on an arbitrary one of N is a
+   correctness footgun. The spec should state that single-object resolution is
+   exact-or-error on ambiguity (consistent with the maintenance surface, where an
+   ambiguous id already requires `--batch`); Julia's `search_dataset` port must do
+   the same.

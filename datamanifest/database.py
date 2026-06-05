@@ -788,12 +788,17 @@ def search_dataset(db, name: str, raise_: bool = True, **kwargs):
             )
         return None
     if len(results) > 1:
+        # An ambiguous identifier (e.g. a DOI shared by several datasets, as in a
+        # Zenodo `--split` import) is a fail-loud error: silently acting on an
+        # arbitrary one of N datasets is a correctness footgun. Name the
+        # candidates so the caller can pick one.
+        names = ", ".join(k for k, _ in results)
         message = (
-            f"Multiple datasets found for {name}:\n- "
-            + "\n- ".join(
-                " | ".join(list_alternative_keys(ds)) for _, ds in results
-            )
+            f"Ambiguous identifier `{name}`: it matches {len(results)} datasets "
+            f"({names}). Address one by its dataset name."
         )
+        if raise_:
+            raise ValueError(message)
         logger.warning(message)
     return results[0]
 
