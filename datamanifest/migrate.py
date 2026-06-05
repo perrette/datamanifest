@@ -291,7 +291,8 @@ def _discover_and_record(db, project_root, env, *, dry_run, no_input,
         if top_n == len(root_of) and top_n > 0 and top_root != default_root:
             if _confirm(
                 f"All {top_n} discovered dataset(s) are under {top_root!r}. "
-                "Set datasets_dir there for this host?", no_input=no_input,
+                "Send new downloads there too (set datasets_dir for this host)?",
+                no_input=no_input,
             ):
                 storage = db.extra.setdefault("_STORAGE", {})
                 host = socket.gethostname()
@@ -299,19 +300,17 @@ def _discover_and_record(db, project_root, env, *, dry_run, no_input,
                 host_dir = top_root
                 lines.append(
                     f'[_STORAGE._HOST."{host}"].datasets_dir = {top_root!r}  '
-                    f"({top_n} dataset(s) resolve here)"
+                    "(new downloads land here on this host)"
                 )
 
-    # Record everything that does NOT already resolve via the effective
-    # datasets_dir (the host override if set, else the repo-local default) —
-    # objects there are found without any state entry, so recording is noise.
-    effective_root = host_dir if host_dir is not None else default_root
+    # Record EVERY discovered dataset's real location in the state file — a
+    # complete inventory (transparency + a complete migration), regardless of
+    # whether it also resolves via datasets_dir. (host_dir, when set, only governs
+    # where *new* data is written.)
     base = os.path.dirname(db.datasets_toml) or os.path.abspath(project_root)
     idx = CachedIndex.read_or_empty(base)
     touched = False
     for name, loc in chosen.items():
-        if root_of.get(name) == effective_root:
-            continue                  # resolves via datasets_dir (no state needed)
         entry = db.datasets[name]
         sp = _portable(loc, project_root)
         sha = "" if (db.skip_checksum or entry.skip_checksum) else (entry.sha256 or "")

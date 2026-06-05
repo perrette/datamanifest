@@ -186,3 +186,43 @@ def test_user_managed_dataset_is_protected(tmp_path):
     path = download_dataset(db, "a")
     _maintain(_enumerate_objects(db), _args(delete=True), db)
     assert os.path.exists(path)          # exact user path never touched
+
+
+def test_refresh_recovers_missing_from_pool_without_scan(tmp_path):
+    """Plain `refresh` (no --scan) recovers a 'missing' dataset whose bytes turn
+    up in a configured read pool — non-destructive, re-points instead of drops."""
+    pool = tmp_path / "pool"
+    (pool / "example.com").mkdir(parents=True)
+    (pool / "example.com" / "a.csv").write_bytes(b"x\n")
+    toml = tmp_path / "datamanifest.toml"
+    toml.write_text(
+        "[_META]\nschema = 1\n"
+        f'[_STORAGE]\ndatasets_dir = "datasets"\ndatasets_pools = ["{pool}"]\n'
+        '[a]\nuri = "https://example.com/a.csv"\n'
+    )
+    state = tmp_path / ".datamanifest-state.toml"
+    state.write_text('[_META]\nschema = 5\n'
+                     '[datasets."example.com/a.csv"]\nstorage_path = "gone/a.csv"\n')
+    db = Database(datasets_toml=str(toml))
+
+    _refresh(_enumerate_objects(db), db, dry_run=False)        # no --scan
+    assert CachedIndex.read(state).dataset_path_of("example.com/a.csv") == \
+        os.path.join("pool", "example.com", "a.csv")
+
+
+def test_refresh_drops_missing_when_not_in_any_pool(tmp_path):
+    """Plain `refresh` drops a missing record when the bytes are truly gone
+    (no pool holds them)."""
+    toml = tmp_path / "datamanifest.toml"
+    toml.write_text(
+        "[_META]\nschema = 1\n"
+        '[_STORAGE]\ndatasets_dir = "datasets"\ndatasets_pools = []\n'  # pools off
+        '[a]\nuri = "https://example.com/a.csv"\n'
+    )
+    state = tmp_path / ".datamanifest-state.toml"
+    state.write_text('[_META]\nschema = 5\n'
+                     '[datasets."example.com/a.csv"]\nstorage_path = "gone/a.csv"\n')
+    db = Database(datasets_toml=str(toml))
+
+    _refresh(_enumerate_objects(db), db, dry_run=False)
+    assert CachedIndex.read(state).dataset_path_of("example.com/a.csv") == ""

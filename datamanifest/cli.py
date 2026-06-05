@@ -507,6 +507,18 @@ def _render_rich(objects):
                 flag = _paint(" orphan", "yellow", on=on) if not o.referenced else ""
                 print(f"    {h}  {p}  {s}{flag}{_dirty_suffix(o, on)}")
 
+    # Hint: anything marked ✗ (untracked / relocated / missing) is reconcilable.
+    dirties = [o.dirty for o in objects if getattr(o, "dirty", "")]
+    if dirties:
+        n = len(dirties)
+        msg = (f"\n{n} object{'s' if n != 1 else ''} marked ✗ — run "
+               "`datamanifest refresh` to reconcile (record untracked, repoint "
+               "moved, drop missing).")
+        if "missing" in dirties:
+            msg += (" For missing ones, `datamanifest refresh --scan` first looks "
+                    "in the read pools and only drops what isn't found there.")
+        print(_paint(msg, "dim", on=on))
+
 
 def _cmd_list(args):
     db = _get_db()
@@ -587,13 +599,16 @@ def _cmd_refresh(args):
     same way on access; this is the bulk, no-refetch way to do it at once.)
     """
     db = _get_db()
-    # The whole inventory, unfiltered (orphan-hiding etc. is a view concern; a
-    # reconcile considers every object). Size/created aren't needed.
+    ds_pools = _override_pools(db, getattr(args, "datasets_pools", None))
+    dc_pools = _override_pools(db, getattr(args, "datacache_pools", None))
     objects = _enumerate_objects(db, heavy=frozenset())
-    _refresh(objects, db, dry_run=args.dry_run)
+    # Reconcile non-destructively: a "missing" dataset that turns up in a read
+    # pool is *recovered* (re-pointed), not dropped. (Pools default to the
+    # configured / well-known ones; --datasets-pools overrides for this run.)
+    _refresh(objects, db, dry_run=args.dry_run, pools=ds_pools)
     if getattr(args, "scan", False):
-        ds_pools = _override_pools(db, getattr(args, "datasets_pools", None))
-        dc_pools = _override_pools(db, getattr(args, "datacache_pools", None))
+        # --scan additionally IMPORTS manifest datasets that live only in a pool
+        # (never recorded/local) and cached artifacts from datacache pools.
         _refresh_scan_pools(db, dry_run=args.dry_run,
                             datasets_pools=ds_pools, datacache_pools=dc_pools)
 
@@ -602,8 +617,9 @@ def _refresh_scan_pools(db, *, dry_run, datasets_pools=None, datacache_pools=Non
     """``refresh --scan``: probe the read pools for objects that exist there but
     aren't local yet, and **adopt** them — record the pooled location in the state
     file (no downloads or copies). Datasets are checksum-gated. *datasets_pools* /
-    *datacache_pools* override the configured pools for this run. The active
-    counterpart to ``where --scan``."""
+    *datacache_pools* override the configured pools for this run. Returns the set
+    of dataset names adopted (so the caller can avoid dropping them as "missing").
+    The active counterpart to ``where --scan``."""
     from . import storage as storage_mod
     from .cache import (CACHED_INDEX_NAME, CachedIndex, find_produced_artifacts,
                         read_config)
@@ -615,9 +631,9 @@ def _refresh_scan_pools(db, *, dry_run, datasets_pools=None, datacache_pools=Non
     index_path = os.path.join(base or ".", CACHED_INDEX_NAME)
     index = CachedIndex.read_or_empty(index_path)
     touched = False
+    recovered = set()
 
     # --- datasets ---
-    adopted = 0
     for name, entry in db.datasets.items():
         if entry.skip_download or not entry.key:
             continue
@@ -638,10 +654,10 @@ def _refresh_scan_pools(db, *, dry_run, datasets_pools=None, datacache_pools=Non
                 key=entry.key,
                 storage_path=_record_portable(pooled, project_root), sha256=sha,
             )
-        adopted += 1
+        recovered.add(name)
         touched = True
     verb = "would adopt" if dry_run else "adopted"
-    print(f"Read pools (datasets): {verb} {adopted}")
+    print(f"Read pools (datasets): {verb} {len(recovered)}")
 
     # --- produced artifacts (only when a datacache pool is in effect) ---
     dc_pools = (datacache_pools if datacache_pools is not None
@@ -675,6 +691,7 @@ def _refresh_scan_pools(db, *, dry_run, datasets_pools=None, datacache_pools=Non
 
     if not dry_run and touched:
         index.write(index_path)
+    return recovered
 
 
 def _match_cached_by_id(ident, objects):
@@ -865,16 +882,17 @@ def _remove_path_and_markers(path):
             pass
 
 
-def _refresh(objects, db, *, dry_run=False):
+def _refresh(objects, db, *, dry_run=False, pools=None):
     """Reconcile the state file with disk (no downloads, no file moves) over the
-    given *objects*: repoint a *relocated* entry to where the bytes actually are,
-    drop a *missing* entry whose bytes are gone, and **adopt** an *untracked*
-    dataset (record the present-but-unrecorded dataset's location). A cached
-    orphan is left as an orphan (not adopted as a GC root); clean objects are
-    untouched. Edits only the git-ignored state file, so it **applies by default**;
-    *dry_run* previews without writing.
-    """
+    given *objects*, **non-destructively**: repoint a *relocated* entry to where
+    the bytes actually are; for a *missing* dataset, **recover** it if its bytes
+    turn up in a read pool (re-point) and only **drop** it when truly gone; and
+    **adopt** an *untracked* dataset. A cached orphan is left as an orphan; clean
+    objects are untouched. *pools* overrides the read pools consulted for recovery
+    (``None`` = the configured / built-in pools). Edits only the git-ignored state
+    file, so it **applies by default**; *dry_run* previews without writing."""
     from .cache import CACHED_INDEX_NAME, CachedIndex
+    from .database import resolve_from_pools
 
     do_it = not dry_run
     project_root = db.get_project_root()
@@ -903,16 +921,31 @@ def _refresh(objects, db, *, dry_run=False):
                         )
             changed += 1
         elif dirty == "missing":
-            verb = "Dropped" if do_it else "Would drop"
-            print(f"{verb} (missing): {obj.key}")
-            if do_it:
-                if obj.kind == "cached":
-                    index.remove_instance(
-                        cachetype=obj.cachetype, version=obj.version, hash=obj.hash,
+            # A missing dataset whose bytes turn up in a read pool is recovered,
+            # not dropped (non-destructive). Cached artifacts have no such
+            # checksummed pool recovery here — they are dropped (and re-imported
+            # by `--scan` from a datacache pool if one is configured).
+            entry = db.datasets.get(obj.key) if obj.kind == "datasets" else None
+            pooled = (resolve_from_pools(db, entry, pools=pools)
+                      if entry is not None else "")
+            if pooled:
+                verb = "Recovered" if do_it else "Would recover"
+                print(f"{verb} (pool): {obj.key} -> {pooled}")
+                if do_it:
+                    sha = "" if (db.skip_checksum or entry.skip_checksum) else (entry.sha256 or "")
+                    index.register_dataset(
+                        key=entry.key,
+                        storage_path=_record_portable(pooled, project_root), sha256=sha,
                     )
-                else:
-                    entry = db.datasets.get(obj.key)
-                    if entry is not None:
+            else:
+                verb = "Dropped" if do_it else "Would drop"
+                print(f"{verb} (missing): {obj.key}")
+                if do_it:
+                    if obj.kind == "cached":
+                        index.remove_instance(
+                            cachetype=obj.cachetype, version=obj.version, hash=obj.hash,
+                        )
+                    elif entry is not None:
                         index.remove_dataset(entry.key)
             changed += 1
         elif dirty == "untracked":

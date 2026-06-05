@@ -165,9 +165,9 @@ def test_migrate_discovers_legacy_dataset_into_state(tmp_path, monkeypatch):
     assert tomllib.loads(toml.read_text())["_STORAGE"]["datasets_dir"] == "datasets"
 
 
-def test_migrate_does_not_record_data_at_default_location(tmp_path, monkeypatch):
-    """Data already under the repo-local ./datasets resolves via datasets_dir, so
-    it is NOT redundantly recorded in the state file."""
+def test_migrate_records_every_discovered_dataset(tmp_path, monkeypatch):
+    """The state file is a complete inventory: data is recorded even when it's
+    already at the repo-local default ./datasets (transparency / full migration)."""
     _isolate_legacy_roots(tmp_path, monkeypatch)
     key = "example.com/a.csv"
     here = tmp_path / "datasets" / key
@@ -177,8 +177,7 @@ def test_migrate_does_not_record_data_at_default_location(tmp_path, monkeypatch)
     toml = _write(tmp_path, '[_META]\nschema = 1\n\n[a]\nuri = "https://example.com/a.csv"\n')
     migrate_manifest(str(toml), no_input=True)
 
-    assert not (tmp_path / ".datamanifest-state.toml").exists() \
-        or _state(tmp_path).dataset_path_of(key) == ""
+    assert _state(tmp_path).dataset_path_of(key) == os.path.join("datasets", key)
 
 
 def test_migrate_skips_user_managed_and_skip_download(tmp_path, monkeypatch):
