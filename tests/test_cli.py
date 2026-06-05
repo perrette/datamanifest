@@ -742,6 +742,30 @@ def test_match_cached_by_id_addressing():
 
 # ----- where: state records + --scan -----------------------------------------
 
+def test_where_storage_root_strips_key_tail():
+    import types
+
+    from datamanifest.cli import _storage_root
+
+    # Plain dataset: the full key is stripped → the storage root remains.
+    key = "github.com/jesstierney/BAYSPLINE/archive/refs/tags/v1.csv"
+    loc = f"/data/here/{key}"
+    plain = types.SimpleNamespace(key=key, extract=False)
+    assert _storage_root(loc, key, plain) == "/data/here"
+
+    # Extract dataset: on disk the *extracted* tail (no .zip) is what's present.
+    zkey = "github.com/brews/bayfox/archive/refs/heads/master.zip"
+    ext_loc = "/data/here/github.com/brews/bayfox/archive/refs/heads/master"
+    extract = types.SimpleNamespace(key=zkey, extract=True)
+    assert _storage_root(ext_loc, zkey, extract) == "/data/here"
+
+    # No manifest entry, tail still matches the raw key.
+    assert _storage_root("/x/y/host/a.csv", "host/a.csv", None) == "/x/y"
+
+    # Explicit storage_path that doesn't follow <root>/<key> → parent folder.
+    assert _storage_root("/weird/place/file.bin", "host/a.csv", None) == "/weird/place"
+
+
 def test_where_folds_pools_and_surfaces_only_offpattern(tmp_path):
     pool = tmp_path / "pool" / "example.com"
     pool.mkdir(parents=True)
@@ -772,9 +796,12 @@ def test_where_folds_pools_and_surfaces_only_offpattern(tmp_path):
     # separate "read pools" block.
     assert str(tmp_path / "pool") in out
     assert "read pools (datasets)" not in out       # no separate pools block
-    # Conformant 'a' (recorded in the pool) is NOT surfaced; only off-pattern 'c'.
+    # Conformant 'a' (recorded in the pool) is NOT surfaced; only off-pattern 'c',
+    # grouped under its storage root (the key `example.com/c.csv` is stripped, so
+    # the folder shown is the root, not the deep `.../example.com`).
     assert "datasets recorded outside" in out
-    assert f"- {stray} -> c" in out
+    assert f"- {tmp_path / 'stray'} -> c" in out
+    assert "reuse on download" not in out           # the misleading hint is gone
 
     scan = _run("where", "--scan", env=env).stdout
     assert "scan" in scan and "b →" in scan   # b is in the pool, not yet local

@@ -17,7 +17,7 @@ import socket
 import sys
 
 from . import __version__
-from .config import logger
+from .config import get_extract_path, logger
 
 
 def _get_db():
@@ -1217,22 +1217,51 @@ def _under(loc, root):
     return bool(root) and (loc == root or loc.startswith(root.rstrip(os.sep) + os.sep))
 
 
-def _where_off_pattern(locs, conform_roots, label, hint, on, *, top=12, per=4):
-    """Print the ``(name, abspath)`` pairs whose location is *not* under any of
+def _strip_tail(loc, tail):
+    """``loc`` with the storage *tail* (the object's key-derived relative path)
+    removed — i.e. the storage **root** that holds it (``<root>/<tail>`` →
+    ``<root>``). Returns ``None`` when *loc* does not end with *tail*."""
+    t = (tail or "").replace("/", os.sep)
+    if t and (loc == t or loc.endswith(os.sep + t)):
+        return loc[: -len(t)].rstrip(os.sep) or os.sep
+    return None
+
+
+def _storage_root(loc, key, entry):
+    """The storage root holding *loc* — *loc* with its key-derived tail stripped,
+    so ``<root>/<host>/<path>`` groups under ``<root>`` rather than the deep folder
+    just above the file. For an extract dataset the on-disk tail is the *extracted*
+    path; we try the entry's exact tail first, then the raw key both ways. Falls
+    back to the parent folder when nothing matches (e.g. an explicit storage_path
+    that does not follow the ``<root>/<key>`` convention)."""
+    tails = []
+    if entry is not None and entry.key:
+        tails.append(get_extract_path(entry.key) if entry.extract else entry.key)
+    if key:
+        tails += [key, get_extract_path(key)]
+    for tail in tails:
+        root = _strip_tail(loc, tail)
+        if root is not None:
+            return root
+    return os.path.dirname(loc)
+
+
+def _where_off_pattern(items, conform_roots, label, on, *, top=12, per=4):
+    """Print the ``(name, loc, root)`` triples whose *loc* is *not* under any of
     *conform_roots* (the datasets_dir / datacache_dir and the read pools) — the
     only locations worth surfacing, since conformant ones need no attention.
 
-    They are grouped by their parent folder, one ``- <folder> -> a, b, +N more``
-    line each (top *top* folders, *per* names), so a folder holding hundreds of
+    They are grouped by their storage *root*, one ``- <root> -> a, b, +N more``
+    line each (top *top* roots, *per* names), so a root holding hundreds of
     datasets collapses to a single line."""
-    off = [(n, l) for n, l in locs
-           if not any(_under(l, r) for r in conform_roots)]
+    off = [(n, root) for n, loc, root in items
+           if not any(_under(loc, r) for r in conform_roots)]
     if not off:
         return
     groups = {}
-    for name, loc in off:
-        groups.setdefault(os.path.dirname(loc), []).append(name)
-    print(_paint(f"\n{label}", "yellow", on=on) + f" ({hint}):")
+    for name, root in off:
+        groups.setdefault(root, []).append(name)
+    print(_paint(f"\n{label}:", "yellow", on=on))
     for folder in sorted(groups, key=lambda f: (-len(groups[f]), f))[:top]:
         names = sorted(groups[folder])
         shown = ", ".join(names[:per])
@@ -1248,27 +1277,33 @@ def _where_recorded(idx, db, project_root, ds_pools, datasets_dir,
     """Surface only what sits *outside* the configured locations: datasets not
     under datasets_dir or a datasets read pool, and cached artifacts not under
     datacache_dir or a cached read pool. Conformant objects are intentionally
-    not listed (the header already names where they live)."""
+    not listed (the header already names where they live). Each off-pattern object
+    is shown under its storage root, not the deep folder just above the file."""
     key_to_name = {e.key: n for n, e in db.datasets.items()}
-    ds_items = [(key_to_name.get(r["key"], r["key"]),
-                 _abs_under(r["storage_path"], project_root))
-                for r in idx.dataset_records()]
-    ds_items = [(n, l) for n, l in ds_items if l]
+    ds_items = []
+    for r in idx.dataset_records():
+        loc = _abs_under(r["storage_path"], project_root)
+        if not loc:
+            continue
+        name = key_to_name.get(r["key"], r["key"])
+        ds_items.append((name, loc, _storage_root(loc, r["key"], db.datasets.get(name))))
     ds_roots = [r for r in [os.path.abspath(datasets_dir), *ds_pools] if r]
     _where_off_pattern(
         ds_items, ds_roots,
-        "datasets recorded outside datasets_dir / read pools",
-        "add to datasets_pools to reuse on download", on)
+        "datasets recorded outside datasets_dir / read pools", on)
 
-    dc_items = [(f"{r['cachetype']}{('@' + r['version']) if r['version'] else ''}",
-                 _abs_under(sp, project_root))
-                for r in idx.recipe_records() for sp in r["instances"].values()]
-    dc_items = [(n, l) for n, l in dc_items if l]
+    dc_items = []
+    for r in idx.recipe_records():
+        name = f"{r['cachetype']}{('@' + r['version']) if r['version'] else ''}"
+        for h, sp in r["instances"].items():
+            loc = _abs_under(sp, project_root)
+            if not loc:
+                continue
+            dc_items.append((name, loc, _storage_root(loc, f"{r['cachetype']}/{h}", None)))
     dc_roots = [r for r in [os.path.abspath(datacache_dir), *dc_pools] if r]
     _where_off_pattern(
         dc_items, dc_roots,
-        "cached artifacts recorded outside datacache_dir / read pools",
-        "add to datacache_pools to reuse", on)
+        "cached artifacts recorded outside datacache_dir / read pools", on)
 
 
 def _cmd_where(args):
