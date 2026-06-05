@@ -738,3 +738,66 @@ def test_match_cached_by_id_addressing():
     assert len(_match_cached_by_id("abc", objs)) == 2          # abc123, abc777
     assert {o.hash for o in _match_cached_by_id("ct/abc", objs)} == {"abc123"}
     assert len(_match_cached_by_id("ct/ab", objs)) == 2        # cachetype-scoped prefix
+
+
+# ----- where: state records + --scan -----------------------------------------
+
+def test_where_lists_state_records_and_pools(tmp_path):
+    pool = tmp_path / "pool" / "example.com"
+    pool.mkdir(parents=True)
+    (pool / "a.csv").write_bytes(b"a\n")
+    (pool / "b.csv").write_bytes(b"b\n")
+    toml = tmp_path / "datamanifest.toml"
+    toml.write_text(
+        '[_META]\nschema = 1\n'
+        f'[_STORAGE]\ndatasets_dir = "datasets"\ndatasets_pools = ["{tmp_path / "pool"}"]\n'
+        '[a]\nuri = "https://example.com/a.csv"\n'
+        '[b]\nuri = "https://example.com/b.csv"\n'
+    )
+    env = _env_with_toml(toml)
+    _run("download", "a", env=env)            # reused from the pool → recorded
+
+    out = _run("where", env=env).stdout
+    assert "datasets pools" in out
+    assert "recorded in the state file" in out
+    assert "example.com/a.csv" in out
+
+    scan = _run("where", "--scan", env=env).stdout
+    assert "scan" in scan and "b →" in scan   # b is in the pool, not yet local
+
+
+# ----- add / show / remove / download / verify (command coverage) ------------
+
+def _proj_with_source(tmp_path):
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "x.csv").write_bytes(b"col\n1\n")
+    toml = tmp_path / "datamanifest.toml"
+    toml.write_text('[_META]\nschema = 1\n[_STORAGE]\ndatasets_dir = "datasets"\n')
+    return toml, src
+
+
+def test_add_show_remove(tmp_path):
+    toml, src = _proj_with_source(tmp_path)
+    env = _env_with_toml(toml)
+
+    add = _run("add", f"file://{src / 'x.csv'}", "--name", "foo", env=env)
+    assert add.returncode == 0, add.stderr
+    assert "[foo]" in toml.read_text()
+
+    show = _run("show", "foo", env=env)
+    assert show.returncode == 0 and "x.csv" in show.stdout
+
+    rm = _run("remove", "foo", env=env)
+    assert rm.returncode == 0 and "[foo]" not in toml.read_text()
+
+
+def test_download_then_verify(tmp_path):
+    toml, src = _proj_with_source(tmp_path)
+    env = _env_with_toml(toml)
+    _run("add", f"file://{src / 'x.csv'}", "--name", "foo", "--no-download", env=env)
+
+    dl = _run("download", "foo", env=env)
+    assert dl.returncode == 0, dl.stderr
+    v = _run("verify", "foo", env=env)
+    assert v.returncode == 0, v.stderr

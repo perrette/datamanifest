@@ -1103,6 +1103,8 @@ def _cmd_where(args):
             print(value if value is not None else _resolve(attr))
             return
 
+    ds_pools = storage_mod.datasets_pools(project_root=root, storage_config=cfg)
+    dc_pools = storage_mod.datacache_pools(project_root=root, storage_config=cfg)
     rows = [
         ("manifest", db.datasets_toml or "(none — in-memory database)"),
         ("state file", state_path
@@ -1110,9 +1112,31 @@ def _cmd_where(args):
         ("datasets_dir", _resolve("datasets_dir")),
         ("datacache_dir", _resolve("datacache_dir")),
     ]
+    if ds_pools:
+        rows.append(("datasets pools", ", ".join(ds_pools)))
+    if dc_pools:
+        rows.append(("datacache pools", ", ".join(dc_pools)))
     width = max(len(k) for k, _ in rows)
     for k, v in rows:
         print(f"{k:<{width}} : {v}")
+
+    # Always: the objects recorded in the state file (where each actually lives).
+    if os.path.isfile(state_path):
+        try:
+            idx = CachedIndex.read(state_path)
+        except Exception:  # noqa: BLE001 - a broken state file records nothing
+            idx = None
+        if idx is not None:
+            ds_recs = idx.dataset_records()
+            rc_recs = idx.recipe_records()
+            if ds_recs or rc_recs:
+                print("\nrecorded in the state file:")
+            for r in sorted(ds_recs, key=lambda r: r["key"]):
+                print(f"  dataset  {r['key']} → {r['storage_path']}")
+            for rec in sorted(rc_recs, key=lambda r: (r["cachetype"], r["version"])):
+                label = rec["cachetype"] + (f"@{rec['version']}" if rec["version"] else "")
+                for h, sp in sorted(rec["instances"].items()):
+                    print(f"  cached   {label}/{h[:8]} → {sp}")
 
     # Datasets whose storage_path deviates from the default $datasets_dir/$key —
     # surface the distinct directories they live in.
@@ -1131,6 +1155,35 @@ def _cmd_where(args):
         print("\nother dataset locations (storage_path overrides):")
         for d, names in sorted(others.items()):
             print(f"  {d}  ({', '.join(sorted(names))})")
+
+    # --scan: probe the read pools for datasets present there but not at the
+    # resolved location (candidates to adopt by `download` / `migrate`).
+    if getattr(args, "scan", False):
+        from .database import resolve_existing_path
+
+        found = []
+        for name, entry in db.datasets.items():
+            if entry.skip_download or not entry.key:
+                continue
+            try:
+                resolved = resolve_existing_path(db, entry)
+                here = os.path.isfile(resolved) or os.path.isdir(resolved)
+            except Exception:  # noqa: BLE001
+                here = False
+            if here:
+                continue
+            for pool in ds_pools:
+                cand = os.path.join(pool, entry.key)
+                if os.path.isfile(cand) or os.path.isdir(cand):
+                    found.append((name, cand))
+                    break
+        print("\nscan — datasets available in a read pool (not yet local):")
+        if found:
+            for name, cand in sorted(found):
+                print(f"  {name} → {cand}")
+            print("  (run `datamanifest download` to adopt, or `migrate` to record)")
+        else:
+            print("  (none found)")
 
 
 # ----- storage config editing ([_STORAGE]) -----------------------------------
@@ -1588,7 +1641,11 @@ def main():
                              help="Print only the resolved datasets_dir")
     _where_excl.add_argument("--datacache-dir", dest="datacache_dir",
                              action="store_true",
-                             help="Print only the resolved datacache_dir"
+                             help="Print only the resolved datacache_dir")
+    p_where.add_argument(
+        "--scan", action="store_true",
+        help="Also probe the read pools for datasets present there but not local "
+             "(candidates to adopt via download / migrate)",
     )
     p_where.set_defaults(func=_cmd_where)
 
