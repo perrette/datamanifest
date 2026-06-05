@@ -1236,8 +1236,18 @@ class Database:
 
     def write(self, datasets_toml: str) -> None:
         data = self.to_dict()
+        # Structural ``_``-tables (``_META`` / ``_STORAGE`` / ``_LOADERS`` /
+        # ``_LANG``) at the top, then datasets — both alphabetical. A plain
+        # code-point sort would otherwise drop ``_`` (0x5F) *between* the
+        # upper-cased / digit-named datasets and the lower-cased ones.
+        ordered = {
+            k: _sort_recursive(v)
+            for k, v in sorted(
+                data.items(), key=lambda kv: (not kv[0].startswith("_"), kv[0])
+            )
+        }
         with open(datasets_toml, "wb") as f:
-            tomli_w.dump(_sort_recursive(data), f)
+            tomli_w.dump(ordered, f)
 
     # ----- registry (Databases.jl:553-792) -----
     def register_dataset(

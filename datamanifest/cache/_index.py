@@ -337,7 +337,15 @@ class CachedIndex:
             raise ValueError("no path given and CachedIndex has no loaded path")
         target = self._resolve_path(target)
         os.makedirs(os.path.dirname(target) or ".", exist_ok=True)
+        data = self.to_dict()
+        # ``_META`` (and any ``_``-table) first, then the cachetype recipes.
+        ordered = {
+            k: sort_recursive(v)
+            for k, v in sorted(
+                data.items(), key=lambda kv: (not kv[0].startswith("_"), kv[0])
+            )
+        }
         with open(target, "wb") as f:
-            tomli_w.dump(sort_recursive(self.to_dict()), f)
+            tomli_w.dump(ordered, f)
         self.path = target
         return target
