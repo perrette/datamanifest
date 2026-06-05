@@ -834,9 +834,10 @@ def _parse_duration(text: str) -> float:
 
 
 def _cmd_migrate(args):
-    """Freeze a spec-v3 manifest's storage locations into the spec-v4 two-field
-    model (datasets_dir / datacache_dir + per-dataset storage_path). Moves no
-    bytes; see :mod:`datamanifest.migrate`."""
+    """Reshape a spec-v3 manifest's [_STORAGE] to the spec-v4 two-field model
+    (datasets_dir / datacache_dir at their defaults), dropping the retired keys
+    and carrying local_path → storage_path. Moves no bytes; see
+    :mod:`datamanifest.migrate`."""
     from .migrate import migrate_manifest
 
     toml_path = os.path.abspath(args.file)
@@ -1074,8 +1075,9 @@ def main():
     # migrate
     p_migrate = subparsers.add_parser(
         "migrate",
-        help="Freeze a spec-v3 manifest's storage into the spec-v4 two-field "
-             "model (datasets_dir/datacache_dir + storage_path); moves no bytes",
+        help="Reshape a spec-v3 manifest's [_STORAGE] to the spec-v4 two-field "
+             "model (datasets_dir/datacache_dir defaults); drops retired keys, "
+             "carries local_path → storage_path; moves no bytes",
     )
     p_migrate.add_argument("file", metavar="FILE", help="Path to datasets.toml to migrate")
     p_migrate.add_argument(
