@@ -72,7 +72,9 @@ def test_download_reuses_pooled_copy_in_place(tmp_path):
     assert idx.dataset_path_of("example.com/a.csv")
 
 
-def test_pool_copy_with_wrong_checksum_is_not_adopted(tmp_path):
+def test_pool_copy_with_wrong_checksum_is_not_adopted(tmp_path, caplog):
+    import logging
+
     content = b"pooled,data\n"
     pool = tmp_path / "pool"
     (pool / "example.com").mkdir(parents=True)
@@ -80,8 +82,11 @@ def test_pool_copy_with_wrong_checksum_is_not_adopted(tmp_path):
     wrong = hashlib.sha256(b"different").hexdigest()
 
     db = _project(tmp_path, pool_dir=str(pool), sha256=wrong)
-    # The declared sha256 doesn't match the pooled file → not adopted.
-    assert resolve_from_pools(db, db.datasets["a"]) == ""
+    # The declared sha256 doesn't match the pooled file → not adopted, but a
+    # warning surfaces that the file IS present (e.g. a stale manifest checksum).
+    with caplog.at_level(logging.WARNING):
+        assert resolve_from_pools(db, db.datasets["a"]) == ""
+    assert any("does not match" in r.message for r in caplog.records)
 
 
 def test_pool_copy_with_matching_checksum_is_adopted(tmp_path):

@@ -950,12 +950,13 @@ def resolve_from_pools(db: "Database", entry: "DatasetEntry", extract=None) -> s
 
     Skipped for ``skip_download`` / user-managed datasets. For an ``extract``-ed
     dataset the **extracted** location ``<pool>/<extract_path>`` is probed (that
-    is what the dataset is read from); a declared ``sha256`` then verifies the
-    sibling archive ``<pool>/<key>`` when the pool also holds it (the extracted
-    dir itself can't be hashed against the archive's checksum)."""
+    is what the dataset is read from, and what its ``sha256`` is a hash of — this
+    tool checksums ``local_path``, the extracted dir, not the archive)."""
     if entry.skip_download or storage.is_user_managed(entry.storage_path):
         return ""
     eff_extract = entry.extract if extract is None else extract
+    # The probed location matches what the dataset is read from / checksummed:
+    # the extracted dir for an extract dataset, the file otherwise.
     probe_key = get_extract_path(entry.key) if eff_extract else entry.key
     declared = bool(entry.sha256) and not (db.skip_checksum or entry.skip_checksum)
     pools = storage.datasets_pools(
@@ -965,20 +966,20 @@ def resolve_from_pools(db: "Database", entry: "DatasetEntry", extract=None) -> s
         cand = os.path.join(pool, probe_key)
         if not (os.path.isfile(cand) or os.path.isdir(cand)):
             continue
-        if eff_extract:
-            if declared:
-                archive = os.path.join(pool, entry.key)
-                try:
-                    if os.path.isfile(archive) and sha256_path(archive) != entry.sha256:
-                        continue        # the pool's archive is a different copy
-                except OSError:
-                    pass
-            return cand
         if declared:
             try:
-                if sha256_path(cand) != entry.sha256:
-                    continue            # a different/corrupt copy — do not adopt
+                actual = sha256_path(cand)
             except OSError:
+                continue
+            if actual != entry.sha256:
+                # Present in the pool but its checksum disagrees — surface it
+                # (the manifest sha256 may be stale) rather than silently skip.
+                logger.warning(
+                    "Found %s in read pool at %s but its sha256 does not match "
+                    "(manifest %s…, on disk %s…); not adopted. Update/clear the "
+                    "manifest checksum or set skip_checksum if it is stale.",
+                    entry.key, cand, (entry.sha256 or "")[:12], actual[:12],
+                )
                 continue
         return cand
     return ""
