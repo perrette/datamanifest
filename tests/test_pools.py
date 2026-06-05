@@ -161,3 +161,28 @@ def test_refresh_scan_adopts_pool_dataset(tmp_path):
     _refresh_scan_pools(db, dry_run=False)
     idx = CachedIndex.read(tmp_path / ".datamanifest-state.toml")
     assert idx.dataset_path_of("example.com/a.csv")
+
+
+def test_pool_reuses_extracted_dataset(tmp_path):
+    """An extract=true dataset is reused from a pool that holds the EXTRACTED
+    directory (<pool>/<extract_path>), not just the archive."""
+    from datamanifest.config import get_extract_path
+
+    pool = tmp_path / "pool"
+    extract_key = get_extract_path("host.com/data/archive.zip")
+    (pool / extract_key).mkdir(parents=True)
+    (pool / extract_key / "inner.txt").write_text("x")
+    toml = tmp_path / "datamanifest.toml"
+    toml.write_text(
+        "[_META]\nschema = 1\n"
+        f'[_STORAGE]\ndatasets_dir = "datasets"\ndatasets_pools = ["{pool}"]\n'
+        '[a]\nuri = "https://host.com/data/archive.zip"\nextract = true\n'
+    )
+    db = Database(datasets_toml=str(toml))
+    entry = db.datasets["a"]
+    assert entry.extract                                  # it's an extract dataset
+    assert resolve_from_pools(db, entry) == str(pool / extract_key)
+
+    got = download_dataset(db, "a")                       # reused, not downloaded
+    assert os.path.abspath(got) == str(pool / extract_key)
+    assert not (tmp_path / "datasets").exists()

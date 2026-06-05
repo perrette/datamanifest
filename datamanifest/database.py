@@ -842,8 +842,11 @@ def resolve_existing_path(db: "Database", entry: "DatasetEntry", extract=None) -
     :func:`get_dataset_path`. The recorded path only helps *find* an existing
     object; a (re)download still writes to the derived location (gold standard).
 
-    Read-first applies to the non-extracted location (the dataset's recorded
-    ``storage_path``); an ``extract``-ed dataset uses the derived extracted dir.
+    The recorded ``storage_path`` is the location the dataset is normally read
+    from — the extracted dir for an ``extract``-ed dataset, the file otherwise.
+    Read-first therefore applies at that **natural** level (``eff_extract ==
+    entry.extract``); a caller explicitly asking for the *other* level (e.g. the
+    non-extracted archive of an extract dataset) gets the derived path.
     """
     eff_extract = entry.extract if extract is None else extract
     derived = get_dataset_path(
@@ -853,7 +856,7 @@ def resolve_existing_path(db: "Database", entry: "DatasetEntry", extract=None) -
         project_root=db.get_project_root(),
         storage_config=db.storage_config,
     )
-    if not eff_extract:
+    if eff_extract == entry.extract:
         recorded = state_recorded_dataset_path(db, entry)
         if (
             recorded
@@ -945,22 +948,33 @@ def resolve_from_pools(db: "Database", entry: "DatasetEntry", extract=None) -> s
     pool is never written to; the caller records the adopted location and the
     gold standard (new downloads → ``datasets_dir``) is unchanged.
 
-    Skipped for ``skip_download`` / user-managed datasets and for the extracted
-    location (pools hold the non-extracted file)."""
+    Skipped for ``skip_download`` / user-managed datasets. For an ``extract``-ed
+    dataset the **extracted** location ``<pool>/<extract_path>`` is probed (that
+    is what the dataset is read from); a declared ``sha256`` then verifies the
+    sibling archive ``<pool>/<key>`` when the pool also holds it (the extracted
+    dir itself can't be hashed against the archive's checksum)."""
     if entry.skip_download or storage.is_user_managed(entry.storage_path):
         return ""
     eff_extract = entry.extract if extract is None else extract
-    if eff_extract:
-        return ""
+    probe_key = get_extract_path(entry.key) if eff_extract else entry.key
+    declared = bool(entry.sha256) and not (db.skip_checksum or entry.skip_checksum)
     pools = storage.datasets_pools(
         project_root=db.get_project_root(), storage_config=db.storage_config,
     )
-    verify = bool(entry.sha256) and not (db.skip_checksum or entry.skip_checksum)
     for pool in pools:
-        cand = os.path.join(pool, entry.key)
+        cand = os.path.join(pool, probe_key)
         if not (os.path.isfile(cand) or os.path.isdir(cand)):
             continue
-        if verify:
+        if eff_extract:
+            if declared:
+                archive = os.path.join(pool, entry.key)
+                try:
+                    if os.path.isfile(archive) and sha256_path(archive) != entry.sha256:
+                        continue        # the pool's archive is a different copy
+                except OSError:
+                    pass
+            return cand
+        if declared:
             try:
                 if sha256_path(cand) != entry.sha256:
                     continue            # a different/corrupt copy — do not adopt
