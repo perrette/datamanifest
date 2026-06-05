@@ -390,11 +390,13 @@ def _heal_on_hit(
 ) -> None:
     """Self-heal the registry on a cache hit (best-effort, never raises).
 
-    If this variation is missing from ``cached.toml`` (the index was deleted by
-    hand, or never written), re-register it; if the variation is present but the
-    recipe's ``ref`` has drifted (the producing function was refactored), refresh
-    it. Otherwise do nothing. A read-only or malformed index must never break a
-    hit, so any error is swallowed.
+    Re-register when the variation is missing (the index was deleted by hand, or
+    never written), the recipe's ``ref`` has drifted (the function was
+    refactored), **or** the recorded location is stale (an older shape, or the
+    artifact was found somewhere other than where the index says — so the next
+    hit upgrades the record in place rather than needing a manual delete).
+    Otherwise do nothing. A read-only or malformed index must never break a hit,
+    so any error is swallowed.
     """
     try:
         index = CachedIndex.read_or_empty(cached_toml_path)
@@ -404,7 +406,10 @@ def _heal_on_hit(
         ref_current = index.ref_of(
             cachetype=cachetype, version=version,
         ) == ref
-        if present and ref_current:
+        path_current = index.instance_path_of(
+            cachetype=cachetype, version=version, hash=hash_,
+        ) == storage_path
+        if present and ref_current and path_current:
             return
         index.register(
             cachetype=cachetype, hash=hash_, ref=ref,

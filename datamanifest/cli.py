@@ -111,30 +111,53 @@ def _enumerate_objects(db):
     """
     from . import storage
     from .cache import CACHED_INDEX_NAME, CachedIndex, enumerate_artifacts
-    from .cache._inspect import CacheObject
+    from .cache._inspect import CacheObject, cache_object_at
     from .cache._usage import iso_from_mtime, last_access
     from .database import resolve_existing_path
 
     objects = []
+    project_root = db.get_project_root()
 
     # Produced artifacts under the resolved datacache_dir, tagged referenced via
     # the project's sibling cached.toml ((cachetype, version, hash) reachability).
     cache_root = storage.datacache_dir(
-        project_root=db.get_project_root(), storage_config=db.storage_config,
+        project_root=project_root, storage_config=db.storage_config,
     )
+    index = None
     referenced = set()
     base = os.path.dirname(db.datasets_toml) if db.datasets_toml else os.getcwd()
     cached_toml = os.path.join(base or ".", CACHED_INDEX_NAME)
     if os.path.isfile(cached_toml):
         try:
-            referenced = CachedIndex.read(cached_toml).reachable_keys()
+            index = CachedIndex.read(cached_toml)
+            referenced = index.reachable_keys()
         except Exception:  # noqa: BLE001 - an unreadable index roots nothing
-            referenced = set()
+            index, referenced = None, set()
+    seen_locations = set()
     for obj in enumerate_artifacts(cache_root):
         # name/params come from the artifact's own config.toml (set by
         # enumerate_artifacts).
         obj.referenced = (obj.cachetype, obj.version, obj.hash) in referenced
         objects.append(obj)
+        seen_locations.add(obj.location)
+
+    # Artifacts the index records at a location *outside* datacache_dir — e.g.
+    # ones that were ``--move``\\d elsewhere — so they still surface in `list`.
+    if index is not None:
+        for rec in index.recipe_records():
+            for sp in rec["instances"].values():
+                if not sp:
+                    continue
+                adir = sp if os.path.isabs(sp) else os.path.join(project_root, sp)
+                adir = os.path.abspath(adir)
+                if adir in seen_locations:
+                    continue
+                obj = cache_object_at(adir)
+                if obj is None:
+                    continue
+                obj.referenced = True
+                objects.append(obj)
+                seen_locations.add(adir)
 
     # Fetched datasets — present and not-yet-fetched alike (manifest entries are
     # always referenced).
@@ -399,7 +422,7 @@ def _cmd_list(args):
 
     # ----- actions (operate on the filtered set, report their own output) -----
     if args.delete or args.move:
-        _maintain(objects, args)
+        _maintain(objects, args, db)
         return
 
     if getattr(args, "push", None) or getattr(args, "pull", None):
@@ -433,21 +456,38 @@ def _cmd_list(args):
         _render_rich(objects)
 
 
-def _maintain(objects, args):
+def _maintain(objects, args, db):
     """Run ``--delete`` / ``--move`` over the selected *objects*.
 
     Both default to a **dry run** (report only); ``--yes`` performs the action.
+    On a real run the project's ``cached.toml`` is kept consistent: ``--move``
+    repoints the artifact's recorded location, ``--delete`` prunes it.
     Only produced (``kind="cached"``) artifacts are eligible — fetched datasets,
     ``$data``/``$repo`` and ``local_path`` data are reported as skipped and never
     touched.
     """
-    from .cache import delete_object, move_object
+    from .cache import CACHED_INDEX_NAME, CachedIndex, delete_object, move_object
 
     do_it = args.yes
     if args.move:
         verb = "Moved" if do_it else "Would move"
     else:
         verb = "Deleted" if do_it else "Would delete"
+
+    project_root = db.get_project_root()
+    base = os.path.dirname(db.datasets_toml) if db.datasets_toml else os.getcwd()
+    index_path = os.path.join(base or ".", CACHED_INDEX_NAME)
+    index = CachedIndex.read_or_empty(index_path) if do_it else None
+    index_dirty = False
+
+    def _record(parent):
+        """Portable form of an artifact dir for cached.toml: relative to the
+        manifest dir when under it, else absolute (mirrors the produce path)."""
+        ap = os.path.abspath(parent)
+        rt = os.path.abspath(project_root) if project_root else ""
+        if rt and (ap == rt or ap.startswith(rt + os.sep)):
+            return os.path.relpath(ap, rt)
+        return ap
 
     acted = 0
     for obj in objects:
@@ -459,12 +499,24 @@ def _maintain(objects, args):
                 else os.path.join(args.move, obj.cachetype, obj.version, obj.hash)
             print(f"{verb}: {obj.key}  {obj.location} -> {dest}")
             if do_it:
-                move_object(obj, args.move)
+                new_loc = move_object(obj, args.move)
+                # Keep cached.toml pointing at the moved artifact's new home.
+                index_dirty |= index.set_instance_path(
+                    cachetype=obj.cachetype, version=obj.version, hash=obj.hash,
+                    storage_path=_record(new_loc),
+                )
         else:
             print(f"{verb}: {obj.key}  {obj.location}")
             if do_it:
                 delete_object(obj)
+                # Prune the deleted variation from the index.
+                index_dirty |= index.remove_instance(
+                    cachetype=obj.cachetype, version=obj.version, hash=obj.hash,
+                )
         acted += 1
+
+    if index_dirty:
+        index.write(index_path)
 
     noun = "artifact" if acted == 1 else "artifacts"
     if not do_it:

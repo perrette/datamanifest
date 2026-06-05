@@ -231,6 +231,28 @@ def test_dead_instanceless_recipe_is_dropped_on_read(tmp_path):
     assert "[memory2]\n" not in p.read_text()               # self-cleaned on rewrite
 
 
+def test_set_and_remove_instance(tmp_path):
+    """set_instance_path repoints a recorded variation (after a move);
+    remove_instance prunes it (after a delete), dropping the now-empty recipe."""
+    idx = CachedIndex(path=str(tmp_path / "cached.toml"))
+    idx.register(cachetype="ct", hash="h1", storage_path="cached/ct/h1", ref="m:f")
+    idx.register(cachetype="ct", hash="h2", storage_path="cached/ct/h2", ref="m:f")
+
+    # repoint h1; a missing instance returns False and changes nothing.
+    assert idx.set_instance_path(cachetype="ct", version="", hash="h1",
+                                 storage_path="/moved/h1") is True
+    assert idx.instance_path_of(cachetype="ct", version="", hash="h1") == "/moved/h1"
+    assert idx.set_instance_path(cachetype="ct", version="", hash="nope",
+                                 storage_path="/x") is False
+
+    # remove h1, then h2 — the recipe disappears once empty.
+    assert idx.remove_instance(cachetype="ct", version="", hash="h1") is True
+    assert ("ct", "") in idx.recipes
+    assert idx.remove_instance(cachetype="ct", version="", hash="h2") is True
+    assert ("ct", "") not in idx.recipes
+    assert idx.remove_instance(cachetype="ct", version="", hash="h2") is False
+
+
 def test_cachetype_with_at_sign_is_rejected(tmp_path):
     """'@' is reserved as the version separator — a cachetype can't contain it."""
     import pytest

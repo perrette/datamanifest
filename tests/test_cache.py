@@ -485,6 +485,88 @@ def test_cached_registers_instance_location(cache_root):
     assert path == str(cache_root / "t" / h)
 
 
+# ----- inventory consistency: gold-standard writes, hit/heal, move -----------
+
+def _proj(tmp_path):
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "datasets.toml").write_text("[_META]\nschema = 1\n")
+    return proj
+
+
+def test_miss_writes_to_current_directive_not_recorded(tmp_path, monkeypatch):
+    """Gold standard: a new write follows the *current* datacache_dir directive,
+    never a residual recorded location. Changing datacache_dir sends new
+    artifacts to the new place."""
+    proj = _proj(tmp_path)
+
+    @cached(cachetype="ct", format="txt", project_root=str(proj))
+    def f(*, x=1):
+        return str(x)
+
+    monkeypatch.setenv("DATAMANIFEST_DATACACHE_DIR", str(tmp_path / "A"))
+    f(x=1)                                                       # lands in A
+    monkeypatch.setenv("DATAMANIFEST_DATACACHE_DIR", str(tmp_path / "B"))
+    f(x=2)                                                       # new hash ⇒ miss ⇒ B
+    in_b = [r for r, _, fs in os.walk(tmp_path / "B") if "data.txt" in fs]
+    assert len(in_b) == 1                                       # obeyed the new directive
+
+
+def test_heal_refreshes_stale_recorded_path(tmp_path):
+    """On a hit, a stale recorded location self-heals to where the artifact was
+    actually found — no manual cached.toml deletion needed."""
+    from datamanifest.cache import CachedIndex
+
+    proj = _proj(tmp_path)
+
+    @cached(cachetype="ct", format="txt", project_root=str(proj))
+    def f(*, x=1):
+        return str(x)
+
+    f(x=1)
+    idx_path = proj / "cached.toml"
+    idx = CachedIndex.read(idx_path)
+    (h, good), = idx.recipes[("ct", "")]["instances"].items()
+    # Corrupt the recorded location (e.g. an older shape / wrong value).
+    idx.recipes[("ct", "")]["instances"][h] = "stale/wrong"
+    idx.write(idx_path)
+
+    f(x=1)                                                       # hit (found at derived) + heal
+    back = CachedIndex.read(idx_path)
+    assert back.instance_path_of(cachetype="ct", version="", hash=h) == good
+
+
+def test_hit_finds_artifact_at_recorded_location_after_move(tmp_path):
+    """After an artifact is moved and its recorded location updated (as `--move`
+    does), a later call hits it at the new place — no recompute."""
+    import shutil
+
+    from datamanifest.cache import CachedIndex
+
+    proj = _proj(tmp_path)
+    calls = {"n": 0}
+
+    @cached(cachetype="ct", format="txt", project_root=str(proj))
+    def f(*, x=1):
+        calls["n"] += 1
+        return str(x)
+
+    f(x=1)
+    assert calls["n"] == 1
+    idx_path = proj / "cached.toml"
+    idx = CachedIndex.read(idx_path)
+    (h, loc), = idx.recipes[("ct", "")]["instances"].items()
+
+    new = tmp_path / "elsewhere" / h
+    new.parent.mkdir(parents=True)
+    shutil.move(str(proj / loc), str(new))                      # relocate the bytes
+    idx.set_instance_path(cachetype="ct", version="", hash=h, storage_path=str(new))
+    idx.write(idx_path)
+
+    assert f(x=1) == "1"
+    assert calls["n"] == 1                                      # hit from the moved location
+
+
 def test_cached_honors_manifest_datacache_dir(tmp_path, monkeypatch):
     """@cached resolves datacache_dir from the nearest manifest's [_STORAGE] —
     the same centralized storage config the fetch side uses — with no env var

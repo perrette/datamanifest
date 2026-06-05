@@ -259,6 +259,30 @@ class CachedIndex:
         rec = self.recipes.get((cachetype, version))
         return rec["instances"].get(hash, "") if rec else ""
 
+    def set_instance_path(self, *, cachetype: str, version: str, hash: str,
+                          storage_path: str) -> bool:
+        """Update a recorded variation's ``storage_path`` (e.g. after a
+        ``--move``). Returns ``True`` if the instance existed and was updated,
+        ``False`` if it is not in the index (an unrooted/orphan artifact)."""
+        rec = self.recipes.get((cachetype, version))
+        if not rec or hash not in rec["instances"]:
+            return False
+        rec["instances"][hash] = storage_path
+        return True
+
+    def remove_instance(self, *, cachetype: str, version: str,
+                        hash: str) -> bool:
+        """Drop a recorded variation (e.g. after a ``--delete``); the recipe is
+        removed too once its last instance is gone. Returns ``True`` if the
+        instance existed and was removed."""
+        rec = self.recipes.get((cachetype, version))
+        if not rec or hash not in rec["instances"]:
+            return False
+        del rec["instances"][hash]
+        if not rec["instances"]:
+            del self.recipes[(cachetype, version)]
+        return True
+
     def reachable_keys(self) -> set:
         """The set of ``(cachetype, version, hash)`` tuples this index roots —
         **every** instance of every recipe. Reachability (spec-v4) is keyed on

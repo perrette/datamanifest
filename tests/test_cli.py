@@ -216,6 +216,70 @@ def test_list_move_relocates_orphan(tmp_path):
     assert (dest / "mt" / h / "data.txt").exists()
 
 
+def _registered_artifact(tmp_path, cache, cachetype, key_table, version=""):
+    """A produced artifact materialized under *cache* AND registered (referenced)
+    in the project's cached.toml, returning (artifact_dir, hash)."""
+    from datamanifest.cache import CachedIndex
+
+    artifact, key = _orphan_artifact(cache, cachetype, key_table)
+    if version:  # move the dir under a version segment to match the recipe key
+        dest = cache / cachetype / version / artifact.name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        artifact.rename(dest)
+        artifact = dest
+    h = key.split("/", 1)[1]
+    idx = CachedIndex(path=str(tmp_path / "cached.toml"))
+    idx.register(cachetype=cachetype, hash=h, version=version,
+                 storage_path=str(artifact), ref="m:f", format="txt")
+    idx.write()
+    return artifact, h
+
+
+def test_list_move_keeps_cached_toml_consistent(tmp_path):
+    """End-to-end: `list <hash> --move DEST --yes` relocates the bytes, repoints
+    the artifact's recorded location in cached.toml, and the artifact still shows
+    in `list` afterwards (enumerated from its recorded location)."""
+    from datamanifest.cache import CachedIndex
+
+    cache = tmp_path / "cache"
+    artifact, h = _registered_artifact(tmp_path, cache, "ct", {"x": 1})
+    env = _maint_env(tmp_path, cache)
+    dest = tmp_path / "moved"
+
+    assert h[:12] in _run("list", h, env=env).stdout            # listed before
+
+    run = _run("list", h, "--move", str(dest), "--yes", env=env)
+    assert run.returncode == 0, run.stderr
+    moved = dest / "ct" / h
+    assert (moved / "data.txt").is_file() and not artifact.exists()   # bytes moved
+
+    # cached.toml repointed at the new home (relative to the manifest dir).
+    back = CachedIndex.read(tmp_path / "cached.toml")
+    assert back.instance_path_of(cachetype="ct", version="", hash=h) == \
+        os.path.join("moved", "ct", h)
+
+    # Still listed after the move (found at its recorded location, not datacache).
+    assert h[:12] in _run("list", h, env=env).stdout
+
+
+def test_list_delete_prunes_cached_toml(tmp_path):
+    """End-to-end: `list <hash> --delete --yes` removes the bytes AND prunes the
+    variation from cached.toml (the recipe goes too once its last instance is)."""
+    from datamanifest.cache import CachedIndex
+
+    cache = tmp_path / "cache"
+    artifact, h = _registered_artifact(tmp_path, cache, "ct", {"x": 1})
+    env = _maint_env(tmp_path, cache)
+
+    run = _run("list", h, "--delete", "--yes", env=env)
+    assert run.returncode == 0, run.stderr
+    assert not artifact.exists()                                 # bytes gone
+
+    back = CachedIndex.read(tmp_path / "cached.toml")
+    assert ("ct", "") not in back.recipes                       # pruned from index
+    assert "Nothing to list" in _run("list", h, env=env).stdout
+
+
 def test_older_than_filter_excludes_recent():
     # Unit-test the --older-than filter directly: enumeration bumps a directory's
     # atime (relatime updates it on the walk), so an end-to-end backdate is not

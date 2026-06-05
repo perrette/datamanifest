@@ -42,6 +42,7 @@ __all__ = [
     "CacheObject",
     "find_produced_artifacts",
     "enumerate_artifacts",
+    "cache_object_at",
     "delete_object",
     "move_object",
 ]
@@ -197,29 +198,42 @@ def enumerate_artifacts(cache_root: str):
 
     ``referenced`` is left ``None`` — the CLI composition root resolves it.
     """
-    for artifact_dir, key in find_produced_artifacts(cache_root):
-        try:
-            config = read_config(artifact_dir)
-        except Exception:  # noqa: BLE001 - already filtered, belt-and-braces
-            continue
-        meta = config.get("_META", {})
-        cachetype = meta.get("cachetype", "")
-        h = meta.get("hash", "")
-        version = meta.get("version", "")
-        yield CacheObject(
-            kind="cached",
-            location=os.path.abspath(artifact_dir),
-            key=key,
-            name=cachetype,                 # the recipe identity is the cachetype
-            hash=h,
-            cachetype=cachetype,
-            version=version,
-            format=_guess_format(artifact_dir),
-            size=_dir_size(artifact_dir),
-            created=_created(artifact_dir),
-            last_access=last_access(artifact_dir),
-            params=config_key_table(config),  # the kwargs that produced it
-        )
+    for artifact_dir, _key in find_produced_artifacts(cache_root):
+        obj = cache_object_at(artifact_dir)
+        if obj is not None:
+            yield obj
+
+
+def cache_object_at(artifact_dir: str):
+    """Build a :class:`CacheObject` for a single produced-artifact directory
+    (a ``config.toml``-bearing dir), or ``None`` if it is not one.
+
+    Used both by :func:`enumerate_artifacts` (walking a root) and to surface an
+    artifact recorded in ``cached.toml`` at a location outside the walked
+    ``datacache_dir`` (e.g. one that was ``--move``\\d elsewhere)."""
+    try:
+        config = read_config(artifact_dir)
+    except Exception:  # noqa: BLE001 - not a (readable) artifact dir
+        return None
+    meta = config.get("_META", {})
+    cachetype = meta.get("cachetype", "")
+    h = meta.get("hash", "")
+    if not (cachetype and h):
+        return None
+    return CacheObject(
+        kind="cached",
+        location=os.path.abspath(artifact_dir),
+        key=f"{cachetype}/{h}",
+        name=cachetype,                 # the recipe identity is the cachetype
+        hash=h,
+        cachetype=cachetype,
+        version=meta.get("version", ""),
+        format=_guess_format(artifact_dir),
+        size=_dir_size(artifact_dir),
+        created=_created(artifact_dir),
+        last_access=last_access(artifact_dir),
+        params=config_key_table(config),  # the kwargs that produced it
+    )
 
 
 def delete_object(obj: "CacheObject") -> None:
