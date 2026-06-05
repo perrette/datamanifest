@@ -466,11 +466,12 @@ def test_cached_hit_does_not_rewrite_index_when_present(cache_root):
     assert os.stat(index_path).st_mtime_ns == mtime
 
 
-# ----- cached.toml records each variation's params ---------------------------
+# ----- cached.toml records each variation's location -------------------------
 
-def test_cached_registers_params(cache_root):
-    """The cached.toml recipe records each variation's ``params`` (the kwargs it
-    was produced with) under its ``(cachetype, version)`` identity."""
+def test_cached_registers_instance_location(cache_root):
+    """The cached.toml recipe records each variation's on-disk location (full
+    artifact dir, hash included) under its ``(cachetype, version)`` identity —
+    params live in the artifact's config.toml sidecar, not the index."""
     from datamanifest.cache import CachedIndex
 
     @cached(cachetype="t", format="txt")
@@ -480,7 +481,8 @@ def test_cached_registers_params(cache_root):
     produce(name="v")
     index = CachedIndex.read(os.path.join(os.getcwd(), "cached.toml"))
     rec = {r["cachetype"]: r for r in index.recipe_records()}["t"]
-    assert list(rec["instances"].values()) == [{"name": "v"}]
+    (h, path), = rec["instances"].items()
+    assert path == str(cache_root / "t" / h)
 
 
 def test_cached_honors_manifest_datacache_dir(tmp_path, monkeypatch):

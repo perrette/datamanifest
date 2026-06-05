@@ -357,23 +357,23 @@ def _locate_cached_toml(cached_toml, project_root) -> str:
 
 
 def _register_produced(
-    cached_toml_path, *, cachetype, hash_, params, ref, format, storage_path,
+    cached_toml_path, *, cachetype, hash_, ref, format, storage_path,
     version="",
 ) -> str:
     """Register a freshly-produced variation into its ``cached.toml`` and record
     that index in the depot usage log. Returns the index path written.
 
     Reads any existing index (so a register **adds** this variation without
-    dropping the rest), records the parameter ``hash`` + ``params`` under the
-    recipe ``(cachetype, version)`` along with the recipe's ``storage_path``
-    (its parent dir), writes canonically, and stamps the usage log so GC can
-    discover this root.
+    dropping the rest), records the variation ``hash`` → its per-instance
+    ``storage_path`` (where the artifact was written) under the recipe
+    ``(cachetype, version)``, writes canonically, and stamps the usage log so GC
+    can discover this root. Params are **not** stored here — they live in the
+    artifact's ``config.toml`` sidecar.
     """
     index = CachedIndex.read_or_empty(cached_toml_path)
     index.register(
         cachetype=cachetype,
         hash=hash_,
-        params=params,
         ref=ref,
         format=format or "",
         storage_path=storage_path,
@@ -385,7 +385,7 @@ def _register_produced(
 
 
 def _heal_on_hit(
-    cached_toml_path, *, cachetype, hash_, params, ref, format, storage_path,
+    cached_toml_path, *, cachetype, hash_, ref, format, storage_path,
     version,
 ) -> None:
     """Self-heal the registry on a cache hit (best-effort, never raises).
@@ -407,7 +407,7 @@ def _heal_on_hit(
         if present and ref_current:
             return
         index.register(
-            cachetype=cachetype, hash=hash_, params=params, ref=ref,
+            cachetype=cachetype, hash=hash_, ref=ref,
             format=format or "", storage_path=storage_path, version=version,
         )
         record_path(index.write(cached_toml_path))
@@ -544,42 +544,45 @@ def cached(
             index_path = _locate_cached_toml(cached_toml, root)
             data_filename = _data_name(basename, fmt)
 
-            # The recipe's storage_path under the current config — the direct
-            # parent of the hash dirs, version baked in (storage_path= verbatim;
-            # cache_dir ⇒ <cache_dir>/<cachetype>[/<version>]; else
-            # <datacache_dir>/<cachetype>[/<version>]) — and its portable form.
+            # The artifact directory under the current config (the directive) —
+            # storage_path= verbatim parent; cache_dir ⇒ <cache_dir>/<cachetype>;
+            # else <datacache_dir>/<cachetype> — plus [/<version>]/<hash>. The
+            # per-instance recorded storage_path is this **full artifact dir**
+            # (hash included), in portable form.
             derived_parent = _recipe_storage_path(
                 cache_dir=cache_dir, storage_path=storage_path, cachetype=ct,
                 version=version, project_root=root, storage_config=sconf,
             )
-            sp_record = _record_storage_path(derived_parent, root)
+            derived_dir = _artifact_dir(derived_parent, hash_)
+            sp_record = _record_storage_path(derived_dir, root)
 
-            # Hit search prefers the location **recorded in cached.toml** (where
-            # this recipe's artifacts were actually written — which may differ
-            # from the current default if the config changed), then falls back to
-            # the machine-derived parent.
+            # Hit search prefers this **instance's** recorded location in
+            # cached.toml (where its artifact was actually written — which may
+            # differ from the current default if the config changed or it was
+            # moved), then falls back to the machine-derived dir. The recorded
+            # path only helps *find* an existing artifact; a miss always *writes*
+            # to the current directive (derived_dir) — the gold standard.
             recorded_sp = ""
             if os.path.isfile(index_path):
                 try:
-                    recorded_sp = CachedIndex.read(index_path).storage_path_of(
-                        cachetype=ct, version=version,
+                    recorded_sp = CachedIndex.read(index_path).instance_path_of(
+                        cachetype=ct, version=version, hash=hash_,
                     )
                 except Exception:  # noqa: BLE001 - a broken index never blocks
                     recorded_sp = ""
-            search_parents = []
+            search_dirs = []
             if recorded_sp:
-                search_parents.append(locations.resolve_path(
+                search_dirs.append(locations.resolve_path(
                     recorded_sp, project_root=root, storage_config=sconf))
-            if derived_parent not in search_parents:
-                search_parents.append(derived_parent)
+            if derived_dir not in search_dirs:
+                search_dirs.append(derived_dir)
 
             # A hit requires not just a complete, hash-valid artifact but the
             # expected data file for *this* format on disk (two recipes sharing a
             # cachetype+hash but different formats coexist; a stale-format
             # mismatch must recompute rather than fail to read).
             if cached:
-                for parent in search_parents:
-                    adir = _artifact_dir(parent, hash_)
+                for adir in search_dirs:
                     dpath = os.path.join(adir, data_filename)
                     if (
                         materialize.is_complete(adir)
@@ -590,14 +593,14 @@ def cached(
                         # recording the location it was actually found at.
                         _heal_on_hit(
                             index_path, cachetype=ct, hash_=hash_,
-                            params=key_table, ref=ref, format=fmt,
-                            storage_path=_record_storage_path(parent, root),
+                            ref=ref, format=fmt,
+                            storage_path=_record_storage_path(adir, root),
                             version=version,
                         )
                         return _load_value(dpath, fmt)
 
             # Miss → produce at the derived (current-config) location.
-            artifact_dir = _artifact_dir(derived_parent, hash_)
+            artifact_dir = derived_dir
             result = fn(**kwargs)
             write_value = _default_writer(fmt)
 
@@ -605,7 +608,7 @@ def cached(
             # liveness root for GC) and record that index in the depot usage log.
             written_index = _register_produced(
                 index_path,
-                cachetype=ct, hash_=hash_, params=key_table, ref=ref,
+                cachetype=ct, hash_=hash_, ref=ref,
                 format=fmt, storage_path=sp_record, version=version,
             )
 

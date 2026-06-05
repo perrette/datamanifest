@@ -6,26 +6,31 @@ dataset by its **portable** identity rather than by an absolute path, and is the
 set of *roots* that keeps produced cache artifacts reachable for garbage
 collection.
 
-Schema 3 (spec-v4) keys each recipe by its **cachetype** directly — one table
-``["<cachetype>"]`` (or ``["<cachetype>@<version>"]`` when versioned) carrying
-``ref`` / ``format``, and one ``["<cachetype>[@version]".instances.<hash>]``
-sub-table per produced *variation* whose **body is the params** (the key table)
-that produced it. So a recipe accumulates **every** variation — calling it with
-different parameters adds an instance, it does not overwrite — and the params sit
-directly under the hash with no separate wrapper:
+Schema 4 keys each recipe by its **cachetype** — one table ``["<cachetype>"]``
+(or ``["<cachetype>@<version>"]`` when versioned) carrying ``ref`` / ``format``,
+and a ``["<cachetype>[@version]".instances]`` table mapping each produced
+variation's parameter ``hash`` to **its on-disk location** — the full artifact
+directory (hash included), recorded per instance:
 
     ["mypkg.mod.run@v3"]
     ref = "mypkg.mod:run"
     format = "pickle"
 
-    ["mypkg.mod.run@v3".instances.83b2…]
-    grid = "5x5"
+    ["mypkg.mod.run@v3".instances]
+    "83b2…" = "cached/mypkg.mod.run/v3/83b2…"
+    "9c41…" = "/scratch/runs/9c41…"       # e.g. a moved one — recorded per instance
+
+So ``cached.toml`` is a per-object **inventory of where objects are** (read-only;
+it never directs a *write* — writes always follow the current ``datacache_dir``
+/ ``storage_path`` directive). The **params** that produced each variation are
+not stored here — they live in each artifact's own ``config.toml`` sidecar.
 
 The version rides in the key (``@<version>``) so the common unversioned case
-stays a bare cachetype and two versions of one cachetype never collide. Schema 2
-(``[[produced]]`` array-of-tables) and schema 1 (a flat table per *name*) are
-still **read** and rewritten as schema 3. (spec-v4 dropped the recipe ``scope``
-and ``store``; any present in an older file are ignored on read.)
+stays a bare cachetype and two versions of one cachetype never collide; a
+cachetype may **not** contain ``@``. Schema 3 (params-body + a recipe-level
+``storage_path``), schema 2 (``[[produced]]``) and schema 1 (flat) are still
+**read** and rewritten as schema 4 (params dropped; each instance inherits the
+old recipe ``storage_path``, or ``""`` when none was recorded).
 
 Layering: this module imports only the Layer 0 substrate
 (:func:`datamanifest.store.sort_recursive` for canonical key ordering) plus
@@ -51,36 +56,33 @@ __all__ = [
 
 CACHED_INDEX_NAME = "cached.toml"
 
-# Recipe-level fields (one per (cachetype, version)) and the per-variation
-# instance fields. Write ordering is canonical/sorted regardless; these document
-# the schema-2 shape.
+# Recipe-level fields (one per (cachetype, version)); each instance is a
+# ``hash -> storage_path`` entry. These document the schema-4 shape.
 CACHED_RECIPE_FIELDS = ("cachetype", "version", "ref", "format")
-CACHED_INSTANCE_FIELDS = ("hash", "params")
+CACHED_INSTANCE_FIELDS = ("hash", "storage_path")
 
 
 class CachedIndex:
-    """Read/register/write a ``cached.toml`` produced-dataset registry (schema 3).
+    """Read/register/write a ``cached.toml`` produced-dataset registry (schema 4).
 
     In memory the index is ``recipes``: a dict keyed by the recipe identity
     ``(cachetype, version)`` whose value is
-    ``{"storage_path", "ref", "format", "instances": {hash: params}}``. On disk
-    (schema 3) the recipe is a table keyed ``["<cachetype>@<version>"]`` —
-    ``@`` separates the version, and a bare ``["<cachetype>"]`` is unversioned. A
-    cachetype may **not** contain ``@`` (the separator is reserved), so the split
-    is unambiguous; produced cachetypes are ``module.qualname``, which never do.
-    :meth:`write` uses the recursive canonical key ordering
-    (:func:`datamanifest.store.sort_recursive`) as the manifest writer, so a
-    read/write round-trip is byte-stable.
+    ``{"ref", "format", "instances": {hash: storage_path}}`` — the per-instance
+    ``storage_path`` is the recorded full artifact directory (hash included) of that variation. On
+    disk the recipe is a table keyed ``["<cachetype>@<version>"]`` (``@``
+    separates the version; a bare ``["<cachetype>"]`` is unversioned; a cachetype
+    may not contain ``@``). :meth:`write` uses the recursive canonical key
+    ordering (:func:`datamanifest.store.sort_recursive`), so a read/write
+    round-trip is byte-stable.
     """
 
-    SCHEMA = 3
+    SCHEMA = 4
     # Reserved separator embedding the version in a recipe's table key
     # (``cachetype@version``); a bare cachetype key is the unversioned recipe.
     _VERSION_SEP = "@"
 
     def __init__(self, recipes: dict = None, path: str = ""):
-        # {(cachetype, version):
-        #     {storage_path, ref, format, instances: {hash: params}}}
+        # {(cachetype, version): {ref, format, instances: {hash: storage_path}}}
         self.recipes = dict(recipes) if recipes else {}
         self.path = path
 
@@ -110,33 +112,51 @@ class CachedIndex:
 
     @classmethod
     def read(cls, path: str) -> "CachedIndex":
-        """Read a ``cached.toml`` (schema 3 cachetype-keyed, schema 2 nested, or
-        schema 1 flat) from *path* (a file, or a directory holding the
-        default-named index)."""
+        """Read a ``cached.toml`` (schema 4 hash→path, schema 3 params-body,
+        schema 2 ``[[produced]]``, or schema 1 flat) from *path* (a file, or a
+        directory holding the default-named index)."""
         target = cls._resolve_path(path)
         with open(target, "rb") as f:
             data = tomllib.load(f)
         schema = data.get("_META", {}).get("schema", 1)
         recipes = {}
-        if schema >= 3:
-            # ["<cachetype>@<version>"] tables (bare cachetype = unversioned);
-            # each recipe's ``instances`` sub-table maps a hash to its params
-            # body, plus ``storage_path`` (the recipe's parent dir).
+        if schema >= 4:
+            # ["<cachetype>@<version>"] tables; ``instances`` maps hash → the
+            # per-instance recorded storage_path (its full artifact dir).
             for key, rec in data.items():
                 if key == "_META" or not isinstance(rec, dict):
                     continue
                 cachetype, version = cls._split_key(key)
                 instances = {
-                    h: dict(p)
+                    h: p for h, p in rec.get("instances", {}).items()
+                    if isinstance(p, str)
+                }
+                if not instances:
+                    # Roots nothing — drop dead/residual entries.
+                    continue
+                recipes[(cachetype, version)] = {
+                    "ref": rec.get("ref", ""),
+                    "format": rec.get("format", ""),
+                    "instances": instances,
+                }
+        elif schema == 3:
+            # Legacy: instances are a hash→params-body map and the recipe carries
+            # one storage_path (the parent dir). Migrate to per-instance full
+            # artifact dirs (parent/hash); drop the params (they live in the
+            # artifact's config.toml sidecar).
+            for key, rec in data.items():
+                if key == "_META" or not isinstance(rec, dict):
+                    continue
+                cachetype, version = cls._split_key(key)
+                recipe_sp = rec.get("storage_path", "")
+                instances = {
+                    h: (f"{recipe_sp}/{h}" if recipe_sp else "")
                     for h, p in rec.get("instances", {}).items()
                     if isinstance(p, dict)
                 }
                 if not instances:
-                    # A recipe with no produced variations roots nothing — skip it
-                    # (drops dead/residual entries rather than round-tripping them).
                     continue
                 recipes[(cachetype, version)] = {
-                    "storage_path": rec.get("storage_path", ""),
                     "ref": rec.get("ref", ""),
                     "format": rec.get("format", ""),
                     "instances": instances,
@@ -146,15 +166,14 @@ class CachedIndex:
                 if not isinstance(rec, dict):
                     continue
                 key = (rec.get("cachetype", ""), rec.get("version", ""))
-                instances = {}
-                for inst in rec.get("instances", []):
-                    h = inst.get("hash", "")
-                    if h:
-                        instances[h] = dict(inst.get("params", {}))
+                instances = {
+                    inst.get("hash", ""): ""
+                    for inst in rec.get("instances", [])
+                    if inst.get("hash", "")
+                }
                 if not instances:
                     continue
                 recipes[key] = {
-                    "storage_path": "",
                     "ref": rec.get("ref", ""),
                     "format": rec.get("format", ""),
                     "instances": instances,
@@ -169,10 +188,9 @@ class CachedIndex:
                     continue
                 key = (ctype, e.get("version", ""))
                 recipes[key] = {
-                    "storage_path": "",
                     "ref": e.get("ref", ""),
                     "format": e.get("format", ""),
-                    "instances": {h: {}},
+                    "instances": {h: ""},
                 }
         return cls(recipes=recipes, path=target)
 
@@ -190,7 +208,6 @@ class CachedIndex:
         *,
         cachetype: str,
         hash: str,
-        params: dict = None,
         ref: str = "",
         format: str = "",
         storage_path: str = "",
@@ -199,13 +216,13 @@ class CachedIndex:
         """Add (or update) the produced *variation* ``hash`` under its recipe.
 
         The recipe is identified by ``(cachetype, version)``; the variation by
-        its parameter ``hash`` plus the ``params`` (key table) that produced it.
-        Registering accumulates: a new ``hash`` adds an instance rather than
-        replacing the recipe, so all variations stay referenced. Recipe-level
-        metadata (``ref`` / ``format`` / ``storage_path`` — the recipe's parent
-        dir, parallel to the cachetype) is refreshed on each register, so e.g.
-        ``ref`` tracks the producing function across a refactor and
-        ``storage_path`` records where the recipe's artifacts were last written.
+        its parameter ``hash`` plus the per-instance ``storage_path`` — the
+        recorded full artifact directory of *this* variation. Registering
+        accumulates: a new ``hash`` adds an instance rather than replacing the
+        recipe. Recipe-level ``ref`` / ``format`` are refreshed on each register
+        (so ``ref`` tracks the producing function across a refactor); the
+        per-instance ``storage_path`` is updated to where the artifact was just
+        written / found.
 
         A *cachetype* may not contain the reserved version separator ``@``.
         """
@@ -217,14 +234,11 @@ class CachedIndex:
         key = (cachetype, version)
         rec = self.recipes.get(key)
         if rec is None:
-            rec = {"storage_path": storage_path, "ref": ref, "format": format,
-                   "instances": {}}
+            rec = {"ref": ref, "format": format, "instances": {}}
             self.recipes[key] = rec
         else:
             rec["ref"], rec["format"] = ref, format
-            if storage_path:
-                rec["storage_path"] = storage_path
-        rec["instances"][hash] = dict(params or {})
+        rec["instances"][hash] = storage_path
 
     def has_instance(self, *, cachetype: str, version: str,
                      hash: str) -> bool:
@@ -238,11 +252,12 @@ class CachedIndex:
         rec = self.recipes.get((cachetype, version))
         return rec["ref"] if rec else None
 
-    def storage_path_of(self, *, cachetype: str, version: str) -> str:
-        """The recipe's recorded ``storage_path`` (its parent dir), or ``""``
-        when the recipe is absent / unrecorded."""
+    def instance_path_of(self, *, cachetype: str, version: str,
+                         hash: str) -> str:
+        """The recorded per-instance ``storage_path`` (full artifact dir) of a
+        variation, or ``""`` when the instance is absent / unrecorded."""
         rec = self.recipes.get((cachetype, version))
-        return rec["storage_path"] if rec else ""
+        return rec["instances"].get(hash, "") if rec else ""
 
     def reachable_keys(self) -> set:
         """The set of ``(cachetype, version, hash)`` tuples this index roots —
@@ -266,32 +281,27 @@ class CachedIndex:
 
     def recipe_records(self) -> list:
         """The recipes as a list of plain dicts (identity + metadata +
-        ``instances`` mapping ``hash -> params``), for inspection."""
+        ``instances`` mapping ``hash -> storage_path``), for inspection."""
         out = []
         for (cachetype, version), rec in self.recipes.items():
             out.append({
                 "cachetype": cachetype, "version": version,
-                "storage_path": rec["storage_path"],
                 "ref": rec["ref"], "format": rec["format"],
                 "instances": dict(rec["instances"]),
             })
         return out
 
     def to_dict(self) -> dict:
-        """Build the schema-3 TOML structure: a ``["<cachetype>@<version>"]``
-        table per recipe (bare cachetype when unversioned) carrying
-        ``storage_path`` / ``ref`` / ``format`` and an ``instances`` map of
-        ``hash -> params``. Canonical key sorting is applied on top by
-        :meth:`write`."""
+        """Build the schema-4 TOML structure: a ``["<cachetype>@<version>"]``
+        table per recipe (bare cachetype when unversioned) carrying ``ref`` /
+        ``format`` and an ``instances`` map of ``hash -> storage_path``.
+        Canonical key sorting is applied on top by :meth:`write`."""
         out = {"_META": {"schema": self.SCHEMA}}
         for (cachetype, version), rec in self.recipes.items():
             out[self._join_key(cachetype, version)] = {
-                "storage_path": rec["storage_path"],
                 "ref": rec["ref"],
                 "format": rec["format"],
-                "instances": {
-                    h: dict(rec["instances"][h]) for h in rec["instances"]
-                },
+                "instances": dict(rec["instances"]),
             }
         return out
 
