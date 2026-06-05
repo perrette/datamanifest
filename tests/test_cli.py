@@ -104,9 +104,10 @@ def test_path_single_line():
 def test_where():
     result = _run("where", env=_env_with_toml())
     assert result.returncode == 0
-    lines = result.stdout.strip().splitlines()
-    assert any(l.startswith("datasets_toml=") for l in lines)
-    assert any(l.startswith("datasets_folder=") for l in lines)
+    out = result.stdout
+    # Shows the manifest, the state file, and the resolved runtime folders.
+    for label in ("manifest", "state file", "datasets_dir", "datacache_dir"):
+        assert label in out, f"`where` output missing {label!r}: {out!r}"
 
 
 # ----- update-checksums -----

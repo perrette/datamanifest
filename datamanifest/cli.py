@@ -1066,9 +1066,53 @@ def _cmd_init(args):
 
 
 def _cmd_where(args):
+    """Show where this project keeps things: the active manifest and state file,
+    the data directories **resolved for this host** (datasets_dir / datacache_dir,
+    honoring env vars and `_HOST` overrides), and any non-default per-dataset
+    locations (`storage_path` overrides)."""
+    from . import storage as storage_mod
+    from .cache import STATE_FILE_NAME, CachedIndex
+    from .database import get_dataset_path
+
     db = _get_db()
-    print(f"datasets_toml={db.datasets_toml}")
-    print(f"datasets_folder={db.datasets_folder}")
+    root = db.get_project_root()
+    cfg = db.storage_config
+    base = os.path.dirname(db.datasets_toml) if db.datasets_toml else os.getcwd()
+    state = CachedIndex.locate(base)
+    state_disp = (state if os.path.isfile(state)
+                  else os.path.join(base, STATE_FILE_NAME) + "  (not created yet)")
+
+    rows = [
+        ("manifest", db.datasets_toml or "(none — in-memory database)"),
+        ("state file", state_disp),
+    ]
+    for field in ("datasets_dir", "datacache_dir"):
+        try:
+            rows.append((field, getattr(storage_mod, field)(
+                project_root=root, storage_config=cfg)))
+        except Exception as e:  # noqa: BLE001 - surface an unresolved symbol inline
+            rows.append((field, f"<unresolved: {e}>"))
+    width = max(len(k) for k, _ in rows)
+    for k, v in rows:
+        print(f"{k:<{width}} : {v}")
+
+    # Datasets whose storage_path deviates from the default $datasets_dir/$key —
+    # surface the distinct directories they live in.
+    others = {}
+    for name, entry in db.datasets.items():
+        if not getattr(entry, "storage_path", ""):
+            continue
+        try:
+            loc = get_dataset_path(entry, db.datasets_folder,
+                                   project_root=root, storage_config=cfg)
+            d = loc if os.path.isdir(loc) else (os.path.dirname(loc) or loc)
+        except Exception:  # noqa: BLE001 - fall back to the raw expression
+            d = entry.storage_path
+        others.setdefault(d, []).append(name)
+    if others:
+        print("\nother dataset locations (storage_path overrides):")
+        for d, names in sorted(others.items()):
+            print(f"  {d}  ({', '.join(sorted(names))})")
 
 
 # ----- storage config editing ([_STORAGE]) -----------------------------------
@@ -1492,16 +1536,16 @@ def main():
 
     # where
     p_where = subparsers.add_parser(
-        "where", help="Print active datasets_toml and datasets_folder paths"
+        "where", help="Show the active manifest, state file, and resolved data "
+                      "directories for this host"
     )
     p_where.set_defaults(func=_cmd_where)
 
     # migrate
     p_migrate = subparsers.add_parser(
         "migrate",
-        help="Reshape a spec-v3 manifest's [_STORAGE] to the spec-v4 two-field "
-             "model (datasets_dir/datacache_dir defaults); drops retired keys, "
-             "carries local_path → storage_path; moves no bytes",
+        help="Migrate an older manifest to the current format (upgrades language "
+             "bindings and the [_STORAGE] storage model); moves no bytes",
     )
     p_migrate.add_argument(
         "file", metavar="FILE",
