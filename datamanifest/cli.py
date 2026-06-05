@@ -161,29 +161,80 @@ def _enumerate_objects(db):
     return objects
 
 
+# Object fields a free-text search term is matched against (joined, lowercased).
+_SEARCH_FIELDS = (
+    "kind", "name", "key", "hash", "cachetype", "version", "format",
+    "storage_path", "location",
+)
+
+
+def _search_text(obj) -> str:
+    """The lowercased, space-joined searchable text of *obj* (its key fields)."""
+    parts = [str(getattr(obj, f, "") or "") for f in _SEARCH_FIELDS]
+    return " ".join(p for p in parts if p).lower()
+
+
+def _matches_search(obj, terms, *, any_=False) -> bool:
+    """Whether *obj* matches the free-text *terms* (case-insensitive substrings of
+    its searchable text). All terms must match unless *any_* (then any one does."""
+    text = _search_text(obj)
+    hits = (t.lower() in text for t in terms)
+    return any(hits) if any_ else all(hits)
+
+
 def _filter_objects(objects, args):
     """Apply the ``list`` *filter* flags to *objects* — narrowing only, never a
     change of output style (the renderer is chosen separately).
 
-    Filters: ``--kind`` / ``--format`` / ``--older-than`` (object attributes);
-    ``--present`` / ``--missing`` (fetched-dataset presence); ``--orphan`` (only
-    unreferenced produced artifacts). By default a produced artifact this
-    project's ``cached.toml`` does not root is hidden — surfaced by ``--all``
-    (with datasets) or ``--orphan`` (orphans only).
+    Filters: free-text ``search`` terms (substring of the object's key fields —
+    all terms must match, or any with ``--any``; ``--invert`` selects the
+    non-matching objects instead); ``--hash`` (one or more hash
+    prefixes, OR-matched, any version); ``--cached`` / ``--datasets`` (kind;
+    default both) / ``--format`` / ``--older-than`` (object attributes);
+    ``--present`` / ``--missing``
+    (fetched-dataset presence); ``--orphan`` (only unreferenced produced
+    artifacts). By default a produced artifact this project's ``cached.toml``
+    does not root is hidden — surfaced by ``--all`` (with datasets), ``--orphan``
+    (orphans only), or any explicit ``search`` / ``--hash`` selector (which
+    reveals matches regardless of root status).
     """
     out = objects
-    if args.kind:
-        out = [o for o in out if o.kind == args.kind]
+    terms = getattr(args, "search", None)
+    hashes = getattr(args, "hash", None)
+    invert = getattr(args, "invert", False)
+    # A *positive* explicit selector (search terms / --hash) means the user is
+    # hunting for specific objects: reveal matches regardless of root status
+    # (skip the default orphan-hiding below). An inverted search is an exclusion,
+    # not a hunt, so it keeps the normal orphan-hiding.
+    explicit_selector = (bool(terms) and not invert) or bool(hashes)
+    if terms:
+        any_ = getattr(args, "any", False)
+        out = [o for o in out
+               if _matches_search(o, terms, any_=any_) != invert]
+    show_cached = getattr(args, "cached", False)
+    show_datasets = getattr(args, "datasets", False)
+    # Neither flag (or both) ⇒ both kinds; one flag narrows to that kind.
+    if show_cached and not show_datasets:
+        out = [o for o in out if o.kind == "cached"]
+    elif show_datasets and not show_cached:
+        out = [o for o in out if o.kind == "datasets"]
     if args.format:
         out = [o for o in out if o.format == args.format]
+    if hashes:
+        prefs = [h.lower() for h in hashes]
+        # Hash identifies the params, independent of version; multiple prefixes
+        # select all of them (OR) — paste several hashes at once.
+        out = [o for o in out
+               if o.hash and any(o.hash.lower().startswith(p) for p in prefs)]
     if getattr(args, "present", False):
         out = [o for o in out if o.kind == "datasets" and o.present]
     if getattr(args, "missing", False):
         out = [o for o in out if o.kind == "datasets" and not o.present]
     if args.orphan:
         out = [o for o in out if o.referenced is False]
-    elif not getattr(args, "all", False):
-        # Hide produced artifacts not rooted by this project's cached.toml.
+    elif not getattr(args, "all", False) and not explicit_selector:
+        # Hide produced artifacts not rooted by this project's cached.toml —
+        # unless an explicit selector (search / --hash) asked for them.
         out = [o for o in out if not (o.kind == "cached" and o.referenced is False)]
     if args.older_than:
         seconds = _parse_duration(args.older_than)
@@ -374,9 +425,8 @@ def _cmd_list(args):
     # ----- output style (explicit; independent of the filters) -----
     if args.fields:
         # Machine-readable tab-separated columns (explicit field selection).
-        fields = [f.strip() for f in args.fields.split(",") if f.strip()]
         for obj in objects:
-            print("\t".join(_get_field(obj, f) for f in fields))
+            print("\t".join(_get_field(obj, f) for f in args.fields))
     elif getattr(args, "bare", False):
         _render_bare(objects)
     else:
@@ -747,7 +797,47 @@ def main():
             "plus the explicit --delete / --move actions (dry run unless --yes)."
         ),
     )
-    filter_group = p_list.add_argument_group("name filter")
+    p_list.add_argument(
+        "search", nargs="*", metavar="TERM",
+        help="Free-text search term(s) matched (case-insensitive substring) "
+             "against each object's key fields (name/key/cachetype/version/"
+             "format/storage_path/location/hash). All terms must match unless "
+             "--any is given.",
+    )
+    filter_group = p_list.add_argument_group("filters")
+    filter_group.add_argument(
+        "--any", action="store_true",
+        help="Match objects where ANY search term matches (default: all terms)",
+    )
+    filter_group.add_argument(
+        "--invert", action="store_true",
+        help="Invert the search-term match (select objects that do NOT match)",
+    )
+    filter_group.add_argument(
+        "--cached", action="store_true",
+        help="Only produced (cached) artifacts (default: both kinds)",
+    )
+    filter_group.add_argument(
+        "--datasets", action="store_true",
+        help="Only fetched datasets (default: both kinds)",
+    )
+    filter_group.add_argument(
+        "--format", metavar="FMT", help="Only objects in this serialization format"
+    )
+    filter_group.add_argument(
+        "--hash", nargs="+", metavar="PREFIX",
+        help="Only produced artifacts whose hash starts with one of these "
+             "PREFIX(es) — paste several hashes to select them all; matched "
+             "across any version",
+    )
+    filter_group.add_argument(
+        "--orphan", action="store_true",
+        help="Only unreferenced produced artifacts (no cached.toml root)",
+    )
+    filter_group.add_argument(
+        "--older-than", dest="older_than", metavar="AGE",
+        help="Only objects last accessed more than AGE ago (e.g. 7d, 36h, 3600)",
+    )
     _excl = filter_group.add_mutually_exclusive_group()
     _excl.add_argument(
         "--present", action="store_true", help="Show only present datasets"
@@ -766,28 +856,12 @@ def main():
         help="Print a plain newline-separated list of names (scriptable); "
              "default is the styled, grouped view",
     )
-    obj_group = p_list.add_argument_group("object view (maintenance)")
-    obj_group.add_argument(
-        "--kind", choices=["datasets", "cached"],
-        help="Only objects of this kind (fetched datasets / produced artifacts)",
-    )
-    obj_group.add_argument(
-        "--format", metavar="FMT", help="Only objects in this serialization format"
-    )
-    obj_group.add_argument(
-        "--orphan", action="store_true",
-        help="Only unreferenced produced artifacts (no cached.toml root)",
-    )
-    obj_group.add_argument(
-        "--older-than", dest="older_than", metavar="AGE",
-        help="Only objects last accessed more than AGE ago (e.g. 7d, 36h, 3600)",
-    )
-    obj_group.add_argument(
-        "--fields", metavar="F1,F2,...",
+    style_group.add_argument(
+        "--fields", nargs="+", metavar="FIELD",
         help=(
-            "Comma-separated fields to print (default: "
-            + ",".join(_DEFAULT_OBJECT_FIELDS)
-            + "). Available: " + ",".join(_OBJECT_FIELDS) + "."
+            "Fields to print, space-separated (default: "
+            + " ".join(_DEFAULT_OBJECT_FIELDS)
+            + "). Available: " + " ".join(_OBJECT_FIELDS) + "."
         ),
     )
     act_group = p_list.add_argument_group("object actions (maintenance)")
