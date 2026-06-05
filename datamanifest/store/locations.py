@@ -50,6 +50,7 @@ __all__ = [
     "datacache_dir",
     "datasets_pools",
     "datacache_pools",
+    "resolve_pool_exprs",
     "dataset_path",
     "is_local_path",
     "is_user_managed",
@@ -285,17 +286,13 @@ def _pools_raw(field, storage_config, env, host):
     return None
 
 
-def _resolve_pools(field, defaults, *, project_root, storage_config, env, host):
-    """Resolve a ``*_pools`` *field* to a list of absolute directories: the
-    configured value (host-composable via ``_HOST`` / ``DATAMANIFEST_<FIELD>``),
-    or *defaults* when undefined; an explicit empty list disables them. Each entry
-    is a path expression."""
+def resolve_pool_exprs(exprs, *, project_root="", storage_config=None,
+                       env=os.environ, host=None):
+    """Resolve an explicit list of pool path *exprs* to deduplicated absolute
+    directories (each interpolated: ``$``-symbols / ``~`` / env). Used both for
+    configured pools and for an explicit per-invocation override."""
     if storage_config is None:
         storage_config = {}
-    if host is None:
-        host = socket.gethostname()
-    raw = _pools_raw(field, storage_config, env, host)
-    exprs = list(defaults) if raw is None else raw
     out = []
     for expr in exprs:
         try:
@@ -307,6 +304,23 @@ def _resolve_pools(field, defaults, *, project_root, storage_config, env, host):
         if ap not in out:
             out.append(ap)
     return out
+
+
+def _resolve_pools(field, defaults, *, project_root, storage_config, env, host):
+    """Resolve a ``*_pools`` *field* to a list of absolute directories: the
+    configured value (host-composable via ``_HOST`` / ``DATAMANIFEST_<FIELD>``),
+    or *defaults* when undefined; an explicit empty list disables them. Each entry
+    is a path expression."""
+    if storage_config is None:
+        storage_config = {}
+    if host is None:
+        host = socket.gethostname()
+    raw = _pools_raw(field, storage_config, env, host)
+    exprs = list(defaults) if raw is None else raw
+    return resolve_pool_exprs(
+        exprs, project_root=project_root, storage_config=storage_config,
+        env=env, host=host,
+    )
 
 
 def datasets_pools(*, project_root="", storage_config=None, env=os.environ,

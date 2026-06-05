@@ -342,7 +342,9 @@ downloads still go to your own `datasets_dir`.
 Point the tool at your own shared folders with `datamanifest storage set
 datasets_pools <dir> …`; see what's reusable with `datamanifest where --scan`
 (report) or pull it all in with `datamanifest refresh --scan` (adopt). Pools can
-differ per machine, and an empty list turns them off.
+differ per machine, and an empty list turns them off. `migrate`, `refresh --scan`
+and `where --scan` also accept `--datasets-pools` / `--datacache-pools` to
+override the folders for a single run (no values = none).
 
 ## Cross-machine sync
 

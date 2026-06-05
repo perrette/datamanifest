@@ -191,3 +191,54 @@ def test_pool_reuses_extracted_dataset(tmp_path):
     got = download_dataset(db, "a")                       # reused, not downloaded
     assert os.path.abspath(got) == str(pool / extract_key)
     assert not (tmp_path / "datasets").exists()
+
+
+# ----- explicit per-invocation override --------------------------------------
+
+def test_resolve_pool_exprs_dedupes_and_expands(tmp_path):
+    out = L.resolve_pool_exprs(["/a", "/a", str(tmp_path / "x")], project_root="/p")
+    assert out == ["/a", str(tmp_path / "x")]                # deduped, absolute
+
+
+def test_resolve_from_pools_override_beats_config(tmp_path):
+    alt = tmp_path / "alt"
+    (alt / "example.com").mkdir(parents=True)
+    (alt / "example.com" / "a.csv").write_bytes(b"x\n")
+    toml = tmp_path / "datamanifest.toml"
+    toml.write_text(
+        "[_META]\nschema = 1\n"
+        '[_STORAGE]\ndatasets_dir = "datasets"\ndatasets_pools = []\n'  # config: disabled
+        '[a]\nuri = "https://example.com/a.csv"\n'
+    )
+    db = Database(datasets_toml=str(toml))
+    # Config pools are empty → no hit; an explicit override finds it.
+    assert resolve_from_pools(db, db.datasets["a"]) == ""
+    assert resolve_from_pools(db, db.datasets["a"], pools=[str(alt)]) == \
+        str(alt / "example.com" / "a.csv")
+    # An explicit empty override also yields nothing.
+    assert resolve_from_pools(db, db.datasets["a"], pools=[]) == ""
+
+
+def test_refresh_scan_pool_override(tmp_path):
+    """`refresh --scan --datasets-pools <dir>` adopts from the override even when
+    the configured pools are empty/disabled."""
+    from datamanifest.cache import CachedIndex
+    from datamanifest.cli import _refresh_scan_pools
+
+    alt = tmp_path / "alt"
+    (alt / "example.com").mkdir(parents=True)
+    (alt / "example.com" / "a.csv").write_bytes(b"x\n")
+    toml = tmp_path / "datamanifest.toml"
+    toml.write_text(
+        "[_META]\nschema = 1\n"
+        '[_STORAGE]\ndatasets_dir = "datasets"\ndatasets_pools = []\n'
+        '[a]\nuri = "https://example.com/a.csv"\n'
+    )
+    db = Database(datasets_toml=str(toml))
+    state = tmp_path / ".datamanifest-state.toml"
+
+    _refresh_scan_pools(db, dry_run=False)                       # config disabled
+    assert not state.exists() or CachedIndex.read(state).dataset_path_of("example.com/a.csv") == ""
+
+    _refresh_scan_pools(db, dry_run=False, datasets_pools=[str(alt)])
+    assert CachedIndex.read(state).dataset_path_of("example.com/a.csv")

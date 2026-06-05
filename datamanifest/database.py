@@ -937,7 +937,8 @@ def record_dataset_state(db: "Database", entry: "DatasetEntry", path: str) -> No
                      exc_info=True)
 
 
-def resolve_from_pools(db: "Database", entry: "DatasetEntry", extract=None) -> str:
+def resolve_from_pools(db: "Database", entry: "DatasetEntry", extract=None,
+                       pools=None) -> str:
     """A **read pool** that already holds this dataset's bytes, or ``""``.
 
     Read pools (``[_STORAGE].datasets_pools``, host-composable, defaulting to the
@@ -959,9 +960,10 @@ def resolve_from_pools(db: "Database", entry: "DatasetEntry", extract=None) -> s
     # the extracted dir for an extract dataset, the file otherwise.
     probe_key = get_extract_path(entry.key) if eff_extract else entry.key
     declared = bool(entry.sha256) and not (db.skip_checksum or entry.skip_checksum)
-    pools = storage.datasets_pools(
-        project_root=db.get_project_root(), storage_config=db.storage_config,
-    )
+    if pools is None:                       # default: the configured / built-in pools
+        pools = storage.datasets_pools(
+            project_root=db.get_project_root(), storage_config=db.storage_config,
+        )
     for pool in pools:
         cand = os.path.join(pool, probe_key)
         if not (os.path.isfile(cand) or os.path.isdir(cand)):

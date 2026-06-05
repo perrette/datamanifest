@@ -592,21 +592,31 @@ def _cmd_refresh(args):
     objects = _enumerate_objects(db, heavy=frozenset())
     _refresh(objects, db, dry_run=args.dry_run)
     if getattr(args, "scan", False):
-        _refresh_scan_pools(db, dry_run=args.dry_run)
+        ds_pools = _override_pools(db, getattr(args, "datasets_pools", None))
+        dc_pools = _override_pools(db, getattr(args, "datacache_pools", None))
+        _refresh_scan_pools(db, dry_run=args.dry_run,
+                            datasets_pools=ds_pools, datacache_pools=dc_pools)
 
 
-def _refresh_scan_pools(db, *, dry_run):
-    """``refresh --scan``: probe the read pools (which default to the well-known
-    legacy locations) for datasets that exist there but aren't local yet, and
-    **adopt** them — record the pooled location in the state file (checksum-gated,
-    no downloads or copies). The active counterpart to ``where --scan``."""
-    from .cache import CACHED_INDEX_NAME, CachedIndex
+def _refresh_scan_pools(db, *, dry_run, datasets_pools=None, datacache_pools=None):
+    """``refresh --scan``: probe the read pools for objects that exist there but
+    aren't local yet, and **adopt** them — record the pooled location in the state
+    file (no downloads or copies). Datasets are checksum-gated. *datasets_pools* /
+    *datacache_pools* override the configured pools for this run. The active
+    counterpart to ``where --scan``."""
+    from . import storage as storage_mod
+    from .cache import (CACHED_INDEX_NAME, CachedIndex, find_produced_artifacts,
+                        read_config)
+    from .cache._inspect import _guess_format
     from .database import resolve_existing_path, resolve_from_pools
 
     project_root = db.get_project_root()
     base = os.path.dirname(db.datasets_toml) if db.datasets_toml else os.getcwd()
     index_path = os.path.join(base or ".", CACHED_INDEX_NAME)
     index = CachedIndex.read_or_empty(index_path)
+    touched = False
+
+    # --- datasets ---
     adopted = 0
     for name, entry in db.datasets.items():
         if entry.skip_download or not entry.key:
@@ -617,7 +627,7 @@ def _refresh_scan_pools(db, *, dry_run):
                 continue                      # already local / recorded
         except Exception:  # noqa: BLE001
             pass
-        pooled = resolve_from_pools(db, entry)   # checksum-gated pool hit, or ""
+        pooled = resolve_from_pools(db, entry, pools=datasets_pools)
         if not pooled:
             continue
         verb = "Would adopt" if dry_run else "Adopted"
@@ -629,10 +639,42 @@ def _refresh_scan_pools(db, *, dry_run):
                 storage_path=_record_portable(pooled, project_root), sha256=sha,
             )
         adopted += 1
-    if not dry_run and adopted:
-        index.write(index_path)
+        touched = True
     verb = "would adopt" if dry_run else "adopted"
-    print(f"Read pools: {verb} {adopted} dataset(s)")
+    print(f"Read pools (datasets): {verb} {adopted}")
+
+    # --- produced artifacts (only when a datacache pool is in effect) ---
+    dc_pools = (datacache_pools if datacache_pools is not None
+                else storage_mod.datacache_pools(
+                    project_root=project_root, storage_config=db.storage_config))
+    if dc_pools:
+        cached_adopted = 0
+        for pool in dc_pools:
+            for artifact_dir, _key in find_produced_artifacts(pool):
+                try:
+                    meta = read_config(artifact_dir).get("_META", {})
+                except Exception:  # noqa: BLE001
+                    continue
+                ct, h = meta.get("cachetype", ""), meta.get("hash", "")
+                ver = meta.get("version", "")
+                if not (ct and h) or CachedIndex._VERSION_SEP in ct:
+                    continue
+                if index.has_instance(cachetype=ct, version=ver, hash=h):
+                    continue
+                verb = "Would adopt" if dry_run else "Adopted"
+                print(f"{verb} (pool cached): {ct}{('@' + ver) if ver else ''}/{h[:8]}"
+                      f" → {artifact_dir}")
+                if not dry_run:
+                    index.register(cachetype=ct, hash=h, version=ver,
+                                   storage_path=_record_portable(artifact_dir, project_root),
+                                   format=_guess_format(artifact_dir))
+                cached_adopted += 1
+                touched = True
+        verb = "would adopt" if dry_run else "adopted"
+        print(f"Read pools (cached): {verb} {cached_adopted}")
+
+    if not dry_run and touched:
+        index.write(index_path)
 
 
 def _match_cached_by_id(ident, objects):
@@ -1107,6 +1149,36 @@ def _cmd_init(args):
     print(f"Created: {toml_path}")
 
 
+def _add_pool_override_flags(parser):
+    """Add ``--datasets-pools`` / ``--datacache-pools`` to a scan/discovery
+    command, to **explicitly override** the read pools for that one run
+    (space-separated dirs; pass the flag with no values for an empty/disabled
+    list). Omitting a flag uses the configured / built-in pools."""
+    parser.add_argument(
+        "--datasets-pools", dest="datasets_pools", nargs="*", metavar="DIR",
+        default=None,
+        help="Override the datasets read pools for this run (space-separated dirs; "
+             "none = disabled); default is the configured / built-in pools",
+    )
+    parser.add_argument(
+        "--datacache-pools", dest="datacache_pools", nargs="*", metavar="DIR",
+        default=None,
+        help="Override the @cached read pools for this run",
+    )
+
+
+def _override_pools(db, exprs):
+    """Resolve a ``--*-pools`` override *exprs* to absolute dirs, or ``None`` when
+    the flag was not given (so the caller uses the configured / built-in pools)."""
+    if exprs is None:
+        return None
+    from . import storage as storage_mod
+
+    return storage_mod.resolve_pool_exprs(
+        exprs, project_root=db.get_project_root(), storage_config=db.storage_config,
+    )
+
+
 def _cmd_where(args):
     """Show where this project keeps things: the active manifest and state file,
     the data directories **resolved for this host** (datasets_dir / datacache_dir,
@@ -1145,8 +1217,12 @@ def _cmd_where(args):
             print(value if value is not None else _resolve(attr))
             return
 
-    ds_pools = storage_mod.datasets_pools(project_root=root, storage_config=cfg)
-    dc_pools = storage_mod.datacache_pools(project_root=root, storage_config=cfg)
+    _ds_override = _override_pools(db, getattr(args, "datasets_pools", None))
+    _dc_override = _override_pools(db, getattr(args, "datacache_pools", None))
+    ds_pools = (_ds_override if _ds_override is not None
+                else storage_mod.datasets_pools(project_root=root, storage_config=cfg))
+    dc_pools = (_dc_override if _dc_override is not None
+                else storage_mod.datacache_pools(project_root=root, storage_config=cfg))
     rows = [
         ("manifest", db.datasets_toml or "(none — in-memory database)"),
         ("state file", state_path
@@ -1439,7 +1515,10 @@ def _cmd_migrate(args):
         print(f"Error: {toml_path} not found.", file=sys.stderr)
         sys.exit(1)
 
-    print(migrate_manifest(toml_path, dry_run=args.dry_run, no_input=args.no_input))
+    print(migrate_manifest(
+        toml_path, dry_run=args.dry_run, no_input=args.no_input,
+        datasets_pools=args.datasets_pools, datacache_pools=args.datacache_pools,
+    ))
 
 
 # ----- argument parser -----
@@ -1693,6 +1772,7 @@ def main():
         help="Also probe the read pools for datasets present there but not local "
              "(candidates to adopt via download / migrate)",
     )
+    _add_pool_override_flags(p_where)
     p_where.set_defaults(func=_cmd_where)
 
     # migrate
@@ -1714,6 +1794,7 @@ def main():
         help="Never prompt: auto-pick on ambiguous discovery (prefer the "
              "repo-local copy) and don't propose host config changes",
     )
+    _add_pool_override_flags(p_migrate)
     p_migrate.set_defaults(func=_cmd_migrate)
 
     # refresh
@@ -1742,6 +1823,7 @@ def main():
              "and adopt datasets present there but not local yet (checksum-gated; "
              "no downloads or copies) — the active twin of `where --scan`",
     )
+    _add_pool_override_flags(p_refresh)
     p_refresh.set_defaults(func=_cmd_refresh)
 
     # storage (edit [_STORAGE] without hand-writing the _HOST syntax)

@@ -42,10 +42,15 @@ _RETIRED_STORAGE_KEYS = (
 )
 
 
-def migrate_manifest(toml_path, *, env=None, dry_run=False, no_input=False):
+def migrate_manifest(toml_path, *, env=None, dry_run=False, no_input=False,
+                     datasets_pools=None, datacache_pools=None):
     """Upgrade *toml_path* in place (language + storage), then discover existing
     data and record it in the sibling state file. Returns a human-readable summary
-    (with *dry_run*, of what *would* change; nothing is written)."""
+    (with *dry_run*, of what *would* change; nothing is written).
+
+    *datasets_pools* / *datacache_pools*, when given (a list of path expressions),
+    **override** the built-in discovery locations for this run (an empty list
+    disables that side of discovery)."""
     from .cache import CACHED_INDEX_NAME, CachedIndex
     from .database import Database, migrate_v0_to_v1
 
@@ -97,8 +102,15 @@ def migrate_manifest(toml_path, *, env=None, dry_run=False, no_input=False):
 
     # 3. Discover existing data on disk and record it in the state file (may also
     #    add a host-scoped datasets_dir override to db.extra["_STORAGE"]).
+    ds_roots = (locations.resolve_pool_exprs(
+        datasets_pools, project_root=project_root, storage_config=new_cfg)
+        if datasets_pools is not None else None)
+    dc_roots = (locations.resolve_pool_exprs(
+        datacache_pools, project_root=project_root, storage_config=new_cfg)
+        if datacache_pools is not None else None)
     discovery = _discover_and_record(
         db, project_root, env, dry_run=dry_run, no_input=no_input,
+        dataset_roots=ds_roots, datacache_roots=dc_roots,
     )
 
     cached_toml = os.path.join(project_root, CACHED_INDEX_NAME)
@@ -237,14 +249,17 @@ def _confirm(question, *, no_input):
     return input(f"{question} [y/N]: ").strip().lower() in ("y", "yes")
 
 
-def _discover_and_record(db, project_root, env, *, dry_run, no_input):
+def _discover_and_record(db, project_root, env, *, dry_run, no_input,
+                         dataset_roots=None, datacache_roots=None):
     """Probe candidate roots for existing data, record finds in the state file,
     and (when one location dominates) propose a host-scoped ``datasets_dir``.
-    Returns a list of human-readable summary lines. Writes nothing on *dry_run*."""
+    Returns a list of human-readable summary lines. Writes nothing on *dry_run*.
+    *dataset_roots* / *datacache_roots* override the built-in candidate roots."""
     from .cache import CachedIndex
 
     lines = []
-    roots = _candidate_dataset_roots(project_root, env)
+    roots = (dataset_roots if dataset_roots is not None
+             else _candidate_dataset_roots(project_root, env))
     default_root = os.path.join(os.path.abspath(project_root), "datasets")
 
     # Find, per dataset, the candidate locations that actually hold bytes.
@@ -304,21 +319,23 @@ def _discover_and_record(db, project_root, env, *, dry_run, no_input):
         touched = True
         lines.append(f"{name} → {sp}")
 
-    touched |= _discover_cached(idx, project_root, env, lines)
+    touched |= _discover_cached(idx, project_root, env, lines, roots=datacache_roots)
 
     if touched and not dry_run:
         idx.write()
     return lines
 
 
-def _discover_cached(idx, project_root, env, lines):
+def _discover_cached(idx, project_root, env, lines, roots=None):
     """Scan candidate datacache roots for produced artifacts and record any not
-    already in the state file. Returns whether anything was added."""
+    already in the state file. Returns whether anything was added. *roots*
+    overrides the built-in candidate datacache roots."""
     from .cache import CachedIndex, read_config
     from .cache._inspect import _guess_format, find_produced_artifacts
 
     added = False
-    for root in _candidate_datacache_roots(project_root, env):
+    scan_roots = roots if roots is not None else _candidate_datacache_roots(project_root, env)
+    for root in scan_roots:
         for artifact_dir, _key in find_produced_artifacts(root):
             try:
                 meta = read_config(artifact_dir).get("_META", {})
