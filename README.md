@@ -156,7 +156,8 @@ re-downloading:
 datamanifest list --dirty       # preview: records that disagree with disk
 datamanifest refresh            # repoint moved files, drop deleted, adopt untracked
 datamanifest refresh --scan     # also discover & adopt copies found elsewhere
-datamanifest where              # the active manifest, state file, and data folders
+datamanifest refresh --scan --datasets-pools ~/other-project/datasets /shared/data \
+                            --datacache-pools /shared/cache   # extend the scan to extra folders
 ```
 
 `refresh` only edits local state — never your data, never the manifest. To act
