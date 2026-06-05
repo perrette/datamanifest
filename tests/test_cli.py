@@ -85,7 +85,7 @@ def test_list_help():
     assert "--present" in result.stdout
     assert "--missing" in result.stdout
     # spec-v3 maintenance surface: filter + action flags on `list`.
-    for flag in ["--kind", "--orphan", "--older-than", "--format", "--delete", "--move"]:
+    for flag in ["--cached", "--datasets", "--orphan", "--older-than", "--format", "--delete", "--move"]:
         assert flag in result.stdout, f"list --help missing {flag}"
 
 
@@ -172,7 +172,7 @@ def test_list_orphan_reports_unreferenced(tmp_path):
     artifact, key = _orphan_artifact(cache, "mytype", {"grid": "5x5"})
     env = _maint_env(tmp_path, cache)
 
-    result = _run("list", "--orphan", "--fields", "kind,referenced,key", env=env)
+    result = _run("list", "--orphan", "--fields", "kind", "referenced", "key", env=env)
     assert result.returncode == 0, result.stderr
     assert key in result.stdout
     assert "false" in result.stdout
@@ -235,15 +235,76 @@ def test_older_than_filter_excludes_recent():
         CacheObject(kind="cached", location="/x/new", key="new/h", last_access=fresh),
     ]
     args = types.SimpleNamespace(
-        kind=None, format=None, orphan=False, older_than="1d"
+        format=None, orphan=False, older_than="1d", cached=False, datasets=False
     )
     kept = {o.key for o in _filter_objects(objs, args)}
     assert "old/h" in kept and "new/h" not in kept
 
 
+def test_search_and_hash_filters():
+    import types
+
+    from datamanifest.cache._inspect import CacheObject
+    from datamanifest.cli import _filter_objects
+
+    objs = [
+        CacheObject(kind="cached", location="/x", key="greet/aa11",
+                    name="greet", cachetype="greet", hash="aa11bb", format="txt"),
+        CacheObject(kind="cached", location="/y", key="analysis.run/cc22",
+                    name="analysis.run", cachetype="analysis.run",
+                    hash="cc22dd", format="pickle"),
+    ]
+
+    def ns(**kw):
+        base = dict(search=None, any=False, invert=False, cached=False, datasets=False, format=None,
+                    hash=None, orphan=False, older_than=None, all=False)
+        base.update(kw)
+        return types.SimpleNamespace(**base)
+
+    keys = lambda a: {o.key for o in _filter_objects(objs, ns(**a))}
+
+    # Free-text search across key fields; AND by default, OR with --any.
+    assert keys(dict(search=["greet"])) == {"greet/aa11"}
+    assert keys(dict(search=["GRE"])) == {"greet/aa11"}                  # case-insensitive
+    assert keys(dict(search=["greet", "pickle"])) == set()              # AND ⇒ none
+    assert keys(dict(search=["greet", "pickle"], any=True)) == \
+        {"greet/aa11", "analysis.run/cc22"}                            # OR ⇒ both
+    assert keys(dict(search=["greet"], invert=True)) == {"analysis.run/cc22"}  # not-matching
+
+    # --hash matches a prefix, independent of version; several prefixes OR.
+    assert keys(dict(hash=["cc22"])) == {"analysis.run/cc22"}
+    assert keys(dict(hash=["zz"])) == set()
+    assert keys(dict(hash=["cc22", "aa11"])) == \
+        {"analysis.run/cc22", "greet/aa11"}                            # paste several
+
+
+def test_explicit_selector_reveals_orphans():
+    """An explicit search/--hash selector bypasses the default orphan-hiding, so
+    an unrooted (referenced=False) artifact still surfaces."""
+    import types
+
+    from datamanifest.cache._inspect import CacheObject
+    from datamanifest.cli import _filter_objects
+
+    orphan = CacheObject(kind="cached", location="/o", key="t/ab12",
+                         name="t", cachetype="t", hash="ab12cd", format="txt",
+                         referenced=False)
+
+    def ns(**kw):
+        base = dict(search=None, any=False, cached=False, datasets=False, format=None, hash=None,
+                    orphan=False, older_than=None, all=False)
+        base.update(kw)
+        return types.SimpleNamespace(**base)
+
+    # Plain list hides the orphan; an explicit --hash or search reveals it.
+    assert _filter_objects([orphan], ns()) == []
+    assert _filter_objects([orphan], ns(hash=["ab12"]))[0].key == "t/ab12"
+    assert _filter_objects([orphan], ns(search=["t"]))[0].key == "t/ab12"
+
+
 def test_list_kind_data_lists_fetched_dataset(tmp_path):
-    # A present fetched dataset (via local_path) alongside a cached orphan:
-    # --kind datasets shows the fetched entry and excludes the produced artifact.
+    # A present fetched dataset (via storage_path) alongside a cached orphan:
+    # --datasets shows the fetched entry and excludes the produced artifact.
     cache = tmp_path / "cache"
     _orphan_artifact(cache, "mt", {"g": "5x5"})
     data_file = tmp_path / "external.csv"
@@ -255,7 +316,7 @@ def test_list_kind_data_lists_fetched_dataset(tmp_path):
     env["DATAMANIFEST_USAGE_LOG"] = str(tmp_path / "usage.toml")
     env["DATAMANIFEST_TOML"] = str(toml)
 
-    result = _run("list", "--kind", "datasets", "--fields", "kind,key", env=env)
+    result = _run("list", "--datasets", "--fields", "kind", "key", env=env)
     assert result.returncode == 0, result.stderr
     assert "mydata" in result.stdout
     assert "datasets" in result.stdout
