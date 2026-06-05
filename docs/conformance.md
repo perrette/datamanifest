@@ -11,8 +11,8 @@ You do **not** need this page to use `datamanifest` — the [README](../README.m
 everyday usage. This file is for anyone who needs the cross-tool details: which features
 this Python implementation supports, and which version of the shared format it targets.
 
-A deeper, Python-specific walkthrough of the format and behaviours lives in
-[`datamanifest-toml.md`](datamanifest-toml.md).
+A deeper, Python-specific walkthrough of the CLI and language bindings lives in
+[`cli.md`](cli.md) and [`language-bindings.md`](language-bindings.md).
 
 ## Targeted format version
 
