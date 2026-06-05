@@ -1,0 +1,17 @@
+metadata:
+  version: 1
+sources:
+  temperature:
+    driver: netcdf
+    description: Gridded temperature climatology
+    args:
+      urlpath: s3://bucket/clim/temp.nc
+  table:
+    driver: csv
+    args:
+      urlpath: https://host/data/table.csv
+  yearly:
+    driver: csv
+    description: A globbed multi-file source (skipped — not a single file)
+    args:
+      urlpath: s3://bucket/clim/year-*.csv

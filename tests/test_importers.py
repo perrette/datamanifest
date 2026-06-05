@@ -250,7 +250,7 @@ def test_parse_zenodo_record_pick_and_prefix():
     assert specs[0]["name"] == "clim/temperature.nc"
 
 
-def test_import_zenodo_with_injected_fetch(tmp_path):
+def test_import_zenodo_bundles_by_default(tmp_path):
     db, toml = _project(tmp_path)
     with open(_ZENODO) as f:
         record = json.load(f)
@@ -261,10 +261,38 @@ def test_import_zenodo_with_injected_fetch(tmp_path):
         return record
 
     summary = import_zenodo(db, "10.5281/zenodo.7654321", fetch_json=fake_fetch)
-    assert "Zenodo record 7654321" in summary and "Imported 2 dataset(s)" in summary
-    # Hit the records API for the parsed id, and declared both files with the DOI.
+    # The record's two files bundle into ONE dataset (uris=), named from the title.
+    assert "Zenodo record 7654321" in summary and "Imported 1 dataset" in summary
     assert calls == ["https://zenodo.org/api/records/7654321"]
-    assert _manifest(toml)["grid"]["doi"] == "10.5281/zenodo.7654321"
+    entry = _manifest(toml)["example-gridded-climatology"]
+    assert entry["doi"] == "10.5281/zenodo.7654321"
+    assert len(entry["uris"]) == 2
+
+
+def test_import_zenodo_split_one_dataset_per_file(tmp_path):
+    db, toml = _project(tmp_path)
+    with open(_ZENODO) as f:
+        record = json.load(f)
+
+    summary = import_zenodo(db, "10.5281/zenodo.7654321",
+                            fetch_json=lambda u: record, split=True)
+    assert "Imported 2 dataset(s)" in summary
+    data = _manifest(toml)
+    # One dataset per file, each carrying the SAME DOI (supported: distinct names).
+    assert data["temperature"]["doi"] == "10.5281/zenodo.7654321"
+    assert data["grid"]["doi"] == "10.5281/zenodo.7654321"
+
+
+def test_import_zenodo_single_file_pick_is_plain_uri(tmp_path):
+    db, toml = _project(tmp_path)
+    with open(_ZENODO) as f:
+        record = json.load(f)
+    # A bundle narrowed to one file is tidier as `uri=` (not a one-element uris=).
+    import_zenodo(db, "10.5281/zenodo.7654321", fetch_json=lambda u: record,
+                  name="temp", picks=["*.nc"])
+    entry = _manifest(toml)["temp"]
+    assert entry["uri"].endswith("/temperature.nc/content")
+    assert "uris" not in entry
 
 
 def test_import_zenodo_rejects_non_zenodo(tmp_path):
@@ -296,11 +324,84 @@ def test_add_routes_zenodo_reference(tmp_path, monkeypatch, capsys):
 
     monkeypatch.setattr(importers, "import_zenodo", stub)
     args = types.SimpleNamespace(
-        uri="10.5281/zenodo.7654321", name="clim", pick=["*.nc"],
+        uri="10.5281/zenodo.7654321", name="clim", pick=["*.nc"], split=True,
         extract=False, overwrite=False, no_download=False,
     )
     cli._cmd_add(args)
 
     assert "STUB ZENODO" in capsys.readouterr().out
     assert seen["ref"] == "10.5281/zenodo.7654321"
-    assert seen["kw"]["name_prefix"] == "clim" and seen["kw"]["picks"] == ["*.nc"]
+    assert seen["kw"]["name"] == "clim" and seen["kw"]["picks"] == ["*.nc"]
+    assert seen["kw"]["split"] is True
+
+
+# ----- intake catalogs -------------------------------------------------------
+
+def test_import_intake_catalog(tmp_path):
+    import pytest
+    pytest.importorskip("yaml")
+    from datamanifest.importers import import_intake
+
+    db, toml = _project(tmp_path)
+    summary = import_intake(db, os.path.join(_DATA, "intake_catalog.yml"))
+    # Two single-file sources become datasets; the globbed one is skipped.
+    assert "Imported 2 dataset(s)" in summary
+    assert "skipped 1 source" in summary and "yearly" in summary
+    data = _manifest(toml)
+    assert data["temperature"]["uri"] == "s3://bucket/clim/temp.nc"
+    assert data["temperature"]["description"] == "Gridded temperature climatology"
+    assert data["table"]["uri"] == "https://host/data/table.csv"
+    assert "yearly" not in data
+
+
+# ----- DVC -------------------------------------------------------------------
+
+def test_import_dvc_reconstructs_remote_uri_and_adopts_cache(tmp_path):
+    import pytest
+    pytest.importorskip("yaml")
+    import hashlib
+
+    from datamanifest.cache import CachedIndex
+    from datamanifest.importers import import_dvc
+
+    # A DVC project: a default s3 remote, a cached object, and a plain `dvc add` out.
+    (tmp_path / ".dvc").mkdir()
+    (tmp_path / ".dvc" / "config").write_text(
+        '[core]\n    remote = storage\n'
+        '[\'remote "storage"\']\n    url = s3://bucket/dvcstore\n'
+    )
+    blob = b"col\n1\n2\n"
+    md5 = hashlib.md5(blob).hexdigest()
+    cdir = tmp_path / ".dvc" / "cache" / "files" / "md5" / md5[:2]
+    cdir.mkdir(parents=True)
+    (cdir / md5[2:]).write_bytes(blob)
+    (tmp_path / "data.csv.dvc").write_text(
+        f"outs:\n- md5: {md5}\n  size: {len(blob)}\n  path: data.csv\n"
+    )
+
+    db, toml = _project(tmp_path)
+    summary = import_dvc(db, str(tmp_path / "data.csv.dvc"))
+    assert "Imported 1 dataset" in summary and "1 adopted from the cache" in summary
+
+    entry = _manifest(toml)["data"]
+    # uri reconstructed from the default remote's content-addressed layout.
+    assert entry["uri"] == f"s3://bucket/dvcstore/files/md5/{md5[:2]}/{md5[2:]}"
+    # The cached object is adopted in place (state records it; sha256 computed).
+    idx = CachedIndex.read(tmp_path / ".datamanifest-state.toml")
+    assert idx.dataset_path_of(f"bucket/dvcstore/files/md5/{md5[:2]}/{md5[2:]}")
+
+
+def test_import_dvc_import_url_uses_dep_url(tmp_path):
+    import pytest
+    pytest.importorskip("yaml")
+    from datamanifest.importers import import_dvc
+
+    (tmp_path / ".dvc").mkdir()
+    (tmp_path / "file.csv.dvc").write_text(
+        "deps:\n- path: https://host/file.csv\n  etag: abc\n"
+        "outs:\n- md5: 0123456789abcdef0123456789abcdef\n  path: file.csv\n"
+    )
+    db, toml = _project(tmp_path)
+    import_dvc(db, str(tmp_path / "file.csv.dvc"))
+    # An import-url out takes the dep URL verbatim (no remote needed).
+    assert _manifest(toml)["file"]["uri"] == "https://host/file.csv"

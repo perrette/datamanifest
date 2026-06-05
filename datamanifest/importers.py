@@ -65,11 +65,21 @@ def _declare_specs(db, specs, *, dry_run=False, overwrite=False):
     """
     rows, declared, adopted, skipped = [], 0, 0, 0
     for s in specs:
-        name, uri = s["name"], s["uri"]
+        name, uri = s["name"], s.get("uri", "")
+        bundle = s.get("uris")                 # a multi-file (uris=) dataset
         sha = s.get("sha256", "") or ""
         cache_file = s.get("cache_file", "") or ""
         algo = s.get("hash_algo", "sha256") or "sha256"
         expected = s.get("hash_value", "") or ""
+
+        if bundle:
+            rows.append(f"  {name}  ->  [{len(bundle)} files]")
+            declared += 1
+            if not dry_run:
+                kwargs = {k: s[k] for k in ("doi", "description") if s.get(k)}
+                db.register_dataset("", name=name, uris=bundle, persist=False,
+                                    overwrite=overwrite, **kwargs)
+            continue
 
         have = bool(cache_file) and os.path.exists(cache_file)
         verified = None                      # None: no checksum to check against
@@ -279,11 +289,21 @@ def parse_zenodo_record(record, *, name_prefix="", picks=None):
     return specs
 
 
-def import_zenodo(db, ref, *, fetch_json=None, name_prefix="", picks=None,
+def _slug(text, limit=40):
+    """A short, filesystem-friendly slug from free text (or ``""``)."""
+    s = re.sub(r"[^a-z0-9]+", "-", (text or "").lower()).strip("-")
+    return s[:limit].rstrip("-")
+
+
+def import_zenodo(db, ref, *, fetch_json=None, name="", picks=None, split=False,
                   dry_run=False, overwrite=False):
-    """Resolve a Zenodo DOI / record URL through the Zenodo API and declare one
-    dataset per file (declare-only — a record can be large; run ``download`` to
-    fetch). *fetch_json* is injectable for testing."""
+    """Resolve a Zenodo DOI / record URL through the Zenodo API and declare its
+    files (declare-only — a record can be large; run ``download`` to fetch).
+
+    By default the record's files are **bundled** into one dataset (``uri`` for a
+    single file, else ``uris=``), named *name* or a slug of the record title.
+    ``--split`` instead declares one dataset per file. *picks* filters the files;
+    *fetch_json* is injectable for testing."""
     rid = zenodo_record_id(ref)
     if not rid:
         raise ValueError(f"{ref!r} is not a recognizable Zenodo DOI or record URL")
@@ -294,13 +314,209 @@ def import_zenodo(db, ref, *, fetch_json=None, name_prefix="", picks=None,
             r.raise_for_status()
             return r.json()
     record = fetch_json(f"https://zenodo.org/api/records/{rid}")
-    specs = parse_zenodo_record(record, name_prefix=name_prefix, picks=picks)
-    if not specs:
+    files = parse_zenodo_record(record, name_prefix=(name if split else ""),
+                                picks=picks)
+    if not files:
         return f"Zenodo record {rid}: no files matched."
+
+    if split:
+        specs = files
+    else:
+        doi = files[0].get("doi", "")
+        desc = files[0].get("description", "")
+        bundle_name = name or _slug(desc) or f"zenodo-{rid}"
+        uris = [f["uri"] for f in files]
+        common = {"name": bundle_name, "doi": doi, "description": desc}
+        # A single file is tidier as a plain `uri=` (a directly-loadable file)
+        # than a one-element `uris=` bundle (which would be a directory).
+        specs = [{**common, "uri": uris[0]}] if len(uris) == 1 \
+            else [{**common, "uris": uris}]
+
     rows, declared, adopted, skipped = _declare_specs(
         db, specs, dry_run=dry_run, overwrite=overwrite)
     return _summary(f"Zenodo record {rid}", rows, declared, adopted, skipped,
                     dry_run=dry_run, cache=False)
+
+
+def _require_yaml():
+    try:
+        import yaml
+    except ImportError as e:
+        raise ValueError(
+            "this importer needs PyYAML. Install with: pip install "
+            "'datamanifest[yaml]' (or: pip install pyyaml)."
+        ) from e
+    return yaml
+
+
+# ----- intake catalogs --------------------------------------------------------
+
+def import_intake(db, catalog_path, *, base_url="", cache_dir="", dry_run=False,
+                  overwrite=False):
+    """Import an intake catalog (``catalog.yml``): each ``sources.<name>`` whose
+    ``args.urlpath`` is a single concrete file path/URL becomes a dataset (``uri`` =
+    that urlpath; intake carries no checksums). Sources whose urlpath is a glob /
+    template / list / non-string are reported and skipped."""
+    yaml = _require_yaml()
+    with open(catalog_path, encoding="utf-8") as f:
+        catalog = yaml.safe_load(f) or {}
+    sources = catalog.get("sources", {}) or {}
+    taken, specs, skipped = set(db.datasets), [], []
+    for src_name, src in sources.items():
+        args = (src or {}).get("args", {}) or {}
+        urlpath = args.get("urlpath")
+        if not isinstance(urlpath, str) or not urlpath \
+                or any(c in urlpath for c in "*{"):
+            skipped.append(src_name)
+            continue
+        uri = urlpath
+        if base_url and "://" not in uri:
+            uri = f"{base_url.rstrip('/')}/{uri.lstrip('/')}"
+        basename = os.path.basename(uri.split("?")[0])
+        specs.append({
+            "name": _unique_name(src_name, taken), "uri": uri,
+            "description": (src or {}).get("description", "") or "",
+            "cache_file": os.path.join(cache_dir, basename) if cache_dir else "",
+        })
+    rows, declared, adopted, skip_cnt = _declare_specs(
+        db, specs, dry_run=dry_run, overwrite=overwrite)
+    summary = _summary(f"intake catalog {os.path.basename(catalog_path)}", rows,
+                       declared, adopted, skip_cnt, dry_run=dry_run,
+                       cache=bool(cache_dir))
+    if skipped:
+        summary += (f"\n  (skipped {len(skipped)} source(s) without a single-file "
+                    f"urlpath: {', '.join(sorted(skipped))})")
+    return summary
+
+
+# ----- DVC --------------------------------------------------------------------
+
+def _dvc_files(target):
+    """The ``.dvc`` files (and ``dvc.lock``) to read from *target* (a file or dir)."""
+    if os.path.isdir(target):
+        out = sorted(os.path.join(target, n) for n in os.listdir(target)
+                     if n.endswith(".dvc"))
+        lock = os.path.join(target, "dvc.lock")
+        if os.path.isfile(lock):
+            out.append(lock)
+        return out
+    return [target]
+
+
+def _dvc_root(target):
+    """The DVC project root (the dir containing ``.dvc/``) at or above *target*."""
+    d = os.path.abspath(target if os.path.isdir(target) else os.path.dirname(target))
+    while True:
+        if os.path.isdir(os.path.join(d, ".dvc")):
+            return d
+        parent = os.path.dirname(d)
+        if parent == d:
+            return ""
+        d = parent
+
+
+def _dvc_default_remote(root):
+    """The URL of the DVC default remote from ``.dvc/config`` (+ ``config.local``)."""
+    import configparser
+    cfg = configparser.ConfigParser()
+    cfg.read([os.path.join(root, ".dvc", "config"),
+              os.path.join(root, ".dvc", "config.local")])
+    name = cfg.get("core", "remote", fallback="")
+    if not name:
+        return ""
+    # DVC writes remote sections git-config style, quoted: ['remote "storage"'].
+    # configparser keeps the literal section name (incl. the outer quotes), so
+    # normalize before matching.
+    for section in cfg.sections():
+        norm = section.strip().strip("'")            # only DVC's outer single quotes
+        if norm in (f'remote "{name}"', f"remote {name}") \
+                and cfg.has_option(section, "url"):
+            return cfg.get(section, "url")
+    return ""
+
+
+def _dvc_remote_uri(remote_url, md5):
+    """The content-addressed URL of *md5* in a DVC remote (3.x ``files/md5`` layout),
+    or ``""`` when there is no usable remote URL."""
+    if not remote_url or len(md5) < 3 or "://" not in remote_url:
+        return ""
+    return f"{remote_url.rstrip('/')}/files/md5/{md5[:2]}/{md5[2:]}"
+
+
+def _dvc_cache_file(cache_dir, md5):
+    """The local DVC cache path for *md5*, probing the 3.x and 2.x layouts."""
+    if not cache_dir or len(md5) < 3:
+        return ""
+    for cand in (os.path.join(cache_dir, "files", "md5", md5[:2], md5[2:]),
+                 os.path.join(cache_dir, md5[:2], md5[2:])):
+        if os.path.exists(cand):
+            return cand
+    return ""
+
+
+def _dvc_outs(doc):
+    """Yield ``(out_dict, dep_url)`` for every tracked out in a parsed ``.dvc`` /
+    ``dvc.lock`` doc. *dep_url* is the URL of an ``import-url`` dependency, if any."""
+    def _dep_url(deps):
+        for d in deps or []:
+            p = (d or {}).get("path", "")
+            if isinstance(p, str) and "://" in p:
+                return p
+        return ""
+
+    if "stages" in doc:                                   # dvc.lock
+        for stage in (doc.get("stages", {}) or {}).values():
+            dep_url = _dep_url((stage or {}).get("deps"))
+            for out in (stage or {}).get("outs", []) or []:
+                yield out, dep_url
+    else:                                                 # a single .dvc file
+        dep_url = _dep_url(doc.get("deps"))
+        for out in doc.get("outs", []) or []:
+            yield out, dep_url
+
+
+def import_dvc(db, target, *, base_url="", cache_dir="", dry_run=False,
+               overwrite=False):
+    """Import DVC outs from a ``.dvc`` file, a ``dvc.lock``, or a directory of them.
+
+    Each tracked out (by md5) becomes a dataset; the local ``.dvc/cache`` copy is
+    adopted in place by hash when present (sha256 computed from it). The ``uri`` is
+    the ``import-url`` dependency when the out has one, else the default DVC remote's
+    content-addressed URL (``s3://`` / ``gs://`` / ``https://`` …, now fetchable);
+    outs with neither are reported and skipped."""
+    yaml = _require_yaml()
+    root = _dvc_root(target)
+    cache = cache_dir or (os.path.join(root, ".dvc", "cache") if root else "")
+    remote = _dvc_default_remote(root) if root else ""
+    taken, specs, skipped = set(db.datasets), [], []
+    for fp in _dvc_files(target):
+        with open(fp, encoding="utf-8") as f:
+            doc = yaml.safe_load(f) or {}
+        for out, dep_url in _dvc_outs(doc):
+            md5 = out.get("md5") or out.get("checksum") or ""
+            path = out.get("path", "")
+            if not md5 or not path:
+                continue
+            uri = dep_url or _dvc_remote_uri(remote, md5)
+            if not uri:
+                skipped.append(path)
+                continue
+            specs.append({
+                "name": _unique_name(
+                    os.path.splitext(os.path.basename(path))[0] or path, taken),
+                "uri": uri, "sha256": "",
+                "cache_file": _dvc_cache_file(cache, md5),
+                "hash_algo": "md5", "hash_value": md5,
+            })
+    rows, declared, adopted, skip_cnt = _declare_specs(
+        db, specs, dry_run=dry_run, overwrite=overwrite)
+    summary = _summary(f"DVC {os.path.basename(os.path.abspath(target))}", rows,
+                       declared, adopted, skip_cnt, dry_run=dry_run, cache=True)
+    if skipped:
+        summary += (f"\n  (skipped {len(skipped)} out(s) with no resolvable URL — "
+                    f"no import-url dep and no usable default remote: "
+                    f"{', '.join(sorted(skipped))})")
+    return summary
 
 
 # Tool name → importer, for the pluggable ``datamanifest import <tool>``.
@@ -309,4 +525,6 @@ IMPORTERS = {
     "pooch": import_pooch,
     "csv": import_csv,
     "urls": import_urls,
+    "intake": import_intake,
+    "dvc": import_dvc,
 }

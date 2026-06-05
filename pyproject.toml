@@ -59,7 +59,7 @@ nc = ["xarray", "netcdf4"]
 yaml = ["pyyaml"]
 fsspec = ["fsspec"]
 all = ["pandas", "pyarrow", "xarray", "netcdf4", "pyyaml", "fsspec"]
-dev = ["pytest", "fsspec"]
+dev = ["pytest", "fsspec", "pyyaml"]
 
 [project.scripts]
 datamanifest = "datamanifest.cli:main"

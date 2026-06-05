@@ -1079,8 +1079,9 @@ def _cmd_add(args):
     # single dataset (the normal path below).
     from .importers import import_zenodo, zenodo_record_id
     if zenodo_record_id(args.uri):
-        print(import_zenodo(db, args.uri, name_prefix=args.name or "",
+        print(import_zenodo(db, args.uri, name=args.name or "",
                             picks=getattr(args, "pick", None) or None,
+                            split=getattr(args, "split", False),
                             overwrite=args.overwrite))
         return
 
@@ -1801,6 +1802,11 @@ def main():
         help="For a Zenodo record: add only files matching GLOB (repeatable)",
     )
     add_opts.add_argument(
+        "--split", action="store_true",
+        help="For a Zenodo record: add one dataset per file instead of bundling "
+             "the record into a single uris= dataset (the default)",
+    )
+    add_opts.add_argument(
         "--no-download", action="store_true", help="Register without downloading"
     )
     add_opts.add_argument(
@@ -1930,15 +1936,18 @@ def main():
     # import (from another tool)
     p_import = subparsers.add_parser(
         "import",
-        help="Bulk-import datasets from another tool's catalog (pooch / csv / urls)",
+        help="Bulk-import datasets from another tool's catalog "
+             "(pooch / csv / urls / intake / dvc)",
     )
     p_import.add_argument(
-        "tool", choices=sorted(["pooch", "csv", "urls"]),
-        help="Source: pooch registry, a name,url,sha256 CSV, or a plain URL list",
+        "tool", choices=sorted(["pooch", "csv", "urls", "intake", "dvc"]),
+        help="Source: pooch registry, a name,url,sha256 CSV, a plain URL list, an "
+             "intake catalog.yml, or DVC .dvc/dvc.lock files",
     )
     p_import.add_argument(
-        "source", metavar="REGISTRY",
-        help="The catalog file (pooch registry.txt / a .csv / a URL list)",
+        "source", metavar="SOURCE",
+        help="The catalog file/dir (pooch registry.txt / .csv / URL list / "
+             "intake catalog.yml / a .dvc file or DVC project dir)",
     )
     p_import.add_argument(
         "--base-url", dest="base_url", default="", metavar="URL",
