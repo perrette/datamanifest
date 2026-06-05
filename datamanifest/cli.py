@@ -1073,6 +1073,17 @@ def _cmd_path(args):
 
 def _cmd_add(args):
     db = _get_db()
+
+    # A Zenodo DOI / record URL expands to one dataset per file in the record
+    # (declare-only — records can be large; `download` fetches). A plain URL is a
+    # single dataset (the normal path below).
+    from .importers import import_zenodo, zenodo_record_id
+    if zenodo_record_id(args.uri):
+        print(import_zenodo(db, args.uri, name_prefix=args.name or "",
+                            picks=getattr(args, "pick", None) or None,
+                            overwrite=args.overwrite))
+        return
+
     kwargs = {}
     if args.name:
         kwargs["name"] = args.name
@@ -1767,9 +1778,19 @@ def main():
 
     # add
     p_add = subparsers.add_parser("add", help="Register (and optionally download) a dataset")
-    p_add.add_argument("uri", metavar="URI", help="Dataset URI")
+    p_add.add_argument(
+        "uri", metavar="URI",
+        help="Dataset URI, or a Zenodo DOI / record URL (expands to its files)",
+    )
     add_opts = p_add.add_argument_group("options")
-    add_opts.add_argument("--name", "-n", metavar="N", help="Name for the dataset entry")
+    add_opts.add_argument(
+        "--name", "-n", metavar="N",
+        help="Name for the dataset entry (a name *prefix* for a Zenodo record)",
+    )
+    add_opts.add_argument(
+        "--pick", metavar="GLOB", action="append",
+        help="For a Zenodo record: add only files matching GLOB (repeatable)",
+    )
     add_opts.add_argument(
         "--no-download", action="store_true", help="Register without downloading"
     )
@@ -1896,14 +1917,15 @@ def main():
     # import (from another tool)
     p_import = subparsers.add_parser(
         "import",
-        help="Import datasets declared by another tool (pooch) into the manifest",
+        help="Bulk-import datasets from another tool's catalog (pooch / csv / urls)",
     )
     p_import.add_argument(
-        "tool", choices=["pooch"], help="Source tool (currently: pooch)",
+        "tool", choices=sorted(["pooch", "csv", "urls"]),
+        help="Source: pooch registry, a name,url,sha256 CSV, or a plain URL list",
     )
     p_import.add_argument(
         "source", metavar="REGISTRY",
-        help="The tool's registry file (e.g. a pooch registry.txt)",
+        help="The catalog file (pooch registry.txt / a .csv / a URL list)",
     )
     p_import.add_argument(
         "--base-url", dest="base_url", default="", metavar="URL",

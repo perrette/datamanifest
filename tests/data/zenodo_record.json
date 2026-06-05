@@ -1,0 +1,25 @@
+{
+  "doi": "10.5281/zenodo.7654321",
+  "metadata": {
+    "title": "Example gridded climatology",
+    "doi": "10.5281/zenodo.7654321"
+  },
+  "files": [
+    {
+      "key": "temperature.nc",
+      "size": 10485760,
+      "checksum": "md5:9f86d081884c7d659a2feaa0c55ad015",
+      "links": {
+        "self": "https://zenodo.org/api/records/7654321/files/temperature.nc/content"
+      }
+    },
+    {
+      "key": "grid.csv",
+      "size": 2048,
+      "checksum": "sha256:aa112233445566778899aabbccddeeff00112233445566778899aabbccddee",
+      "links": {
+        "self": "https://zenodo.org/api/records/7654321/files/grid.csv/content"
+      }
+    }
+  ]
+}

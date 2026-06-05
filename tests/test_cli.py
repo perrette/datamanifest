@@ -826,6 +826,19 @@ def test_import_pooch_cli(tmp_path):
     assert p.returncode == 0 and str(cache / "g.nc") in p.stdout
 
 
+def test_import_csv_cli(tmp_path):
+    csv = tmp_path / "files.csv"
+    csv.write_text("name,url,sha256\nfoo,https://h/a/foo.nc,deadbeef\n")
+    toml = tmp_path / "datamanifest.toml"
+    toml.write_text('[_META]\nschema = 1\n[_STORAGE]\ndatasets_dir = "datasets"\n')
+    env = _env_with_toml(toml)
+
+    r = _run("import", "csv", str(csv), env=env)
+    assert r.returncode == 0, r.stderr
+    assert "Imported 1 dataset" in r.stdout
+    assert "foo" in _run("list", "--datasets", env=env).stdout
+
+
 # ----- add / show / remove / download / verify (command coverage) ------------
 
 def _proj_with_source(tmp_path):

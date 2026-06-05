@@ -6,6 +6,7 @@ and cache-adoption cases build their own files + hashes.
 """
 
 import hashlib
+import json
 import os
 
 try:
@@ -15,9 +16,19 @@ except ModuleNotFoundError:  # Python < 3.11
 
 from datamanifest.cache import CachedIndex
 from datamanifest.database import Database
-from datamanifest.importers import import_pooch, parse_pooch_registry
+from datamanifest.importers import (
+    import_csv,
+    import_pooch,
+    import_urls,
+    import_zenodo,
+    parse_pooch_registry,
+    parse_zenodo_record,
+    zenodo_record_id,
+)
 
-_FIXTURE = os.path.join(os.path.dirname(__file__), "data", "pooch_registry.txt")
+_DATA = os.path.join(os.path.dirname(__file__), "data")
+_FIXTURE = os.path.join(_DATA, "pooch_registry.txt")
+_ZENODO = os.path.join(_DATA, "zenodo_record.json")
 
 
 def _sha256(b):
@@ -148,3 +159,148 @@ def test_import_pooch_dry_run_writes_nothing(tmp_path):
     assert "Would import 3 dataset(s)" in summary
     assert toml.read_text() == before                                # manifest untouched
     assert not (tmp_path / ".datamanifest-state.toml").exists()       # state untouched
+
+
+# ----- generic CSV / URL list ------------------------------------------------
+
+def test_import_csv_declares_and_joins_base_url(tmp_path):
+    db, toml = _project(tmp_path)
+    csv = tmp_path / "files.csv"
+    csv.write_text(
+        "name,url,sha256\n"
+        "temp,https://h/abs/temp.nc,deadbeef\n"            # absolute url, explicit name
+        "rel/grid.csv,grid.csv,\n"                          # relative → base_url, no sha
+    )
+    summary = import_csv(db, str(csv), base_url="https://data.example.org/v1")
+    assert "Imported 2 dataset(s)" in summary
+    data = _manifest(toml)
+    assert data["temp"]["uri"] == "https://h/abs/temp.nc"
+    assert data["temp"]["sha256"] == "deadbeef"
+    # The relative url is joined onto base_url; the explicit name is honored.
+    assert data["rel/grid.csv"]["uri"] == "https://data.example.org/v1/grid.csv"
+
+
+def test_import_csv_requires_url_column(tmp_path):
+    db, _ = _project(tmp_path)
+    bad = tmp_path / "bad.csv"
+    bad.write_text("name,location\nx,/p\n")
+    try:
+        import_csv(db, str(bad))
+    except ValueError as e:
+        assert "url" in str(e)
+    else:
+        raise AssertionError("expected a ValueError about the missing url column")
+
+
+def test_import_urls_list(tmp_path):
+    db, toml = _project(tmp_path)
+    lst = tmp_path / "urls.txt"
+    lst.write_text("# a comment\nhttps://h/a/data.nc\n\nhttps://h/b/grid.csv\n")
+    summary = import_urls(db, str(lst))
+    assert "Imported 2 dataset(s)" in summary
+    data = _manifest(toml)
+    assert data["data"]["uri"] == "https://h/a/data.nc"
+    assert data["grid"]["uri"] == "https://h/b/grid.csv"
+
+
+def test_import_csv_adopts_cache(tmp_path):
+    db, _ = _project(tmp_path)
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    blob = b"grid bytes\n"
+    (cache / "grid.csv").write_bytes(blob)
+    csv = tmp_path / "files.csv"
+    csv.write_text(f"name,url,sha256\ngrid,https://h/grid.csv,{_sha256(blob)}\n")
+
+    summary = import_csv(db, str(csv), cache_dir=str(cache))
+    assert "1 adopted from the cache" in summary
+    idx = CachedIndex.read(tmp_path / ".datamanifest-state.toml")
+    assert idx.dataset_path_of("h/grid.csv")
+
+
+# ----- Zenodo ----------------------------------------------------------------
+
+def test_zenodo_record_id_detection():
+    assert zenodo_record_id("10.5281/zenodo.7654321") == "7654321"
+    assert zenodo_record_id("https://zenodo.org/records/7654321") == "7654321"
+    assert zenodo_record_id("https://zenodo.org/record/7654321") == "7654321"
+    assert zenodo_record_id("https://example.com/data.csv") == ""
+    assert zenodo_record_id("10.1234/other.999") == ""
+
+
+def test_parse_zenodo_record_maps_files():
+    with open(_ZENODO) as f:
+        record = json.load(f)
+    specs = parse_zenodo_record(record)
+    by = {s["name"]: s for s in specs}
+    # md5 file: no sha256 carried, the DOI + title are attached.
+    assert "sha256" not in by["temperature"] or by["temperature"]["sha256"] == ""
+    assert by["temperature"]["doi"] == "10.5281/zenodo.7654321"
+    assert by["temperature"]["description"] == "Example gridded climatology"
+    assert by["temperature"]["uri"].endswith("/temperature.nc/content")
+    # sha256 file: carried verbatim.
+    assert by["grid"]["sha256"].startswith("aa1122")
+
+
+def test_parse_zenodo_record_pick_and_prefix():
+    with open(_ZENODO) as f:
+        record = json.load(f)
+    specs = parse_zenodo_record(record, name_prefix="clim", picks=["*.nc"])
+    assert len(specs) == 1
+    assert specs[0]["name"] == "clim/temperature.nc"
+
+
+def test_import_zenodo_with_injected_fetch(tmp_path):
+    db, toml = _project(tmp_path)
+    with open(_ZENODO) as f:
+        record = json.load(f)
+    calls = []
+
+    def fake_fetch(url):
+        calls.append(url)
+        return record
+
+    summary = import_zenodo(db, "10.5281/zenodo.7654321", fetch_json=fake_fetch)
+    assert "Zenodo record 7654321" in summary and "Imported 2 dataset(s)" in summary
+    # Hit the records API for the parsed id, and declared both files with the DOI.
+    assert calls == ["https://zenodo.org/api/records/7654321"]
+    assert _manifest(toml)["grid"]["doi"] == "10.5281/zenodo.7654321"
+
+
+def test_import_zenodo_rejects_non_zenodo(tmp_path):
+    db, _ = _project(tmp_path)
+    try:
+        import_zenodo(db, "https://example.com/x.csv", fetch_json=lambda u: {})
+    except ValueError as e:
+        assert "Zenodo" in str(e)
+    else:
+        raise AssertionError("expected a ValueError for a non-Zenodo reference")
+
+
+# ----- add → Zenodo routing (CLI composition root) ---------------------------
+
+def test_add_routes_zenodo_reference(tmp_path, monkeypatch, capsys):
+    import types
+
+    from datamanifest import cli, importers
+
+    toml = tmp_path / "datamanifest.toml"
+    toml.write_text('[_META]\nschema = 1\n')
+    monkeypatch.setenv("DATAMANIFEST_TOML", str(toml))
+
+    seen = {}
+
+    def stub(db, ref, **kw):
+        seen.update(ref=ref, kw=kw)
+        return "STUB ZENODO"
+
+    monkeypatch.setattr(importers, "import_zenodo", stub)
+    args = types.SimpleNamespace(
+        uri="10.5281/zenodo.7654321", name="clim", pick=["*.nc"],
+        extract=False, overwrite=False, no_download=False, delegate=None,
+    )
+    cli._cmd_add(args)
+
+    assert "STUB ZENODO" in capsys.readouterr().out
+    assert seen["ref"] == "10.5281/zenodo.7654321"
+    assert seen["kw"]["name_prefix"] == "clim" and seen["kw"]["picks"] == ["*.nc"]

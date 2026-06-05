@@ -116,7 +116,7 @@ datamanifest COMMAND [OPTIONS]
 | `refresh [--scan] [--dry-run]` | Reconcile the state file (`.datamanifest-state.toml`) with disk: relocate stale records, drop missing ones, adopt present-but-untracked datasets. `--scan` also probes the read pools (incl. legacy locations) and adopts pool-present datasets (checksum-gated; no downloads/copies) — the active twin of `where --scan`. Edits only local state, so it applies by default; `--dry-run` previews |
 | `download [NAME ...] [--all] [--overwrite] [--delegate\|--no-delegate]` | Download specific datasets or all of them; `--no-delegate` disables the cross-language fetch rung for the run |
 | `path NAME` | Print the resolved on-disk path (composable in shell) |
-| `add URI [--name N] [--no-download] [--extract] [--delegate\|--no-delegate]` | Register and (by default) download a dataset |
+| `add URI\|DOI [--name N] [--pick GLOB] [--no-download] [--extract] [--delegate\|--no-delegate]` | Register and (by default) download a dataset. A **Zenodo** DOI / record URL expands to one dataset per file (declare-only; `--pick GLOB` selects a subset, `--name` is the name prefix) |
 | `remove NAME [--keep-cache]` | Delete an entry, optionally preserving cached files |
 | `show NAME` | Print full entry detail in TOML style |
 | `verify [NAME ...]` | Re-check sha256 checksums; exits nonzero on any mismatch |
@@ -125,7 +125,7 @@ datamanifest COMMAND [OPTIONS]
 | `where [--manifest\|--state-file\|--datasets-dir\|--datacache-dir] [--scan]` | Show the active manifest, state file, and the data dirs resolved for this host with their read pools folded in; notes how many tracked objects live outside those folders (`list --outside` to inspect). A selector flag prints just that one bare path (scriptable); `--scan` probes read pools for datasets present there but not local |
 | `storage [show]` / `storage set FIELD VALUE… [--host GLOB\|--all-hosts]` / `storage unset FIELD [...]` | Show or edit `[_STORAGE]` without hand-writing the `_HOST` syntax. `set`/`unset` target **this host** by default (a `[_STORAGE._HOST."<hostname>"]` override); `--host GLOB` targets a host pattern, `--all-hosts` the project-wide base. `FIELD` is `datasets_dir`/`datacache_dir`, a user `$symbol`, or a `datasets_pools`/`datacache_pools` list |
 | `migrate FILE [--dry-run]` | Reshape a spec-v3 manifest's `[_STORAGE]` to the spec-v4 two-field model: write `datasets_dir`/`datacache_dir` at their defaults, drop the retired keys, carry `local_path` → `storage_path`. Moves no bytes |
-| `import pooch REGISTRY --base-url URL [--cache-dir DIR] [--overwrite] [--dry-run]` | Import datasets from another tool's registry. For pooch: each `filename [algo:]hash [url]` line becomes a dataset (`uri` = its URL or `base_url + filename`, `sha256` carried over when present). With `--cache-dir` (e.g. `pooch.os_cache('pkg')`) already-downloaded files are adopted in place, checksum-verified — no re-download |
+| `import {pooch\|csv\|urls} SOURCE [--base-url URL] [--cache-dir DIR] [--overwrite] [--dry-run]` | Bulk-import datasets from another tool's catalog. **pooch**: a registry file (`filename [algo:]hash [url]`). **csv**: a `name,url,sha256` file. **urls**: a plain URL list. `uri` is the entry's URL or `base_url + name`; with `--cache-dir` already-downloaded files are adopted in place, checksum-verified — no re-download |
 | `push ID SSH_HOST [--dry-run] [--batch]` | Transfer a stored object **to** an SSH host (rsync over ssh), addressed by id (a dataset's `key`, or `cachetype[/version]/hash`) |
 | `pull ID SSH_HOST [--dry-run] [--batch]` | Transfer a stored object **from** an SSH host (rsync over ssh), same addressing |
 | `delete ID [--dry-run] [--batch]` | Delete a stored object's **bytes** (and prune its state record), addressed by id like `push`/`pull` — *not* the manifest entry (use `remove` for that). Protected data is skipped |
@@ -174,6 +174,29 @@ datamanifest push foo user@hpc                      # push the dataset `foo` to 
 datamanifest pull esm_anomaly/83425a3 user@hpc      # pull a produced artifact by hash prefix
 datamanifest list --cached --push user@hpc          # bulk: push the filtered set
 ```
+
+### Adding datasets from external sources
+
+`add` takes a *reference to data* (one invocation, possibly several files);
+`import` ingests *another tool's catalog*. Both end at standard manifest entries,
+and reuse already-downloaded copies in place where possible.
+
+```bash
+# add — a reference to data
+datamanifest add https://host/path/file.nc            # a direct URL
+datamanifest add 10.5281/zenodo.1234567               # a Zenodo DOI / record URL (all its files)
+
+# import — another tool's catalog
+datamanifest import pooch registry.txt --base-url URL --cache-dir DIR   # adopts pooch's cache
+datamanifest import csv files.csv                     # a name,url,sha256 table
+datamanifest import urls list.txt --base-url URL      # a plain list of URLs
+datamanifest import intake catalog.yml                # an intake catalog                         [planned]
+datamanifest import dvc path-or-dir                   # *.dvc / dvc.lock (+ .dvc/cache)           [planned]
+```
+
+`intake` / `dvc` are still planned (they need a YAML parser); everything else
+ships today. See **[docs/adding-datasets.md](docs/adding-datasets.md)** for the
+full per-source detail.
 
 ## Features
 
