@@ -108,7 +108,7 @@ def migrate_manifest(toml_path, *, env=None, dry_run=False, no_input=False,
     dc_roots = (locations.resolve_pool_exprs(
         datacache_pools, project_root=project_root, storage_config=new_cfg)
         if datacache_pools is not None else None)
-    discovery = _discover_and_record(
+    discovery, host_datasets_dir = _discover_and_record(
         db, project_root, env, dry_run=dry_run, no_input=no_input,
         dataset_roots=ds_roots, datacache_roots=dc_roots,
     )
@@ -131,13 +131,20 @@ def migrate_manifest(toml_path, *, env=None, dry_run=False, no_input=False,
             "\nNeeds manual attention — these datasets used a retired `store` "
             "selector that was dropped:\n  " + "\n  ".join(needs_attention)
         )
-    summary.append(
-        "\nThe spec-v4 defaults are repo-local (./datasets/, ./cached/). New data "
-        "follows them; data found elsewhere was recorded in "
-        ".datamanifest-state.toml so it still resolves. Edit "
-        "[_STORAGE].datasets_dir / datacache_dir (or use `datamanifest storage`) "
-        "to relocate. No bytes were moved."
-    )
+    if host_datasets_dir:
+        summary.append(
+            f"\nDone. Existing data was recorded in .datamanifest-state.toml (it "
+            f"resolves in place); new downloads on this host go to "
+            f"{host_datasets_dir!r}. No bytes were moved."
+        )
+    else:
+        summary.append(
+            "\nDone. Existing data was recorded in .datamanifest-state.toml so it "
+            "resolves in place; new data follows the repo-local defaults "
+            "(./datasets/, ./cached/). Point [_STORAGE].datasets_dir / "
+            "datacache_dir elsewhere with `datamanifest storage` if you prefer. "
+            "No bytes were moved."
+        )
     return "\n".join(summary)
 
 
@@ -322,7 +329,7 @@ def _discover_and_record(db, project_root, env, *, dry_run, no_input,
 
     if touched and not dry_run:
         idx.write()
-    return lines
+    return lines, host_dir
 
 
 def _discover_cached(idx, project_root, env, lines, roots=None):

@@ -254,3 +254,23 @@ def test_migrate_pool_override(tmp_path, monkeypatch):
     migrate_manifest(str(toml), no_input=True, datasets_pools=[str(alt)])
     sp = _state(tmp_path).dataset_path_of(key)
     assert sp and os.path.abspath(os.path.join(tmp_path, sp)) == str(alt / key)
+
+
+def test_migrate_host_dir_footer_when_accepted(tmp_path, monkeypatch):
+    """When the dominant-root datasets_dir offer is accepted, the summary says new
+    downloads go to that host location (not the repo-local default)."""
+    import socket
+
+    monkeypatch.setattr(M, "_confirm", lambda *a, **k: True)   # accept the offer
+    _isolate_legacy_roots(tmp_path, monkeypatch)
+    alt = tmp_path / "alt"
+    key = "h/a.csv"
+    (alt / "h").mkdir(parents=True)
+    (alt / key).write_bytes(b"x")
+    toml = _write(tmp_path, '[_META]\nschema = 1\n\n[a]\nuri = "https://h/a.csv"\n')
+
+    summary = migrate_manifest(str(toml), datasets_pools=[str(alt)])
+    assert "new downloads on this host go to" in summary
+    assert "repo-local defaults" not in summary
+    data = tomllib.loads(toml.read_text())
+    assert data["_STORAGE"]["_HOST"][socket.gethostname()]["datasets_dir"] == str(alt)
