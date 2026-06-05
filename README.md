@@ -90,7 +90,7 @@ datamanifest COMMAND [OPTIONS]
 
 | Command | Description |
 |---|---|
-| `list [SEARCH ...] [--cached\|--datasets] [--present\|--missing\|--all] [--orphan] [--dirty] [--hash P ...] [--older-than AGE] [--format F] [--fields ...] [--delete\|--move DIR] [--yes]` | List datasets and cached artifacts, with their state↔disk status; with `--delete`/`--move` becomes the maintenance command (dry run by default; `--yes` to apply). `--delete`/`--move` act on both artifacts and fetched datasets (protected data is skipped) |
+| `list [SEARCH ...] [--cached\|--datasets] [--present\|--missing\|--all] [--orphan] [--dirty] [--hash P ...] [--older-than AGE] [--format F] [--fields ...] [--delete\|--move DIR] [--dry-run]` | List datasets and cached artifacts, with their state↔disk status; with `--delete`/`--move` becomes the maintenance command. The filtered selection applies directly (`--dry-run` previews); `--delete`/`--move` act on both artifacts and fetched datasets (protected data is skipped) |
 | `refresh [--dry-run]` | Reconcile the state file (`.datamanifest-state.toml`) with disk: relocate stale records, drop missing ones, adopt present-but-untracked datasets. Edits only local state — no downloads/moves — so it applies by default; `--dry-run` previews (use `list --dirty` to see what would change) |
 | `download [NAME ...] [--all] [--overwrite] [--delegate\|--no-delegate]` | Download specific datasets or all of them; `--no-delegate` disables the cross-language fetch rung for the run |
 | `path NAME` | Print the resolved on-disk path (composable in shell) |
@@ -131,8 +131,8 @@ datamanifest update-checksums             # write the new checksums
 
 # Inspect and clean up @cached artifacts
 datamanifest list --cached --orphan               # dry-run: list orphaned cached artifacts
-datamanifest list --cached --orphan --delete --yes  # delete them
-datamanifest list --older-than 30d --delete       # preview artifacts older than 30 days
+datamanifest list --cached --orphan --delete      # delete them (the filter is the selection)
+datamanifest list --older-than 30d --delete --dry-run  # preview artifacts older than 30 days
 
 # Reconcile the state file with disk (after moving data around by hand)
 datamanifest list --dirty                          # preview: objects whose record ≠ disk

@@ -596,20 +596,21 @@ def _maintain(objects, args, db):
     """Run ``--delete`` / ``--move`` over the selected *objects* — produced
     artifacts **and** fetched datasets.
 
-    Both default to a **dry run** (report only); ``--yes`` performs the action.
-    On a real run the project's state file is kept consistent: ``--move`` repoints
-    the recorded location, ``--delete`` prunes the entry. Protected objects are
-    never touched: a fetched dataset with a user-managed exact ``storage_path`` or
-    ``skip_download`` (the URI is the file), and any non-cached/non-dataset object.
-    The manifest (``datamanifest.toml``) is never edited — only the resolved
-    location moves, so a later re-fetch still follows the ``datasets_dir``
+    The ``list`` filter *is* the explicit selection, so the action **applies by
+    default**; ``--dry-run`` previews without changing anything (there is no
+    ``--yes`` and no batch guard here). On a real run the project's state file is
+    kept consistent: ``--move`` repoints the recorded location, ``--delete`` prunes
+    the entry. Protected objects are never touched: a fetched dataset with a
+    user-managed exact ``storage_path`` or ``skip_download`` (the URI is the file),
+    and any non-cached/non-dataset object. The manifest is never edited — only the
+    resolved location moves, so a later re-fetch still follows the ``datasets_dir``
     directive (the gold standard).
     """
     import shutil
 
     from .cache import CACHED_INDEX_NAME, CachedIndex, delete_object, move_object
 
-    do_it = args.yes
+    do_it = not getattr(args, "dry_run", False)
     if args.move:
         verb = "Moved" if do_it else "Would move"
     else:
@@ -679,8 +680,10 @@ def _maintain(objects, args, db):
         index.write(index_path)
 
     noun = "object" if acted == 1 else "objects"
-    suffix = " (dry run; pass --yes to apply)" if not do_it else ""
-    print(f"{verb}: {acted} {noun}{suffix}")
+    if do_it:
+        print(f"{verb}: {acted} {noun}")
+    else:
+        print(f"{verb}: {acted} {noun} (dry run; re-run without --dry-run to apply)")
 
 
 def _remove_path_and_markers(path):
@@ -1187,12 +1190,13 @@ def main():
     )
     _act_excl.add_argument(
         "--move", metavar="DEST",
-        help="Move the selected objects (artifacts or datasets) under DEST "
-             "(dry run unless --yes); the manifest is not edited",
+        help="Move the selected objects (artifacts or datasets) under DEST; "
+             "the manifest is not edited",
     )
     act_group.add_argument(
-        "--yes", "-y", action="store_true",
-        help="Actually perform --delete / --move (otherwise a dry run)",
+        "--dry-run", action="store_true",
+        help="Preview a maintenance / sync action (--delete / --move / --push / "
+             "--pull) without changing anything",
     )
     sync_group = p_list.add_argument_group("object actions (sync)")
     _sync_excl = sync_group.add_mutually_exclusive_group()
@@ -1203,10 +1207,6 @@ def main():
     _sync_excl.add_argument(
         "--pull", metavar="SSH_HOST",
         help="Pull the selected objects from SSH_HOST (rsync over ssh)",
-    )
-    sync_group.add_argument(
-        "--dry-run", action="store_true",
-        help="With --push/--pull: report the selection and transfer nothing",
     )
     p_list.set_defaults(func=_cmd_list)
 

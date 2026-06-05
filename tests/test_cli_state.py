@@ -20,7 +20,7 @@ def _args(**kw):
     base = dict(
         search=[], hash=None, invert=False, any=False, cached=False,
         datasets=False, format=None, present=False, missing=False, orphan=False,
-        dirty=False, all=False, older_than=None, yes=False, move=None,
+        dirty=False, all=False, older_than=None, dry_run=False, move=None,
         delete=False,
     )
     base.update(kw)
@@ -121,7 +121,7 @@ def test_dataset_delete_removes_bytes_and_entry(tmp_path):
     path = download_dataset(db, "a")
     key = db.datasets["a"].key
 
-    _maintain(_enumerate_objects(db), _args(delete=True, yes=True), db)
+    _maintain(_enumerate_objects(db), _args(delete=True), db)
     assert not os.path.exists(path)                       # bytes gone
     idx = CachedIndex.read(tmp_path / ".datamanifest-state.toml")
     assert idx.dataset_path_of(key) == ""                 # entry pruned
@@ -136,7 +136,7 @@ def test_dataset_move_repoints_state_not_manifest(tmp_path):
     before = (tmp_path / "datamanifest.toml").read_text()
     dest = tmp_path / "archive"
 
-    _maintain(_enumerate_objects(db), _args(move=str(dest), yes=True), db)
+    _maintain(_enumerate_objects(db), _args(move=str(dest)), db)
     moved = dest / key
     assert moved.exists() and not os.path.exists(path)    # bytes relocated
     # State repointed at the new home; manifest unchanged.
@@ -150,12 +150,12 @@ def test_skip_download_dataset_is_protected(tmp_path):
     db = _project(tmp_path, skip_download=True)
     download_dataset(db, "a")            # skip_download: the URI file is the data
     src_file = db.datasets["a"].uri.replace("file://", "")
-    _maintain(_enumerate_objects(db), _args(delete=True, yes=True), db)
+    _maintain(_enumerate_objects(db), _args(delete=True), db)
     assert os.path.exists(src_file)      # never deleted (protected)
 
 
 def test_user_managed_dataset_is_protected(tmp_path):
     db = _project(tmp_path, user_managed=True)
     path = download_dataset(db, "a")
-    _maintain(_enumerate_objects(db), _args(delete=True, yes=True), db)
+    _maintain(_enumerate_objects(db), _args(delete=True), db)
     assert os.path.exists(path)          # exact user path never touched

@@ -184,16 +184,16 @@ def test_list_delete_dry_run_then_applies(tmp_path):
     artifact, key = _orphan_artifact(cache, "mytype", {"grid": "5x5"})
     env = _maint_env(tmp_path, cache)
 
-    # Dry run (default): reports but keeps.
-    dry = _run("list", "--orphan", "--delete", env=env)
+    # --dry-run reports but keeps.
+    dry = _run("list", "--orphan", "--delete", "--dry-run", env=env)
     assert dry.returncode == 0, dry.stderr
     assert artifact.is_dir(), "dry run must not delete"
     assert "dry run" in dry.stdout.lower()
 
-    # --yes applies.
-    run = _run("list", "--orphan", "--delete", "--yes", env=env)
+    # The filtered selection applies directly (no --yes).
+    run = _run("list", "--orphan", "--delete", env=env)
     assert run.returncode == 0, run.stderr
-    assert not artifact.exists(), "--delete --yes should remove the orphan"
+    assert not artifact.exists(), "--delete should remove the orphan"
 
 
 def test_list_move_relocates_orphan(tmp_path):
@@ -202,14 +202,14 @@ def test_list_move_relocates_orphan(tmp_path):
     dest = tmp_path / "archive"
     env = _maint_env(tmp_path, cache)
 
-    # Dry run (default): reports but keeps, and does not create the destination.
-    dry = _run("list", "--orphan", "--move", str(dest), env=env)
+    # --dry-run reports but keeps, and does not create the destination.
+    dry = _run("list", "--orphan", "--move", str(dest), "--dry-run", env=env)
     assert dry.returncode == 0, dry.stderr
     assert artifact.is_dir()
     assert not dest.exists()
 
-    # --yes applies the move, preserving the <cachetype>/<hash> key path.
-    run = _run("list", "--orphan", "--move", str(dest), "--yes", env=env)
+    # The selection applies the move, preserving the <cachetype>/<hash> key path.
+    run = _run("list", "--orphan", "--move", str(dest), env=env)
     assert run.returncode == 0, run.stderr
     assert not artifact.exists()
     h = key.split("/", 1)[1]
@@ -236,8 +236,8 @@ def _registered_artifact(tmp_path, cache, cachetype, key_table, version=""):
 
 
 def test_list_move_keeps_cached_toml_consistent(tmp_path):
-    """End-to-end: `list <hash> --move DEST --yes` relocates the bytes, repoints
-    the artifact's recorded location in cached.toml, and the artifact still shows
+    """End-to-end: `list <hash> --move DEST` relocates the bytes, repoints the
+    artifact's recorded location in the state file, and the artifact still shows
     in `list` afterwards (enumerated from its recorded location)."""
     from datamanifest.cache import CachedIndex
 
@@ -248,7 +248,7 @@ def test_list_move_keeps_cached_toml_consistent(tmp_path):
 
     assert h[:12] in _run("list", h, env=env).stdout            # listed before
 
-    run = _run("list", h, "--move", str(dest), "--yes", env=env)
+    run = _run("list", h, "--move", str(dest), env=env)
     assert run.returncode == 0, run.stderr
     moved = dest / "ct" / h
     assert (moved / "data.txt").is_file() and not artifact.exists()   # bytes moved
@@ -263,15 +263,15 @@ def test_list_move_keeps_cached_toml_consistent(tmp_path):
 
 
 def test_list_delete_prunes_cached_toml(tmp_path):
-    """End-to-end: `list <hash> --delete --yes` removes the bytes AND prunes the
-    variation from cached.toml (the recipe goes too once its last instance is)."""
+    """End-to-end: `list <hash> --delete` removes the bytes AND prunes the
+    variation from the state file (the recipe goes too once its last instance is)."""
     from datamanifest.cache import CachedIndex
 
     cache = tmp_path / "cache"
     artifact, h = _registered_artifact(tmp_path, cache, "ct", {"x": 1})
     env = _maint_env(tmp_path, cache)
 
-    run = _run("list", h, "--delete", "--yes", env=env)
+    run = _run("list", h, "--delete", env=env)
     assert run.returncode == 0, run.stderr
     assert not artifact.exists()                                 # bytes gone
 
