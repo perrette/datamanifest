@@ -88,13 +88,14 @@ class CacheObject:
     __slots__ = (
         "kind", "location", "key", "hash", "cachetype", "version",
         "format", "size", "created", "last_access", "referenced",
-        "name", "present", "params", "storage_path",
+        "name", "present", "params", "storage_path", "dirty",
     )
 
     def __init__(
         self, *, kind, location, key="", hash="", cachetype="", version="",
         format="", size=0, created="", last_access="",
         referenced=None, name="", present=True, params=None, storage_path="",
+        dirty="",
     ):
         self.kind = kind
         self.location = location
@@ -119,6 +120,11 @@ class CacheObject:
         self.name = name or key
         self.present = present
         self.params = dict(params) if params else {}
+        # State↔disk status (spec-v5), set by the CLI composition root from the
+        # state file: "" (clean / not-tracked-and-absent), "missing" (recorded but
+        # the bytes are gone), "relocated" (recorded location stale; bytes live
+        # elsewhere), or "untracked" (bytes present but not recorded).
+        self.dirty = dirty
 
     def __repr__(self):
         ref = {True: "referenced", False: "orphan", None: "?"}[self.referenced]
