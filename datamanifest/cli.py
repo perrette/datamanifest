@@ -1094,8 +1094,6 @@ def _cmd_add(args):
 
     if not args.no_download:
         from .pipelines import download_dataset
-        if args.delegate is not None:
-            entry.delegate = args.delegate
         download_dataset(db, name)
 
 
@@ -1800,7 +1798,6 @@ def main():
     add_opts.add_argument(
         "--overwrite", action="store_true", help="Overwrite an existing duplicate entry"
     )
-    _add_delegate_flags(add_opts)
     p_add.set_defaults(func=_cmd_add)
 
     # remove

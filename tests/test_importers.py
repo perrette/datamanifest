@@ -297,7 +297,7 @@ def test_add_routes_zenodo_reference(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(importers, "import_zenodo", stub)
     args = types.SimpleNamespace(
         uri="10.5281/zenodo.7654321", name="clim", pick=["*.nc"],
-        extract=False, overwrite=False, no_download=False, delegate=None,
+        extract=False, overwrite=False, no_download=False,
     )
     cli._cmd_add(args)
 

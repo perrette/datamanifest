@@ -116,7 +116,7 @@ datamanifest COMMAND [OPTIONS]
 | `refresh [--scan] [--dry-run]` | Reconcile the state file (`.datamanifest-state.toml`) with disk: relocate stale records, drop missing ones, adopt present-but-untracked datasets. `--scan` also probes the read pools (incl. legacy locations) and adopts pool-present datasets (checksum-gated; no downloads/copies) — the active twin of `where --scan`. Edits only local state, so it applies by default; `--dry-run` previews |
 | `download [NAME ...] [--all] [--overwrite] [--delegate\|--no-delegate]` | Download specific datasets or all of them; `--no-delegate` disables the cross-language fetch rung for the run |
 | `path NAME` | Print the resolved on-disk path (composable in shell) |
-| `add URI\|DOI [--name N] [--pick GLOB] [--no-download] [--extract] [--delegate\|--no-delegate]` | Register and (by default) download a dataset. A **Zenodo** DOI / record URL expands to one dataset per file (declare-only; `--pick GLOB` selects a subset, `--name` is the name prefix) |
+| `add URI\|DOI [--name N] [--pick GLOB] [--no-download] [--extract]` | Register and (by default) download a dataset. A **Zenodo** DOI / record URL expands to one dataset per file (declare-only; `--pick GLOB` selects a subset, `--name` is the name prefix) |
 | `remove NAME [--keep-cache]` | Delete an entry, optionally preserving cached files |
 | `show NAME` | Print full entry detail in TOML style |
 | `verify [NAME ...]` | Re-check sha256 checksums; exits nonzero on any mismatch |
@@ -488,7 +488,7 @@ the ladder advances to the `uri` download. Cross-language fetch applies to fetch
 datasets only (never `@cached` produced datasets); it is **on by default** and
 probe-gated (a no-op unless a foreign fetcher and a usable Julia env are both
 present). Toggle it per file with `delegate = false`, or per run with the
-`--delegate` / `--no-delegate` flags on `datamanifest download` / `add`.
+`--delegate` / `--no-delegate` flags on `datamanifest download`.
 
 ### Parameterized bindings
 
