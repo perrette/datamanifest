@@ -62,7 +62,9 @@ def project_root_from_paths(datasets_toml_path: str, current_project_path=None) 
     return ""
 
 
-TOML_FILENAMES = ["datasets.toml", "Datasets.toml", "datamanifest.toml"]
+# The canonical manifest name is ``datamanifest.toml``; ``datasets.toml`` /
+# ``Datasets.toml`` are recognized legacy aliases (read when present).
+TOML_FILENAMES = ["datamanifest.toml", "datasets.toml", "Datasets.toml"]
 
 
 def _find_default_toml(start: str) -> str:
@@ -71,8 +73,8 @@ def _find_default_toml(start: str) -> str:
     A directory containing any of :data:`TOML_FILENAMES` is treated as a
     project root and its toml file is returned. As a fallback, a directory
     containing ``pyproject.toml`` is also treated as a project root, in which
-    case the default (lowercase ``datasets.toml``) path is returned even if
-    the file does not exist yet — this lets a fresh project initialise one.
+    case the canonical ``datamanifest.toml`` path is returned even if the file
+    does not exist yet — this lets a fresh project initialise one.
     """
     current = Path(start).resolve()
     while True:
@@ -106,7 +108,7 @@ def get_default_toml() -> str:
         return toml
 
     logger.warning(
-        "No datasets.toml or pyproject.toml found in parent directories. "
-        "Cannot infer default datasets_toml path. In-memory database will be used."
+        "No datamanifest.toml or pyproject.toml found in parent directories. "
+        "Cannot infer default manifest path. In-memory database will be used."
     )
     return ""

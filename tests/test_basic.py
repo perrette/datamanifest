@@ -1325,11 +1325,12 @@ def test_find_default_toml_discovery(tmp_path):
     sub.mkdir(parents=True)
     assert _find_default_toml(str(sub)) == str(tmp_path / "Datasets.toml")
 
-    # A pyproject.toml anchors the default path even if the toml is absent yet.
+    # A pyproject.toml anchors the default path even if the toml is absent yet
+    # (the canonical datamanifest.toml).
     proj = tmp_path / "py"
     proj.mkdir()
     (proj / "pyproject.toml").write_text("[project]\nname = 'x'\n")
-    assert _find_default_toml(str(proj)) == str(proj / "datasets.toml")
+    assert _find_default_toml(str(proj)) == str(proj / "datamanifest.toml")
 
 
 def test_find_default_toml_none(tmp_path):
@@ -1340,7 +1341,7 @@ def test_find_default_toml_none(tmp_path):
 
 
 def test_default_db_missing_toml():
-    """Default-DB functions raise RuntimeError when no datasets.toml is found."""
+    """Default-DB functions raise RuntimeError when no datamanifest.toml is found."""
     import datamanifest
     from datamanifest import database as _db_module
 
@@ -1353,7 +1354,7 @@ def test_default_db_missing_toml():
         tmpdir = tempfile.mkdtemp()
         os.chdir(tmpdir)
         _db_module._default_db = None
-        with pytest.raises(RuntimeError, match="No datasets.toml"):
+        with pytest.raises(RuntimeError, match="No datamanifest.toml"):
             datamanifest.get_dataset_path("anything")
     finally:
         os.chdir(old_cwd)

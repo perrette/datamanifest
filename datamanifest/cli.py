@@ -1045,7 +1045,7 @@ def _cmd_update_checksums(args):
 
 def _cmd_init(args):
     folder = os.path.abspath(args.folder) if args.folder else os.getcwd()
-    toml_path = os.path.join(folder, "datasets.toml")
+    toml_path = os.path.join(folder, "datamanifest.toml")
 
     if os.path.isfile(toml_path) and not args.force:
         print(
@@ -1054,11 +1054,14 @@ def _cmd_init(args):
         )
         sys.exit(1)
 
-    import tomli_w
-
     os.makedirs(folder, exist_ok=True)
-    with open(toml_path, "wb") as f:
-        tomli_w.dump({}, f)
+    with open(toml_path, "w") as f:
+        f.write(
+            "# datamanifest.toml — dataset manifest.\n"
+            "# Add datasets with `datamanifest add <uri>`; data lives under\n"
+            "# ./datasets/ and ./cached/ by default (see `datamanifest storage`).\n\n"
+            "[_META]\nschema = 1\n"
+        )
     print(f"Created: {toml_path}")
 
 
@@ -1474,14 +1477,15 @@ def main():
 
     # init
     p_init = subparsers.add_parser(
-        "init", help="Create a fresh datasets.toml in the current directory"
+        "init", help="Create a fresh datamanifest.toml in the current directory"
     )
     init_opts = p_init.add_argument_group("options")
     init_opts.add_argument(
-        "--folder", metavar="PATH", help="Directory to create datasets.toml in (default: cwd)"
+        "--folder", metavar="PATH",
+        help="Directory to create datamanifest.toml in (default: cwd)",
     )
     init_opts.add_argument(
-        "--force", action="store_true", help="Overwrite an existing datasets.toml"
+        "--force", action="store_true", help="Overwrite an existing datamanifest.toml"
     )
     p_init.set_defaults(func=_cmd_init)
 
@@ -1498,7 +1502,10 @@ def main():
              "model (datasets_dir/datacache_dir defaults); drops retired keys, "
              "carries local_path → storage_path; moves no bytes",
     )
-    p_migrate.add_argument("file", metavar="FILE", help="Path to datasets.toml to migrate")
+    p_migrate.add_argument(
+        "file", metavar="FILE",
+        help="Path to the manifest to migrate (datamanifest.toml / datasets.toml)",
+    )
     p_migrate.add_argument(
         "--dry-run", action="store_true",
         help="Print what would change without writing the manifest",

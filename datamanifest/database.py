@@ -1587,8 +1587,8 @@ def get_default_database() -> "Database":
         toml_path = get_default_toml()
         if not toml_path or not os.path.isfile(toml_path):
             raise RuntimeError(
-                "No datasets.toml found. Activate a project (a directory "
-                "containing datasets.toml) or pass a Database explicitly."
+                "No datamanifest.toml found. Activate a project (a directory "
+                "containing datamanifest.toml) or pass a Database explicitly."
             )
         _default_db = Database(datasets_toml=toml_path)
     return _default_db

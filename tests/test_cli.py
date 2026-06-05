@@ -517,7 +517,7 @@ def test_list_bare_prints_plain_names(tmp_path):
 def test_init_creates_file(tmp_path):
     result = _run("init", "--folder", str(tmp_path))
     assert result.returncode == 0
-    assert (tmp_path / "datasets.toml").exists()
+    assert (tmp_path / "datamanifest.toml").exists()
 
 
 def test_init_refuses_overwrite_without_force(tmp_path):
