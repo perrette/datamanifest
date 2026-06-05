@@ -758,9 +758,9 @@ def test_where_lists_state_records_and_pools(tmp_path):
     _run("download", "a", env=env)            # reused from the pool → recorded
 
     out = _run("where", env=env).stdout
-    assert "datasets pools" in out
-    assert "recorded in the state file" in out
-    assert "example.com/a.csv" in out
+    assert "read pools (datasets)" in out           # configured pool shown
+    assert "recorded:" in out                       # grouped recorded summary
+    assert "→" in out and "a" in out                # dataset 'a' grouped in
 
     scan = _run("where", "--scan", env=env).stdout
     assert "scan" in scan and "b →" in scan   # b is in the pool, not yet local
@@ -801,3 +801,17 @@ def test_download_then_verify(tmp_path):
     assert dl.returncode == 0, dl.stderr
     v = _run("verify", "foo", env=env)
     assert v.returncode == 0, v.stderr
+
+
+def test_where_common_anchor_heuristic():
+    import os
+
+    from datamanifest.cli import _common_anchor
+
+    # A deep shared parent is used as the anchor.
+    assert _common_anchor(["/a/b/c/d/x", "/a/b/c/e/y"]) == "/a/b/c"
+    # Too high (root / home / one level) → no anchor.
+    assert _common_anchor(["/tmp/x/f", "/var/y/g"]) == ""        # commonpath "/"
+    assert _common_anchor([os.path.expanduser("~") + "/a",
+                           os.path.expanduser("~") + "/b"]) == ""
+    assert _common_anchor([]) == ""

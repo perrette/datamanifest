@@ -1212,17 +1212,102 @@ def _override_pools(db, exprs):
     )
 
 
+def _common_anchor(locs):
+    """A *meaningful* common parent directory of the absolute paths *locs* — or
+    ``""`` when there is none, or it would be too high (``/``, the home dir, or
+    shallower than two components below root)."""
+    if not locs:
+        return ""
+    try:
+        common = (os.path.commonpath(locs) if len(locs) > 1
+                  else os.path.dirname(locs[0]))
+    except ValueError:  # paths on different drives / mixed absolute+relative
+        return ""
+    home = os.path.expanduser("~")
+    if common in ("", os.sep, home, os.path.dirname(home)):
+        return ""
+    if len([p for p in common.split(os.sep) if p]) < 2:
+        return ""
+    return common
+
+
+def _under(loc, root):
+    """Whether absolute path *loc* is *root* or sits under it."""
+    return bool(root) and (loc == root or loc.startswith(root.rstrip(os.sep) + os.sep))
+
+
+def _where_recorded(idx, db, project_root, ds_pools, datasets_dir, on,
+                    *, top=8, per=4):
+    """Print a compact summary of what the state file records: datasets grouped by
+    the first folder of their location under the dominant root (``datasets_dir`` or
+    the read pool holding the most), first *top* groups × *per* names with totals;
+    the cached-artifact count; and any folder used but not in a read pool."""
+    recs = idx.dataset_records()
+    n_art = sum(len(r["instances"]) for r in idx.recipe_records())
+    if not recs and not n_art:
+        return
+    key_to_name = {e.key: n for n, e in db.datasets.items()}
+    items = [(key_to_name.get(r["key"], r["key"]),
+              _abs_under(r["storage_path"], project_root)) for r in recs]
+    items = [(n, l) for n, l in items if l]
+
+    # Anchor at the known root (datasets_dir / a pool) covering the most records,
+    # so groups are short relative paths rather than a degenerate "/tmp".
+    roots = [r for r in [os.path.abspath(datasets_dir), *ds_pools] if r]
+    anchor = max(roots, key=lambda r: sum(_under(l, r) for _, l in items), default="")
+    if anchor and not any(_under(l, anchor) for _, l in items):
+        anchor = ""
+
+    under = [(n, l) for n, l in items if anchor and _under(l, anchor)]
+    rest = [(n, l) for n, l in items if not (anchor and _under(l, anchor))]
+
+    if under:
+        groups = {}
+        for name, loc in under:
+            rel = os.path.relpath(loc, anchor)
+            seg = rel.split(os.sep)[0] if rel not in (".", "") else os.path.basename(loc)
+            groups.setdefault(seg, []).append(name)
+        print(f"\nrecorded: {len(under)} dataset{'s' if len(under) != 1 else ''} under "
+              + _paint(anchor, "green", on=on)
+              + f"  ({len(groups)} folder{'s' if len(groups) != 1 else ''}):")
+        for seg in sorted(groups, key=lambda s: (-len(groups[s]), s))[:top]:
+            names = sorted(groups[seg])
+            shown = ", ".join(names[:per])
+            if len(names) > per:
+                shown += f", +{len(names) - per} more"
+            print(f"  {seg}{os.sep}  →  ({shown})")
+        if len(groups) > top:
+            print(f"  … {len(groups) - top} more folder(s) — "
+                  "`datamanifest list` for the full inventory")
+    if n_art:
+        print(f"  + {n_art} cached artifact{'s' if n_art != 1 else ''} "
+              "(`datamanifest list --cached`)")
+
+    # The rest: reused from another pool (fine), or in folders not in any pool.
+    pooled = [(n, l) for n, l in rest if any(_under(l, p) for p in ds_pools)]
+    outside = [(n, l) for n, l in rest if not any(_under(l, p) for p in ds_pools)]
+    if pooled:
+        print(f"  + {len(pooled)} reused from other read pools")
+    if outside:
+        oa = _common_anchor([l for _, l in outside])
+        out_roots = [oa] if oa else sorted({os.path.dirname(l) for _, l in outside})
+        print(_paint("\nrecorded outside any read pool", "yellow", on=on)
+              + " (add to datasets_pools to reuse on download):")
+        for rt in out_roots[:top]:
+            print(f"  {rt}")
+
+
 def _cmd_where(args):
     """Show where this project keeps things: the active manifest and state file,
     the data directories **resolved for this host** (datasets_dir / datacache_dir,
-    honoring env vars and `_HOST` overrides), and any non-default per-dataset
-    locations (`storage_path` overrides).
+    honoring env vars and `_HOST` overrides), the read pools, and a compact grouped
+    summary of what the state file records (with the full inventory left to
+    `datamanifest list`).
 
     With one of ``--manifest`` / ``--state-file`` / ``--datasets-dir`` /
     ``--datacache-dir``, print only that single bare path (scriptable, no label)."""
     from . import storage as storage_mod
     from .cache import STATE_FILE_NAME, CachedIndex
-    from .database import get_dataset_path
 
     db = _get_db()
     root = db.get_project_root()
@@ -1256,6 +1341,7 @@ def _cmd_where(args):
                 else storage_mod.datasets_pools(project_root=root, storage_config=cfg))
     dc_pools = (_dc_override if _dc_override is not None
                 else storage_mod.datacache_pools(project_root=root, storage_config=cfg))
+    on = _color_enabled()
     rows = [
         ("manifest", db.datasets_toml or "(none — in-memory database)"),
         ("state file", state_path
@@ -1263,49 +1349,29 @@ def _cmd_where(args):
         ("datasets_dir", _resolve("datasets_dir")),
         ("datacache_dir", _resolve("datacache_dir")),
     ]
-    if ds_pools:
-        rows.append(("datasets pools", ", ".join(ds_pools)))
-    if dc_pools:
-        rows.append(("datacache pools", ", ".join(dc_pools)))
     width = max(len(k) for k, _ in rows)
     for k, v in rows:
         print(f"{k:<{width}} : {v}")
 
-    # Always: the objects recorded in the state file (where each actually lives).
+    # Read pools — folders searched before downloading / recomputing.
+    if ds_pools:
+        print(_paint("\nread pools (datasets):", "bold", on=on))
+        for p in ds_pools:
+            print(f"  {p}")
+    if dc_pools:
+        print(_paint("read pools (cached):", "bold", on=on))
+        for p in dc_pools:
+            print(f"  {p}")
+
+    # Recorded locations — a compact grouped summary (full list via `list`).
+    idx = None
     if os.path.isfile(state_path):
         try:
             idx = CachedIndex.read(state_path)
         except Exception:  # noqa: BLE001 - a broken state file records nothing
             idx = None
-        if idx is not None:
-            ds_recs = idx.dataset_records()
-            rc_recs = idx.recipe_records()
-            if ds_recs or rc_recs:
-                print("\nrecorded in the state file:")
-            for r in sorted(ds_recs, key=lambda r: r["key"]):
-                print(f"  dataset  {r['key']} → {r['storage_path']}")
-            for rec in sorted(rc_recs, key=lambda r: (r["cachetype"], r["version"])):
-                label = rec["cachetype"] + (f"@{rec['version']}" if rec["version"] else "")
-                for h, sp in sorted(rec["instances"].items()):
-                    print(f"  cached   {label}/{h[:8]} → {sp}")
-
-    # Datasets whose storage_path deviates from the default $datasets_dir/$key —
-    # surface the distinct directories they live in.
-    others = {}
-    for name, entry in db.datasets.items():
-        if not getattr(entry, "storage_path", ""):
-            continue
-        try:
-            loc = get_dataset_path(entry, db.datasets_folder,
-                                   project_root=root, storage_config=cfg)
-            d = loc if os.path.isdir(loc) else (os.path.dirname(loc) or loc)
-        except Exception:  # noqa: BLE001 - fall back to the raw expression
-            d = entry.storage_path
-        others.setdefault(d, []).append(name)
-    if others:
-        print("\nother dataset locations (storage_path overrides):")
-        for d, names in sorted(others.items()):
-            print(f"  {d}  ({', '.join(sorted(names))})")
+    if idx is not None:
+        _where_recorded(idx, db, root, ds_pools, _resolve("datasets_dir"), on)
 
     # --scan: probe the read pools for datasets present there but not at the
     # resolved location (candidates to adopt by `download` / `migrate`).
@@ -1783,10 +1849,11 @@ def main():
         "where", help="Show the active manifest, state file, and resolved data "
                       "directories for this host",
         description=(
-            "Show the active manifest, state file, and the datasets_dir / "
-            "datacache_dir resolved for this host (plus any per-dataset "
-            "storage_path overrides). With a single selector flag, print only "
-            "that bare path (scriptable)."
+            "Show the active manifest, state file, the datasets_dir / "
+            "datacache_dir and read pools resolved for this host, and a compact "
+            "grouped summary of what the state file records (full list via "
+            "`datamanifest list`). With a single selector flag, print only that "
+            "bare path (scriptable)."
         ),
     )
     _where_excl = p_where.add_mutually_exclusive_group()
