@@ -38,20 +38,19 @@ pip install "datamanifestpy[all]"       # all of the above
 
 ```bash
 datamanifest init                  # create datamanifest.toml here
-datamanifest add "https://www.metoffice.gov.uk/hadobs/hadcrut5/data/HadCRUT.5.0.2.0/analysis/diagnostics/HadCRUT.5.0.2.0.analysis.summary_series.global.annual.csv" \
-    --name temperature             # register + download + record sha256
+datamanifest add https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv --name co2
 datamanifest list                  # what's tracked, and where it lives
-datamanifest path temperature      # resolve the on-disk path (for a script)
+datamanifest path co2              # resolve the on-disk path (for a script)
 datamanifest storage               # where data goes on this host; `storage set` to change
 ```
 
-The `add` above wrote one entry to `datamanifest.toml` — a plain TOML file you
-can read and edit by hand:
+The `add` above downloaded the Mauna Loa CO₂ record and wrote one entry to
+`datamanifest.toml` — a plain TOML file you can read and edit by hand:
 
 ```toml
-[temperature]
-sha256 = "a1441ab5aef8f3baf43cca417bca271f6d674d4f235ea01129f0432c948882e0"
-uri = "https://www.metoffice.gov.uk/hadobs/hadcrut5/data/HadCRUT.5.0.2.0/analysis/diagnostics/HadCRUT.5.0.2.0.analysis.summary_series.global.annual.csv"
+[co2]
+sha256 = "0058b3788040b5c27b2b5c1dd6d26226b7e4deef85e34c153e64806c37df7c75"
+uri = "https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv"
 ```
 
 **Commit `datamanifest.toml`** — it's the recipe (what to fetch and how). The
@@ -70,9 +69,9 @@ what the manifest declares, and never edits it.
 ```python
 import datamanifest
 
-ds = datamanifest.load_dataset("temperature")          # download on first use, then load
-                                                       # (pandas/xarray/… per format)
-path = datamanifest.get_dataset_path("model_output")   # just the on-disk path
+df = datamanifest.load_dataset("co2")          # download on first use, then load
+                                               # (pandas/xarray/… per format)
+path = datamanifest.get_dataset_path("co2")    # just the on-disk path
 ```
 
 Cache an expensive computation, keyed by its keyword arguments:
@@ -114,20 +113,20 @@ datamanifest add "https://github.com/u/repo/archive/v2.1.zip" --extract
 datamanifest add s3://bucket/key.zarr --on-the-fly             # open in place, no download
 
 datamanifest list                       # one styled line each, clickable locations
-datamanifest show file.nc               # full entry detail
-datamanifest remove file.nc             # drop the entry
+datamanifest show co2                   # full entry detail
+datamanifest remove old_entry           # drop an entry
 
 datamanifest verify                     # re-check all checksums (e.g. before submission)
 datamanifest update-checksums           # recompute them after regenerating data
 
-python analysis.py --data "$(datamanifest path file.nc)"   # composable in shell
+python analysis.py --data "$(datamanifest path co2)"   # composable in shell
 ```
 
-A concrete run — continuing from the [quick start](#quick-start)'s HadCRUT5
-temperature series, add the Mauna Loa CO₂ record next to it:
+A concrete run — continuing from the [quick start](#quick-start)'s CO₂ record,
+add the HadCRUT5 global temperature series next to it:
 
 ```console
-$ datamanifest add "https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv" --name co2
+$ datamanifest add "https://www.metoffice.gov.uk/hadobs/hadcrut5/data/HadCRUT.5.0.2.0/analysis/diagnostics/HadCRUT.5.0.2.0.analysis.summary_series.global.annual.csv" --name temperature
 $ datamanifest list
 Datasets
 ● co2          csv         3.1 KiB  …webdata/ccgg/trends/co2/co2_annmean_mlo.csv
@@ -139,10 +138,11 @@ Cached
     50f04896d3ee  grid=5x5                                           382 B
 ```
 
-`temperature` is now loadable from code — `datamanifest.load_dataset("temperature")`,
-as in the [API example](#use-it-from-your-code) above — and the **Cached** group
-lists the `load_anomaly(grid=…)` results from the same section, grouped by
-function with their parameters.
+`temperature` now loads from code just like `co2` —
+`datamanifest.load_dataset("temperature")` — and the **Cached** group lists the
+`load_anomaly(grid=…)` results from the
+[`@cached` example](#use-it-from-your-code) above, grouped by function with
+their parameters.
 
 ### Repair: reassociate data on disk
 
