@@ -1314,9 +1314,9 @@ def _parse_duration(text: str) -> float:
 
 
 def _cmd_migrate(args):
-    """Reshape a spec-v3 manifest's [_STORAGE] to the spec-v4 two-field model
-    (datasets_dir / datacache_dir at their defaults), dropping the retired keys
-    and carrying local_path → storage_path. Moves no bytes; see
+    """Migrate an older manifest to the current format: upgrade inline language
+    bindings + the [_STORAGE] storage model, and discover existing data on disk
+    (recording its location in the state file). Moves no bytes; see
     :mod:`datamanifest.migrate`."""
     from .migrate import migrate_manifest
 
@@ -1325,7 +1325,7 @@ def _cmd_migrate(args):
         print(f"Error: {toml_path} not found.", file=sys.stderr)
         sys.exit(1)
 
-    print(migrate_manifest(toml_path, dry_run=args.dry_run))
+    print(migrate_manifest(toml_path, dry_run=args.dry_run, no_input=args.no_input))
 
 
 # ----- argument parser -----
@@ -1589,7 +1589,12 @@ def main():
     )
     p_migrate.add_argument(
         "--dry-run", action="store_true",
-        help="Print what would change without writing the manifest",
+        help="Print what would change without writing anything",
+    )
+    p_migrate.add_argument(
+        "--no-input", action="store_true",
+        help="Never prompt: auto-pick on ambiguous discovery (prefer the "
+             "repo-local copy) and don't propose host config changes",
     )
     p_migrate.set_defaults(func=_cmd_migrate)
 

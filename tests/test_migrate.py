@@ -1,10 +1,15 @@
-"""spec-v3 → spec-v4 storage migration (``datamanifest migrate``)."""
+"""Manifest migration (``datamanifest migrate``): language + storage upgrade and
+disk discovery into the state file."""
+
+import os
 
 try:
     import tomllib
 except ModuleNotFoundError:  # Python < 3.11
     import tomli as tomllib
 
+import datamanifest.migrate as M
+from datamanifest.cache import CachedIndex
 from datamanifest.migrate import migrate_manifest
 
 
@@ -12,6 +17,18 @@ def _write(tmp_path, body):
     toml = tmp_path / "datasets.toml"
     toml.write_text(body)
     return toml
+
+
+def _isolate_legacy_roots(tmp_path, monkeypatch):
+    """Point platformdirs at empty tmp dirs so discovery never probes the real
+    machine's user data/cache locations. Returns the fake user_data_dir root."""
+    userdata = tmp_path / "_userdata"
+    usercache = tmp_path / "_usercache"
+    monkeypatch.setattr(M.platformdirs, "user_data_dir",
+                        lambda *a, **k: str(userdata))
+    monkeypatch.setattr(M.platformdirs, "user_cache_dir",
+                        lambda *a, **k: str(usercache))
+    return userdata
 
 
 def test_migrate_writes_default_two_fields_and_strips_retired(tmp_path):
@@ -119,3 +136,107 @@ def test_migrate_default_dataset_resolves_repo_local(tmp_path):
         "", "x.com/h/a.csv", project_root=str(tmp_path), storage_config=cfg,
     )
     assert resolved == str(tmp_path / "datasets" / "x.com/h/a.csv")
+
+
+# ----- discovery → state file --------------------------------------------------
+
+def _state(tmp_path):
+    return CachedIndex.read(tmp_path / ".datamanifest-state.toml")
+
+
+def test_migrate_discovers_legacy_dataset_into_state(tmp_path, monkeypatch):
+    """Data sitting in a legacy location (the old $user_data_dir/datamanifest/
+    datasets) is found and its location recorded in the state file; the manifest
+    stays at the clean repo-local default."""
+    userdata = _isolate_legacy_roots(tmp_path, monkeypatch)
+    key = "example.com/a.csv"
+    legacy = userdata / "datasets" / key
+    legacy.parent.mkdir(parents=True)
+    legacy.write_bytes(b"data")
+
+    toml = _write(tmp_path, '[_META]\nschema = 1\n\n[a]\nuri = "https://example.com/a.csv"\n')
+    migrate_manifest(str(toml), no_input=True)
+
+    idx = _state(tmp_path)
+    sp = idx.dataset_path_of(key)
+    assert sp, "legacy data should be recorded in the state file"
+    assert os.path.abspath(os.path.join(tmp_path, sp)) == str(legacy)
+    # Manifest keeps the clean default (no machine path committed).
+    assert tomllib.loads(toml.read_text())["_STORAGE"]["datasets_dir"] == "datasets"
+
+
+def test_migrate_does_not_record_data_at_default_location(tmp_path, monkeypatch):
+    """Data already under the repo-local ./datasets resolves via datasets_dir, so
+    it is NOT redundantly recorded in the state file."""
+    _isolate_legacy_roots(tmp_path, monkeypatch)
+    key = "example.com/a.csv"
+    here = tmp_path / "datasets" / key
+    here.parent.mkdir(parents=True)
+    here.write_bytes(b"data")
+
+    toml = _write(tmp_path, '[_META]\nschema = 1\n\n[a]\nuri = "https://example.com/a.csv"\n')
+    migrate_manifest(str(toml), no_input=True)
+
+    assert not (tmp_path / ".datamanifest-state.toml").exists() \
+        or _state(tmp_path).dataset_path_of(key) == ""
+
+
+def test_migrate_skips_user_managed_and_skip_download(tmp_path, monkeypatch):
+    """Discovery leaves explicit storage_path / skip_download datasets alone."""
+    userdata = _isolate_legacy_roots(tmp_path, monkeypatch)
+    key = "example.com/a.csv"
+    legacy = userdata / "datasets" / key
+    legacy.parent.mkdir(parents=True)
+    legacy.write_bytes(b"data")
+
+    toml = _write(tmp_path,
+                  '[_META]\nschema = 1\n\n[a]\nuri = "https://example.com/a.csv"\n'
+                  'storage_path = "/custom/a.csv"\n')
+    migrate_manifest(str(toml), no_input=True)
+    # storage_path is user-managed → not adopted by discovery.
+    assert not (tmp_path / ".datamanifest-state.toml").exists() \
+        or _state(tmp_path).dataset_path_of(key) == ""
+
+
+def test_migrate_discovers_cached_artifact(tmp_path, monkeypatch):
+    """A produced artifact under the repo-local ./cached is recorded in the
+    datacache namespace of the state file."""
+    from datamanifest.cache._sidecars import write_config
+
+    _isolate_legacy_roots(tmp_path, monkeypatch)
+    art = tmp_path / "cached" / "mypkg.run" / "abc123"
+    art.mkdir(parents=True)
+    (art / "data.txt").write_text("v")
+    write_config(str(art), "mypkg.run", "abc123", {"x": 1})
+    (art / ".complete").write_text("")
+
+    toml = _write(tmp_path, "[_META]\nschema = 1\n")
+    migrate_manifest(str(toml), no_input=True)
+
+    idx = _state(tmp_path)
+    assert idx.instance_path_of(cachetype="mypkg.run", version="", hash="abc123")
+
+
+def test_candidate_datacache_roots_scopes_global_cache(tmp_path):
+    """The global cache is included only scoped to this project's id — never the
+    bare shared root (which would claim other projects' artifacts)."""
+    roots = M._candidate_datacache_roots(str(tmp_path), {})
+    pid = M._legacy_project_id(str(tmp_path))
+    assert any(r.endswith(os.path.join("cached", pid)) for r in roots)
+    assert not any(r.endswith(os.sep + "cached") and pid not in r
+                   for r in roots if "_usercache" not in r and str(tmp_path) not in r)
+
+
+def test_migrate_dry_run_discovers_but_writes_nothing(tmp_path, monkeypatch):
+    userdata = _isolate_legacy_roots(tmp_path, monkeypatch)
+    key = "example.com/a.csv"
+    legacy = userdata / "datasets" / key
+    legacy.parent.mkdir(parents=True)
+    legacy.write_bytes(b"data")
+    toml = _write(tmp_path, '[_META]\nschema = 1\n\n[a]\nuri = "https://example.com/a.csv"\n')
+    before = toml.read_text()
+
+    summary = migrate_manifest(str(toml), no_input=True, dry_run=True)
+    assert "Would update" in summary and "a → " in summary       # reported
+    assert toml.read_text() == before                            # manifest untouched
+    assert not (tmp_path / ".datamanifest-state.toml").exists()  # state not written
