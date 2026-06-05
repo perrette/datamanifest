@@ -192,25 +192,33 @@ def _created(artifact_dir: str) -> str:
     return iso_from_mtime(artifact_dir)
 
 
-def enumerate_artifacts(cache_root: str):
+def enumerate_artifacts(cache_root: str, *, with_size=True, with_created=True):
     """Yield a :class:`CacheObject` for every produced artifact under
     *cache_root* (the ``datacache_dir``).
 
     ``referenced`` is left ``None`` — the CLI composition root resolves it.
+    *with_size* / *with_created* gate the filesystem-heavy fields (see
+    :func:`cache_object_at`).
     """
     for artifact_dir, _key in find_produced_artifacts(cache_root):
-        obj = cache_object_at(artifact_dir)
+        obj = cache_object_at(artifact_dir, with_size=with_size,
+                              with_created=with_created)
         if obj is not None:
             yield obj
 
 
-def cache_object_at(artifact_dir: str):
+def cache_object_at(artifact_dir: str, *, with_size=True, with_created=True):
     """Build a :class:`CacheObject` for a single produced-artifact directory
     (a ``config.toml``-bearing dir), or ``None`` if it is not one.
 
     Used both by :func:`enumerate_artifacts` (walking a root) and to surface an
     artifact recorded in ``cached.toml`` at a location outside the walked
-    ``datacache_dir`` (e.g. one that was ``--move``\\d elsewhere)."""
+    ``datacache_dir`` (e.g. one that was ``--move``\\d elsewhere).
+
+    *with_size* / *with_created* gate the only filesystem-heavy fields — the
+    ``size`` tree-walk and the ``metadata.toml`` read — so a caller that won't
+    display them (e.g. ``--bare``) skips that work. ``params`` is free (it comes
+    from the ``config.toml`` already read for the artifact's identity)."""
     try:
         config = read_config(artifact_dir)
     except Exception:  # noqa: BLE001 - not a (readable) artifact dir
@@ -229,10 +237,10 @@ def cache_object_at(artifact_dir: str):
         cachetype=cachetype,
         version=meta.get("version", ""),
         format=_guess_format(artifact_dir),
-        size=_dir_size(artifact_dir),
-        created=_created(artifact_dir),
+        size=_dir_size(artifact_dir) if with_size else 0,
+        created=_created(artifact_dir) if with_created else "",
         last_access=last_access(artifact_dir),
-        params=config_key_table(config),  # the kwargs that produced it
+        params=config_key_table(config),  # free: from the config read above
     )
 
 

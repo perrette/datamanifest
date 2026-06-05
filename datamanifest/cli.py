@@ -98,9 +98,30 @@ def _age_seconds(iso: str, now: float):
     return now - dt.timestamp()
 
 
-def _enumerate_objects(db):
+def _heavy_fields(args):
+    """The filesystem-heavy per-object fields (``size`` tree-walk / ``created``
+    metadata read) the chosen output actually needs — so enumeration can skip
+    them for the scriptable ``--bare`` path and ``--fields`` that don't ask.
+
+    Returns a set ⊆ {"size", "created"}. The rich (default) view shows ``size``;
+    ``--fields`` shows exactly what's listed; ``--bare`` shows neither.
+    """
+    heavy = {"size", "created"}
+    if getattr(args, "delete", False) or getattr(args, "move", None):
+        return set()                       # actions report key/location, not size
+    if getattr(args, "fields", None):
+        return {f.replace("-", "_") for f in args.fields} & heavy
+    if getattr(args, "bare", False):
+        return set()
+    return {"size"}
+
+
+def _enumerate_objects(db, heavy=frozenset({"size"})):
     """The composition root: enumerate produced artifacts (cache layer) and
     fetched datasets (fetch layer) as a single list of objects.
+
+    *heavy* selects which filesystem-heavy fields to actually compute (see
+    :func:`_heavy_fields`); the rest are left at their cheap defaults.
 
     Reachability is resolved here — the one place that bridges both layers: a
     produced artifact is ``referenced`` iff its ``(cachetype, version, hash)`` is
@@ -116,6 +137,8 @@ def _enumerate_objects(db):
     from .database import resolve_existing_path
 
     objects = []
+    with_size = "size" in heavy
+    with_created = "created" in heavy
     project_root = db.get_project_root()
 
     # Produced artifacts under the resolved datacache_dir, tagged referenced via
@@ -134,7 +157,8 @@ def _enumerate_objects(db):
         except Exception:  # noqa: BLE001 - an unreadable index roots nothing
             index, referenced = None, set()
     seen_locations = set()
-    for obj in enumerate_artifacts(cache_root):
+    for obj in enumerate_artifacts(cache_root, with_size=with_size,
+                                   with_created=with_created):
         # name/params come from the artifact's own config.toml (set by
         # enumerate_artifacts).
         obj.referenced = (obj.cachetype, obj.version, obj.hash) in referenced
@@ -152,7 +176,8 @@ def _enumerate_objects(db):
                 adir = os.path.abspath(adir)
                 if adir in seen_locations:
                     continue
-                obj = cache_object_at(adir)
+                obj = cache_object_at(adir, with_size=with_size,
+                                      with_created=with_created)
                 if obj is None:
                     continue
                 obj.referenced = True
@@ -175,8 +200,8 @@ def _enumerate_objects(db):
             name=name,
             present=present,
             format=getattr(entry, "format", "") or "",
-            size=_object_size(path) if present else 0,
-            created=iso_from_mtime(path) if present else "",
+            size=_object_size(path) if (present and with_size) else 0,
+            created=iso_from_mtime(path) if (present and with_created) else "",
             last_access=last_access(path) if present else "",
             referenced=True,
             storage_path=getattr(entry, "storage_path", "") or "",
@@ -417,8 +442,10 @@ def _cmd_list(args):
     db = _get_db()
 
     # Filters narrow the object set; the output style is chosen separately, so a
-    # filter flag never changes how the list is rendered.
-    objects = _filter_objects(_enumerate_objects(db), args)
+    # filter flag never changes how the list is rendered. Skip the filesystem-
+    # heavy fields the chosen output won't show (notably the size walk under
+    # --bare — a big speedup for large datasets).
+    objects = _filter_objects(_enumerate_objects(db, _heavy_fields(args)), args)
 
     # ----- actions (operate on the filtered set, report their own output) -----
     if args.delete or args.move:

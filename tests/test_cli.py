@@ -280,6 +280,45 @@ def test_list_delete_prunes_cached_toml(tmp_path):
     assert "Nothing to list" in _run("list", h, env=env).stdout
 
 
+def test_bare_skips_the_size_walk(tmp_path, monkeypatch):
+    """--bare (and --fields without size) must not trigger the per-object size
+    tree-walk — the scriptable speedup for large datasets."""
+    import types
+
+    import datamanifest.cache._inspect as inspect_mod
+    from datamanifest.cli import _enumerate_objects, _heavy_fields
+    from datamanifest.database import Database
+
+    cache = tmp_path / "cache"
+    _registered_artifact(tmp_path, cache, "ct", {"x": 1})
+    (tmp_path / "datasets.toml").write_text("[_META]\nschema = 1\n")
+    monkeypatch.setenv("DATAMANIFEST_DATACACHE_DIR", str(cache))
+    db = Database(datasets_toml=str(tmp_path / "datasets.toml"), persist=False)
+    db.datasets_toml = str(tmp_path / "datasets.toml")
+
+    calls = {"n": 0}
+    orig = inspect_mod._dir_size
+    monkeypatch.setattr(inspect_mod, "_dir_size",
+                        lambda p: (calls.__setitem__("n", calls["n"] + 1) or orig(p)))
+
+    _enumerate_objects(db, {"size"})            # rich: walks
+    assert calls["n"] >= 1
+    calls["n"] = 0
+    _enumerate_objects(db, set())               # bare: no walk
+    assert calls["n"] == 0
+
+    # _heavy_fields picks the right set per output mode.
+    def ns(**k):
+        base = dict(bare=False, fields=None, delete=False, move=None)
+        base.update(k)
+        return types.SimpleNamespace(**base)
+    assert "size" not in _heavy_fields(ns(bare=True))
+    assert "size" in _heavy_fields(ns())                     # rich default
+    assert "size" in _heavy_fields(ns(fields=["size"]))
+    assert "size" not in _heavy_fields(ns(fields=["key"]))
+    assert _heavy_fields(ns(delete=True)) == set()           # actions skip it
+
+
 def test_older_than_filter_excludes_recent():
     # Unit-test the --older-than filter directly: enumeration bumps a directory's
     # atime (relatime updates it on the walk), so an end-to-end backdate is not
