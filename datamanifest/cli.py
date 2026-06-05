@@ -292,7 +292,7 @@ def _filter_objects(objects, args):
     default both) / ``--format`` / ``--older-than`` (object attributes);
     ``--present`` / ``--missing``
     (fetched-dataset presence); ``--orphan`` (only unreferenced produced
-    artifacts). By default a produced artifact this project's ``cached.toml``
+    artifacts). By default a produced artifact this project's state file
     does not root is hidden — surfaced by ``--all`` (with datasets), ``--orphan``
     (orphans only), or any explicit ``search`` / ``--hash`` selector (which
     reveals matches regardless of root status).
@@ -334,7 +334,7 @@ def _filter_objects(objects, args):
     if args.orphan:
         out = [o for o in out if o.referenced is False]
     elif not getattr(args, "all", False) and not explicit_selector and not getattr(args, "dirty", False):
-        # Hide produced artifacts not rooted by this project's cached.toml —
+        # Hide produced artifacts not rooted by this project's state file —
         # unless an explicit selector (search / --hash) asked for them.
         out = [o for o in out if not (o.kind == "cached" and o.referenced is False)]
     if args.older_than:
@@ -1282,17 +1282,18 @@ def main():
     # the -h/--help hint) rather than erroring with a bare usage line.
     subparsers.required = False
 
-    # list — dataset listing + the spec-v3 store-maintenance surface.
+    # list — dataset listing + the stored-object maintenance surface.
     p_list = subparsers.add_parser(
         "list",
         help="List datasets, or inspect/maintain stored objects",
         description=(
             "With no maintenance flags, list fetched datasets and the cached "
-            "artifacts this project's cached.toml roots (--all also shows "
-            "orphans and other projects'; --present/--missing print plain "
-            "dataset names). Any maintenance flag switches to the object view: "
-            "produced (cached) artifacts and fetched datasets with their fields, "
-            "plus the explicit --delete / --move actions (dry run unless --yes)."
+            "artifacts this project's state file roots, each with its state↔disk "
+            "status (--all also shows orphans and other projects'; --dirty only "
+            "mismatched objects; --present/--missing print plain dataset names). "
+            "Any maintenance flag switches to the object view: produced artifacts "
+            "and fetched datasets with their fields, plus the --delete / --move "
+            "actions (which apply directly; --dry-run previews)."
         ),
     )
     p_list.add_argument(
@@ -1350,7 +1351,7 @@ def main():
     )
     _excl.add_argument(
         "--all", action="store_true",
-        help="Also list cached artifacts this project's cached.toml does not "
+        help="Also list cached artifacts this project's state file does not "
              "root (orphans and other projects')",
     )
     style_group = p_list.add_argument_group("output style")
