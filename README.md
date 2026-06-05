@@ -292,65 +292,57 @@ datacache_dir = "$user_cache_dir/myproj"
 
 ## State file (`.datamanifest-state.toml`)
 
-`datamanifest.toml` is the **spec** — *what* to track and *how* to obtain it,
-hand-authored and git-committed. Next to it the tool maintains a **state file**,
-`.datamanifest-state.toml` — a per-object inventory of *where* each object
-actually landed **on this machine**: every fetched dataset's resolved
-`storage_path` (+ its actual `sha256`, unless `skip_checksum`) and every
-`@cached` artifact's location, under two namespaces:
+`datamanifest.toml` is the **recipe** you write and commit: *what* data you want
+and *how* to fetch it. Next to it, the tool keeps a small **state file**,
+`.datamanifest-state.toml`, that just remembers *where each file ended up on this
+machine* (and its checksum) — so it never loses track of your data and never
+re-downloads something it can already find.
+
+It's **local and disposable**: add it to your `.gitignore`; delete it and it
+rebuilds itself as you use your data. You normally never edit it by hand.
 
 ```toml
-[_META]
-schema = 5
-
-[datacache."mypkg.run@v3"]
-ref = "mypkg.run:run"
-format = "pickle"
-[datacache."mypkg.run@v3".instances]
-"83b2…" = "cached/mypkg.run/v3/83b2…"
-
-[datasets."example.com/a.csv"]
+[datasets."example.com/a.csv"]          # a fetched dataset: where it landed
 storage_path = "datasets/example.com/a.csv"
 sha256 = "abc123…"
+
+[datacache."mypkg.run@v3".instances]    # a @cached result, by its parameter hash
+"83b2…" = "cached/mypkg.run/v3/83b2…"
 ```
 
-It is **git-ignored, regenerable local state** (it says nothing about *how* to
-re-obtain anything), so add `.datamanifest-state.toml` to your `.gitignore`. The
-state file is **read-first**: resolving a dataset checks its recorded location
-before any derivation, so a moved object is found where it really lives. It is
-maintained non-destructively — active access self-heals it (registers, relocates;
-never deletes), and `list` surfaces a **dirty** marker (`missing` / `relocated` /
-`untracked`) when a record disagrees with disk. `datamanifest refresh` reconciles
-it in bulk (relocate stale records, drop missing ones, adopt untracked datasets;
-no downloads or moves — edits only local state, so it applies by default); `list
---delete` / `--move` act on the bytes and update the record (the spec is never
-edited). Writes always follow the current directive — the recorded location only
-helps *find* existing bytes, never directs a write.
+Because the tool records real locations, things keep working when you move data
+around:
 
-The previous filename `cached.toml` (produced artifacts only) is still read and
-is rewritten to `.datamanifest-state.toml` on the next write.
+- **Moved a file?** It's found at its new spot first, ahead of any default path.
+- **`datamanifest list`** flags a record that disagrees with disk
+  (`missing` / `relocated` / `untracked`).
+- **`datamanifest refresh`** fixes the state file to match disk in one go
+  (re-point moved files, drop deleted ones, pick up data that's present but not yet
+  recorded). It only touches the state file, never your data — so it just runs.
+- **`datamanifest list --delete` / `--move`** act on the actual files and update
+  the record; your committed `datamanifest.toml` is never changed.
 
-### Read pools (shared, machine-wide reuse)
+(The older `cached.toml` — produced artifacts only — is still read and upgraded to
+`.datamanifest-state.toml` automatically.)
 
-Before downloading a dataset (or recomputing a `@cached` result), the tool can
-probe **read pools** — extra read-only locations where the object may already
-exist because another project on the machine fetched/produced it. On a hit it
-**references the copy in place** (records the location in the state file — no
-copy, no re-download/recompute) and uses it; new writes still go to your
-`datasets_dir`/`datacache_dir`.
+### Read pools — don't re-download what you already have
 
-- `datasets_pools` — for fetched datasets. **On by default**: undefined probes
-  well-known locations (`~/.cache/Datasets`, `$user_data_dir/datamanifest/datasets`).
-  A pooled copy is **checksum-verified** against the declared `sha256` before it
-  is adopted.
-- `datacache_pools` — for `@cached` artifacts. **Opt-in** (undefined = none),
-  since there's no de-facto shared compute cache and artifacts have no content
-  checksum (only their `cachetype`/`version`/`hash` identity).
+If a dataset (or a `@cached` result) already exists somewhere else on your machine
+— say another project downloaded it — datamanifest can **reuse that copy in
+place** instead of fetching it again. It checks a few **read pools** (extra
+read-only folders); on a match it records the location and uses it, while new
+downloads still go to your own `datasets_dir`.
 
-Both are set in `[_STORAGE]` (host-composable via `_HOST`, or the
-`DATAMANIFEST_*_POOLS` env vars); an explicit list replaces the defaults, an
-empty list disables them. Manage them with `datamanifest storage set
-datasets_pools <dir> …` and inspect with `datamanifest where` / `where --scan`.
+- **Datasets** are looked up in well-known shared folders by default (e.g.
+  `~/.cache/Datasets`), and a found copy is **checksum-verified** before it's
+  trusted.
+- **`@cached` results** are not shared by default (opt-in) — there's no standard
+  shared location for them, and they carry no content checksum.
+
+Point the tool at your own shared folders with `datamanifest storage set
+datasets_pools <dir> …`; see what's reusable with `datamanifest where --scan`
+(report) or pull it all in with `datamanifest refresh --scan` (adopt). Pools can
+differ per machine, and an empty list turns them off.
 
 ## Cross-machine sync
 
@@ -510,24 +502,22 @@ Foreign `_LANG.<other>` subtrees (e.g. `_LANG.julia`) are preserved verbatim on 
 ### Migration
 
 ```bash
-datamanifest migrate datasets.toml            # rewrite in place
-datamanifest migrate datasets.toml --dry-run  # preview the changes
+datamanifest migrate datamanifest.toml            # upgrade in place
+datamanifest migrate datamanifest.toml --dry-run  # preview the changes
 ```
 
-`migrate` reshapes a spec-v3 manifest's `[_STORAGE]` to the spec-v4 two-field
-model. It:
+`migrate` upgrades an older manifest to the current format **without moving any
+data**. It:
 
-- writes `[_STORAGE].datasets_dir`/`datacache_dir` at their **defaults**
-  (repo-local `./datasets/`, `./cached/`) and drops the retired
-  `default`/`scope`/`store`/`_SCOPE`/`_PREFIX` keys (a `_HOST` table and
-  user-defined symbols are preserved);
-- carries each dataset's explicit `local_path` over to `storage_path` losslessly,
-  and surfaces any dataset that used a retired `store` selector for manual attention.
-
-It **moves no bytes**. The v4 defaults are repo-local, so if your data lives
-elsewhere edit `datasets_dir`/`datacache_dir` (or a dataset's `storage_path`) —
-see the [Storage model](#storage-model) for `$`-symbols and platform-dependent
-(`$user_data_dir`/`$user_cache_dir`) defaults.
+- modernizes the storage settings (writes the two folder fields at their
+  repo-local defaults, drops retired keys) and any inline language bindings;
+- **finds data you already have**: it looks in the old default locations on disk
+  (and well-known shared folders like `~/.cache/Datasets`) and records each file's
+  real location in the [state file](#state-file-datamanifest-statetoml), so your
+  existing downloads keep working while new ones follow the clean defaults. If one
+  location holds most of your data, it offers to point `datasets_dir` there for
+  this machine; if a file turns up in two places, it asks which to use
+  (`--no-input` picks automatically).
 
 ## Python adaptations
 

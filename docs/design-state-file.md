@@ -107,6 +107,32 @@ Produced data already works this way; this generalizes it to fetched data. The
 state file thus becomes the resolver's fast path and the single "where is it"
 truth: a moved object is found at its new home with no re-derive / re-download.
 
+## Read pools: machine-wide reuse before downloading
+
+Resolution has one more rung *after* the recorded/derived location and *before*
+download/produce: a list of **read pools** — extra read-only directories where the
+object may already exist because another project on the machine fetched/produced
+it. On a hit the pool copy is **referenced in place** (its location recorded in
+the state file — no copy, no re-download/recompute); writes still go to the
+current `datasets_dir` / `datacache_dir` (gold standard).
+
+- `datasets_pools` — probed at `<pool>/<key>` (the extracted dir
+  `<pool>/<extract_path>` for an `extract` dataset, which is also what its
+  `sha256` hashes). A declared `sha256` is verified before adoption; a
+  present-but-mismatched copy **warns** (the manifest hash may be stale) rather
+  than silently skipping. **On by default** — when undefined, well-known legacy
+  locations are probed (`~/.cache/Datasets`, `$user_data_dir/datamanifest/datasets`).
+- `datacache_pools` — probed at `<pool>/<cachetype>[/<version>]/<hash>`, gated by
+  the artifact's `config.toml` validation. **Opt-in** (undefined = none): there is
+  no de-facto shared compute location, and produced artifacts carry no content
+  checksum (only their `cachetype`/`version`/`hash` identity).
+
+Both are ordinary `[_STORAGE]` fields — host-composable via `_HOST`, overridable
+by `DATAMANIFEST_*_POOLS` — so an explicit list replaces the defaults and an empty
+list disables them. The same pool list drives the maintenance scans: `where
+--scan` reports pool-present-but-not-local datasets, `refresh --scan` adopts them,
+and `migrate` seeds the state file from them at upgrade time.
+
 ## Source of truth: non-destructive updates + a dirty state
 
 The state file is a **first-order source of truth** for *where objects are*, and
