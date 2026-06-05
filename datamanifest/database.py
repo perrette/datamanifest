@@ -834,17 +834,104 @@ def get_dataset_path(
 def resolve_existing_path(db: "Database", entry: "DatasetEntry", extract=None) -> str:
     """Return the on-disk path to read *entry* from.
 
-    Under spec-v4 a dataset has exactly **one** location — its ``storage_path``
-    (default ``$datasets_dir/$key``) — so the read path is the write path; this
-    delegates to :func:`get_dataset_path`.
+    **Read-first resolution** (spec-v5): the state file's recorded
+    ``storage_path`` is consulted first — if those bytes are actually present, a
+    moved/relocated dataset is found where it really lives, ahead of any
+    derivation rule. Otherwise this falls back to the derived directive location
+    (``storage_path`` field, default ``$datasets_dir/$key``) via
+    :func:`get_dataset_path`. The recorded path only helps *find* an existing
+    object; a (re)download still writes to the derived location (gold standard).
+
+    Read-first applies to the non-extracted location (the dataset's recorded
+    ``storage_path``); an ``extract``-ed dataset uses the derived extracted dir.
     """
-    return get_dataset_path(
+    eff_extract = entry.extract if extract is None else extract
+    derived = get_dataset_path(
         entry,
         db.datasets_folder,
         extract=extract,
         project_root=db.get_project_root(),
         storage_config=db.storage_config,
     )
+    if not eff_extract:
+        recorded = state_recorded_dataset_path(db, entry)
+        if (
+            recorded
+            and recorded != os.path.abspath(derived)
+            and (os.path.isfile(recorded) or os.path.isdir(recorded))
+        ):
+            return recorded
+    return derived
+
+
+# ----- state-file (.datamanifest-state.toml) integration for fetched datasets -
+def _state_base(db: "Database") -> str:
+    """The directory the state file is a sibling of — the manifest's directory.
+
+    Returns ``""`` when the database has no manifest (a transient, manifest-less
+    ``Database``): the state file is defined *relative to a manifest*, so without
+    one there is nothing to record into and resolution stays purely derived.
+    """
+    return os.path.dirname(db.datasets_toml) if db.datasets_toml else ""
+
+
+def _portable_storage_path(path: str, project_root: str) -> str:
+    """Render *path* for the state file: relative to the manifest dir when it
+    lives under the project root (portable across clones), absolute otherwise —
+    mirroring the produced-artifact convention."""
+    if project_root:
+        ap, rt = os.path.abspath(path), os.path.abspath(project_root)
+        if ap == rt or ap.startswith(rt + os.sep):
+            return os.path.relpath(ap, rt)
+    return path
+
+
+def state_recorded_dataset_path(db: "Database", entry: "DatasetEntry") -> str:
+    """The dataset's recorded resolved location from the state file, as an
+    absolute path (relative records are anchored to the project root), or ``""``
+    when unrecorded / the state file is absent. Read-only."""
+    from .cache import CachedIndex
+
+    base = _state_base(db)
+    if not base:
+        return ""
+    state_path = CachedIndex.locate(base)
+    if not os.path.isfile(state_path):
+        return ""
+    try:
+        sp = CachedIndex.read(state_path).dataset_path_of(entry.key)
+    except Exception:  # noqa: BLE001 - a broken state file never blocks resolution
+        return ""
+    if not sp:
+        return ""
+    if os.path.isabs(sp):
+        return sp
+    root = db.get_project_root() or _state_base(db)
+    return os.path.abspath(os.path.join(root, sp))
+
+
+def record_dataset_state(db: "Database", entry: "DatasetEntry", path: str) -> None:
+    """Record a fetched dataset's resolved *path* (+ its actual ``sha256`` unless
+    checksums are skipped) into the state file — the systematic inventory of
+    where every object lives. Additive and concurrency-safe (re-read + merge +
+    atomic write). Best-effort: a read-only / unwritable state file never breaks
+    a download."""
+    if not path or not entry.key:
+        return
+    base = _state_base(db)
+    if not base:
+        return
+    try:
+        from .cache import CachedIndex
+
+        idx = CachedIndex.read_or_empty(base)
+        sp = _portable_storage_path(path, db.get_project_root())
+        sha = "" if (db.skip_checksum or entry.skip_checksum) else (entry.sha256 or "")
+        idx.register_dataset(key=entry.key, storage_path=sp, sha256=sha)
+        idx.write()
+    except Exception:  # noqa: BLE001 - recording is best-effort inventory upkeep
+        logger.debug("could not record state for dataset %s", entry.key,
+                     exc_info=True)
 
 
 # ----- Checksum, update, delete (Databases.jl:464-617) -----

@@ -1,5 +1,10 @@
 datamanifest/_version.py
 
+# Local, regenerable state file (per-machine object inventory; never committed).
+# Legacy name kept for projects that still carry it.
+.datamanifest-state.toml
+cached.toml
+
 # Autonomous roadmap workflows (local coordination artifacts; never committed)
 /workflows/
 /.worktrees/

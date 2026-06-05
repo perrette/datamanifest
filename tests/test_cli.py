@@ -228,7 +228,7 @@ def _registered_artifact(tmp_path, cache, cachetype, key_table, version=""):
         artifact.rename(dest)
         artifact = dest
     h = key.split("/", 1)[1]
-    idx = CachedIndex(path=str(tmp_path / "cached.toml"))
+    idx = CachedIndex(path=str(tmp_path / ".datamanifest-state.toml"))
     idx.register(cachetype=cachetype, hash=h, version=version,
                  storage_path=str(artifact), ref="m:f", format="txt")
     idx.write()
@@ -254,7 +254,7 @@ def test_list_move_keeps_cached_toml_consistent(tmp_path):
     assert (moved / "data.txt").is_file() and not artifact.exists()   # bytes moved
 
     # cached.toml repointed at the new home (relative to the manifest dir).
-    back = CachedIndex.read(tmp_path / "cached.toml")
+    back = CachedIndex.read(tmp_path / ".datamanifest-state.toml")
     assert back.instance_path_of(cachetype="ct", version="", hash=h) == \
         os.path.join("moved", "ct", h)
 
@@ -275,7 +275,7 @@ def test_list_delete_prunes_cached_toml(tmp_path):
     assert run.returncode == 0, run.stderr
     assert not artifact.exists()                                 # bytes gone
 
-    back = CachedIndex.read(tmp_path / "cached.toml")
+    back = CachedIndex.read(tmp_path / ".datamanifest-state.toml")
     assert ("ct", "") not in back.recipes                       # pruned from index
     assert "Nothing to list" in _run("list", h, env=env).stdout
 

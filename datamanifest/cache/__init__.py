@@ -16,7 +16,7 @@ the fetch layer never sees a produced dataset.
 
 from ._decorator import CacheTypeConflict, Recipe, cached, registered_recipes
 from ._hash import key_table_from_kwargs, param_hash
-from ._index import CACHED_INDEX_NAME, CachedIndex
+from ._index import CACHED_INDEX_NAME, STATE_FILE_NAME, CachedIndex
 from ._inspect import (
     CacheObject,
     delete_object,
@@ -56,6 +56,7 @@ __all__ = [
     "read_metadata",
     "CachedIndex",
     "CACHED_INDEX_NAME",
+    "STATE_FILE_NAME",
     "CacheObject",
     "enumerate_artifacts",
     "find_produced_artifacts",

@@ -53,8 +53,8 @@ def _add_delegate_flags(group):
 # the timestamps double as the spec-v3 ``datamanifest list`` object schema.
 _OBJECT_FIELDS = (
     "kind", "name", "key", "hash", "cachetype", "version", "storage-path",
-    "format", "params", "size", "location", "referenced", "present", "created",
-    "last-access",
+    "format", "params", "size", "location", "referenced", "present", "dirty",
+    "created", "last-access",
 )
 _DEFAULT_OBJECT_FIELDS = ("kind", "referenced", "key", "location")
 
@@ -107,7 +107,8 @@ def _heavy_fields(args):
     ``--fields`` shows exactly what's listed; ``--bare`` shows neither.
     """
     heavy = {"size", "created"}
-    if getattr(args, "delete", False) or getattr(args, "move", None):
+    if (getattr(args, "delete", False) or getattr(args, "move", None)
+            or getattr(args, "refresh", False)):
         return set()                       # actions report key/location, not size
     if getattr(args, "fields", None):
         return {f.replace("-", "_") for f in args.fields} & heavy
@@ -116,97 +117,147 @@ def _heavy_fields(args):
     return {"size"}
 
 
+def _abs_under(sp, project_root):
+    """Resolve a (possibly repo-relative) recorded ``storage_path`` to an absolute
+    path — relative records anchor to *project_root* (else cwd)."""
+    if not sp:
+        return ""
+    if os.path.isabs(sp):
+        return os.path.abspath(sp)
+    return os.path.abspath(os.path.join(project_root or os.getcwd(), sp))
+
+
 def _enumerate_objects(db, heavy=frozenset({"size"})):
     """The composition root: enumerate produced artifacts (cache layer) and
-    fetched datasets (fetch layer) as a single list of objects.
+    fetched datasets (fetch layer) as a single list of objects, each tagged with
+    its reachability (``referenced``) and its state↔disk status (``dirty``).
 
     *heavy* selects which filesystem-heavy fields to actually compute (see
     :func:`_heavy_fields`); the rest are left at their cheap defaults.
 
-    Reachability is resolved here — the one place that bridges both layers: a
-    produced artifact is ``referenced`` iff its ``(cachetype, version, hash)`` is
-    rooted by the project's ``cached.toml``; a fetched dataset is referenced by
-    its manifest entry. Both **present** and not-yet-fetched datasets are
-    included (``present`` tells them apart). The cache-layer enumeration itself
-    imports only ``store``.
+    Reachability and dirty status are resolved here — the one place that bridges
+    both layers — from the project's sibling state file
+    (``.datamanifest-state.toml``): a produced artifact is ``referenced`` iff its
+    ``(cachetype, version, hash)`` is rooted there; a fetched dataset is always
+    referenced by its manifest entry. ``dirty`` compares each object's recorded
+    location against where its bytes actually are: ``""`` clean, ``relocated``
+    (recorded location stale), ``missing`` (recorded but gone), ``untracked``
+    (present but unrecorded). Missing recorded objects (no bytes) are included so
+    ``--dirty`` / ``--refresh`` can act on them.
     """
     from . import storage
-    from .cache import CACHED_INDEX_NAME, CachedIndex, enumerate_artifacts
+    from .cache import CachedIndex, enumerate_artifacts
     from .cache._inspect import CacheObject, cache_object_at
     from .cache._usage import iso_from_mtime, last_access
-    from .database import resolve_existing_path
+    from .database import get_dataset_path
 
     objects = []
     with_size = "size" in heavy
     with_created = "created" in heavy
     project_root = db.get_project_root()
 
-    # Produced artifacts under the resolved datacache_dir, tagged referenced via
-    # the project's sibling cached.toml ((cachetype, version, hash) reachability).
     cache_root = storage.datacache_dir(
         project_root=project_root, storage_config=db.storage_config,
     )
     index = None
-    referenced = set()
     base = os.path.dirname(db.datasets_toml) if db.datasets_toml else os.getcwd()
-    cached_toml = os.path.join(base or ".", CACHED_INDEX_NAME)
-    if os.path.isfile(cached_toml):
+    state_path = CachedIndex.locate(base or ".")
+    if os.path.isfile(state_path):
         try:
-            index = CachedIndex.read(cached_toml)
-            referenced = index.reachable_keys()
-        except Exception:  # noqa: BLE001 - an unreadable index roots nothing
-            index, referenced = None, set()
-    seen_locations = set()
+            index = CachedIndex.read(state_path)
+        except Exception:  # noqa: BLE001 - an unreadable state file roots nothing
+            index = None
+    referenced = index.reachable_keys() if index else set()
+
+    # --- produced artifacts ---------------------------------------------------
+    # Present artifacts under datacache_dir, keyed by identity.
+    found = {}
     for obj in enumerate_artifacts(cache_root, with_size=with_size,
                                    with_created=with_created):
-        # name/params come from the artifact's own config.toml (set by
-        # enumerate_artifacts).
-        obj.referenced = (obj.cachetype, obj.version, obj.hash) in referenced
-        objects.append(obj)
-        seen_locations.add(obj.location)
+        ident = (obj.cachetype, obj.version, obj.hash)
+        obj.referenced = ident in referenced
+        found[ident] = obj
 
-    # Artifacts the index records at a location *outside* datacache_dir — e.g.
-    # ones that were ``--move``\\d elsewhere — so they still surface in `list`.
+    recorded_keys = set()
     if index is not None:
         for rec in index.recipe_records():
-            for sp in rec["instances"].values():
-                if not sp:
-                    continue
-                adir = sp if os.path.isabs(sp) else os.path.join(project_root, sp)
-                adir = os.path.abspath(adir)
-                if adir in seen_locations:
-                    continue
-                obj = cache_object_at(adir, with_size=with_size,
-                                      with_created=with_created)
-                if obj is None:
-                    continue
-                obj.referenced = True
-                objects.append(obj)
-                seen_locations.add(adir)
+            ct, ver = rec["cachetype"], rec["version"]
+            for h, sp in rec["instances"].items():
+                ident = (ct, ver, h)
+                recorded_keys.add(ident)
+                rec_abs = _abs_under(sp, project_root)
+                if rec_abs and os.path.isdir(rec_abs):
+                    if ident not in found:
+                        # Recorded at a location outside datacache_dir (e.g. moved
+                        # there) — surface it from its recorded home (clean).
+                        out = cache_object_at(rec_abs, with_size=with_size,
+                                              with_created=with_created)
+                        if out is not None:
+                            out.referenced = True
+                            found[ident] = out
+                    # else: present at its recorded location → clean.
+                elif ident in found:
+                    # Recorded path stale, but a copy lives under datacache_dir.
+                    found[ident].dirty = "relocated"
+                else:
+                    # Recorded but the bytes are gone — a missing (dirty) root.
+                    found[ident] = CacheObject(
+                        kind="cached", location=rec_abs, key=f"{ct}/{h}", name=ct,
+                        hash=h, cachetype=ct, version=ver, present=False,
+                        referenced=True, dirty="missing",
+                    )
 
-    # Fetched datasets — present and not-yet-fetched alike (manifest entries are
-    # always referenced).
+    for ident, obj in found.items():
+        if obj.present and ident not in recorded_keys:
+            # On disk but the state file roots nothing for it.
+            obj.dirty = "untracked"
+        objects.append(obj)
+
+    # --- fetched datasets -----------------------------------------------------
     for name, entry in db.datasets.items():
-        path, present = "", False
+        recorded = index.dataset_path_of(entry.key) if index else ""
+        recorded_abs = _abs_under(recorded, project_root)
         try:
-            path = resolve_existing_path(db, entry)
-            present = os.path.isfile(path) or os.path.isdir(path)
+            derived_abs = os.path.abspath(get_dataset_path(
+                entry, db.datasets_folder,
+                project_root=project_root, storage_config=db.storage_config,
+            ))
         except Exception:  # noqa: BLE001 - unresolvable entry is simply absent
-            present = False
+            derived_abs = ""
+        location, present, dirty = _dataset_state(recorded_abs, derived_abs)
+        if entry.skip_download:
+            dirty = ""                      # user-managed external file: not tracked
         objects.append(CacheObject(
             kind="datasets",
-            location=os.path.abspath(path) if present else "",
+            location=location,
             key=name,
             name=name,
             present=present,
             format=getattr(entry, "format", "") or "",
-            size=_object_size(path) if (present and with_size) else 0,
-            created=iso_from_mtime(path) if (present and with_created) else "",
-            last_access=last_access(path) if present else "",
+            size=_object_size(location) if (present and with_size) else 0,
+            created=iso_from_mtime(location) if (present and with_created) else "",
+            last_access=last_access(location) if present else "",
             referenced=True,
             storage_path=getattr(entry, "storage_path", "") or "",
+            dirty=dirty,
         ))
     return objects
+
+
+def _dataset_state(recorded_abs, derived_abs):
+    """``(location, present, dirty)`` for a fetched dataset, comparing its recorded
+    location against where the bytes actually are (read-first: recorded wins)."""
+    rec_present = bool(recorded_abs) and os.path.exists(recorded_abs)
+    der_present = bool(derived_abs) and os.path.exists(derived_abs)
+    if recorded_abs:
+        if rec_present:
+            return recorded_abs, True, ""              # clean
+        if der_present:
+            return derived_abs, True, "relocated"      # recorded stale
+        return "", False, "missing"                    # recorded but gone
+    if der_present:
+        return derived_abs, True, "untracked"          # present but unrecorded
+    return "", False, ""                               # simply not fetched
 
 
 # Object fields a free-text search term is matched against (joined, lowercased).
@@ -278,9 +329,11 @@ def _filter_objects(objects, args):
         out = [o for o in out if o.kind == "datasets" and o.present]
     if getattr(args, "missing", False):
         out = [o for o in out if o.kind == "datasets" and not o.present]
+    if getattr(args, "dirty", False):
+        out = [o for o in out if getattr(o, "dirty", "")]
     if args.orphan:
         out = [o for o in out if o.referenced is False]
-    elif not getattr(args, "all", False) and not explicit_selector:
+    elif not getattr(args, "all", False) and not explicit_selector and not getattr(args, "dirty", False):
         # Hide produced artifacts not rooted by this project's cached.toml —
         # unless an explicit selector (search / --hash) asked for them.
         out = [o for o in out if not (o.kind == "cached" and o.referenced is False)]
@@ -341,6 +394,23 @@ def _fit(text, width, *, keep_tail=False) -> str:
     if width == 1:
         return "…"
     return "…" + text[-(width - 1):] if keep_tail else text[: width - 1] + "…"
+
+
+# Dirty (state↔disk) status → its rendered marker (label, colour).
+_DIRTY_MARK = {
+    "missing": ("✗ missing", "red"),
+    "relocated": ("✗ relocated", "yellow"),
+    "untracked": ("✗ untracked", "yellow"),
+}
+
+
+def _dirty_suffix(obj, on) -> str:
+    """A trailing styled marker for a dirty object (state↔disk mismatch), or ""."""
+    info = _DIRTY_MARK.get(getattr(obj, "dirty", ""))
+    if not info:
+        return ""
+    label, colour = info
+    return " " + _paint(label, colour, on=on)
 
 
 def _fmt_params(params: dict) -> str:
@@ -404,7 +474,7 @@ def _render_rich(objects):
             # default (a custom / user-managed storage_path).
             m = (_paint(" ⚑custom", "yellow", on=on)
                  if getattr(d, "storage_path", "") else "")
-            print(f"{g} {n}  {f}  {s}  {t}{m}")
+            print(f"{g} {n}  {f}  {s}  {t}{m}{_dirty_suffix(d, on)}")
 
     if cached:
         if datasets:
@@ -435,7 +505,7 @@ def _render_rich(objects):
                            "dim", on=on)
                 s = _paint(_fmt_size(o.size).rjust(9), "dim", on=on)
                 flag = _paint(" orphan", "yellow", on=on) if not o.referenced else ""
-                print(f"    {h}  {p}  {s}{flag}")
+                print(f"    {h}  {p}  {s}{flag}{_dirty_suffix(o, on)}")
 
 
 def _cmd_list(args):
@@ -450,6 +520,10 @@ def _cmd_list(args):
     # ----- actions (operate on the filtered set, report their own output) -----
     if args.delete or args.move:
         _maintain(objects, args, db)
+        return
+
+    if getattr(args, "refresh", False):
+        _refresh(objects, args, db)
         return
 
     if getattr(args, "push", None) or getattr(args, "pull", None):
@@ -483,16 +557,44 @@ def _cmd_list(args):
         _render_rich(objects)
 
 
+def _record_portable(path, project_root):
+    """Portable form of *path* for the state file: relative to the manifest dir
+    when under it, else absolute (mirrors the produce / download record path)."""
+    ap = os.path.abspath(path)
+    rt = os.path.abspath(project_root) if project_root else ""
+    if rt and (ap == rt or ap.startswith(rt + os.sep)):
+        return os.path.relpath(ap, rt)
+    return ap
+
+
+def _dataset_protected(db, obj):
+    """Whether a fetched dataset object is protected from delete/move — a
+    user-managed exact ``storage_path`` (no ``$key``) or a ``skip_download`` entry
+    (the URI *is* the file). Returns the entry too (or ``None``)."""
+    from . import storage
+
+    entry = db.datasets.get(obj.key)
+    if entry is None:
+        return True, None
+    protected = bool(entry.skip_download) or storage.is_user_managed(entry.storage_path)
+    return protected, entry
+
+
 def _maintain(objects, args, db):
-    """Run ``--delete`` / ``--move`` over the selected *objects*.
+    """Run ``--delete`` / ``--move`` over the selected *objects* — produced
+    artifacts **and** fetched datasets.
 
     Both default to a **dry run** (report only); ``--yes`` performs the action.
-    On a real run the project's ``cached.toml`` is kept consistent: ``--move``
-    repoints the artifact's recorded location, ``--delete`` prunes it.
-    Only produced (``kind="cached"``) artifacts are eligible — fetched datasets,
-    ``$data``/``$repo`` and ``local_path`` data are reported as skipped and never
-    touched.
+    On a real run the project's state file is kept consistent: ``--move`` repoints
+    the recorded location, ``--delete`` prunes the entry. Protected objects are
+    never touched: a fetched dataset with a user-managed exact ``storage_path`` or
+    ``skip_download`` (the URI is the file), and any non-cached/non-dataset object.
+    The manifest (``datamanifest.toml``) is never edited — only the resolved
+    location moves, so a later re-fetch still follows the ``datasets_dir``
+    directive (the gold standard).
     """
+    import shutil
+
     from .cache import CACHED_INDEX_NAME, CachedIndex, delete_object, move_object
 
     do_it = args.yes
@@ -506,50 +608,146 @@ def _maintain(objects, args, db):
     index_path = os.path.join(base or ".", CACHED_INDEX_NAME)
     index = CachedIndex.read_or_empty(index_path) if do_it else None
     index_dirty = False
-
-    def _record(parent):
-        """Portable form of an artifact dir for cached.toml: relative to the
-        manifest dir when under it, else absolute (mirrors the produce path)."""
-        ap = os.path.abspath(parent)
-        rt = os.path.abspath(project_root) if project_root else ""
-        if rt and (ap == rt or ap.startswith(rt + os.sep)):
-            return os.path.relpath(ap, rt)
-        return ap
-
     acted = 0
+
     for obj in objects:
-        if obj.kind != "cached":
-            print(f"Skipped ({obj.kind}, protected): {obj.location}")
-            continue
-        if args.move:
-            dest = os.path.join(args.move, obj.cachetype, obj.hash) if not obj.version \
-                else os.path.join(args.move, obj.cachetype, obj.version, obj.hash)
-            print(f"{verb}: {obj.key}  {obj.location} -> {dest}")
-            if do_it:
-                new_loc = move_object(obj, args.move)
-                # Keep cached.toml pointing at the moved artifact's new home.
-                index_dirty |= index.set_instance_path(
-                    cachetype=obj.cachetype, version=obj.version, hash=obj.hash,
-                    storage_path=_record(new_loc),
-                )
+        if obj.kind == "cached":
+            if not obj.present:
+                print(f"Skipped (missing, use --refresh): {obj.key}")
+                continue
+            if args.move:
+                dest = (os.path.join(args.move, obj.cachetype, obj.hash)
+                        if not obj.version
+                        else os.path.join(args.move, obj.cachetype, obj.version, obj.hash))
+                print(f"{verb}: {obj.key}  {obj.location} -> {dest}")
+                if do_it:
+                    new_loc = move_object(obj, args.move)
+                    index_dirty |= index.set_instance_path(
+                        cachetype=obj.cachetype, version=obj.version, hash=obj.hash,
+                        storage_path=_record_portable(new_loc, project_root),
+                    )
+            else:
+                print(f"{verb}: {obj.key}  {obj.location}")
+                if do_it:
+                    delete_object(obj)
+                    index_dirty |= index.remove_instance(
+                        cachetype=obj.cachetype, version=obj.version, hash=obj.hash,
+                    )
+            acted += 1
+        elif obj.kind == "datasets":
+            protected, entry = _dataset_protected(db, obj)
+            if protected:
+                print(f"Skipped (dataset, user-managed/skip_download, protected): "
+                      f"{obj.key}")
+                continue
+            if not obj.present:
+                print(f"Skipped (dataset not present): {obj.key}")
+                continue
+            if args.move:
+                dest = os.path.join(args.move, entry.key)
+                print(f"{verb}: {obj.key}  {obj.location} -> {dest}")
+                if do_it:
+                    os.makedirs(os.path.dirname(dest) or ".", exist_ok=True)
+                    shutil.move(obj.location, dest)
+                    index.register_dataset(
+                        key=entry.key,
+                        storage_path=_record_portable(dest, project_root),
+                    )
+                    index_dirty = True
+            else:
+                print(f"{verb}: {obj.key}  {obj.location}")
+                if do_it:
+                    _remove_path_and_markers(obj.location)
+                    index_dirty |= index.remove_dataset(entry.key)
+            acted += 1
         else:
-            print(f"{verb}: {obj.key}  {obj.location}")
-            if do_it:
-                delete_object(obj)
-                # Prune the deleted variation from the index.
-                index_dirty |= index.remove_instance(
-                    cachetype=obj.cachetype, version=obj.version, hash=obj.hash,
-                )
-        acted += 1
+            print(f"Skipped ({obj.kind}, protected): {obj.location}")
 
     if index_dirty:
         index.write(index_path)
 
-    noun = "artifact" if acted == 1 else "artifacts"
-    if not do_it:
-        print(f"{verb}: {acted} produced {noun} (dry run; pass --yes to apply)")
-    else:
-        print(f"{verb}: {acted} produced {noun}")
+    noun = "object" if acted == 1 else "objects"
+    suffix = " (dry run; pass --yes to apply)" if not do_it else ""
+    print(f"{verb}: {acted} {noun}{suffix}")
+
+
+def _remove_path_and_markers(path):
+    """Remove a fetched dataset's bytes (file or directory) and its sibling
+    completion / lock markers (best-effort)."""
+    import shutil
+
+    if os.path.isdir(path) and not os.path.islink(path):
+        shutil.rmtree(path, ignore_errors=True)
+    elif os.path.exists(path):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+    for suffix in (".complete", ".lock", ".tmp"):
+        try:
+            os.remove(path + suffix)
+        except OSError:
+            pass
+
+
+def _refresh(objects, args, db):
+    """``--refresh``: reconcile the state file with disk (no downloads, no file
+    moves). For the selected objects it repoints a *relocated* entry to where the
+    bytes actually are and drops a *missing* entry whose bytes are gone. Untracked
+    objects are left for active access (download / ``@cached``) to register; clean
+    ones are untouched. Defaults to a dry run; ``--yes`` applies.
+    """
+    from .cache import CACHED_INDEX_NAME, CachedIndex
+
+    do_it = args.yes
+    project_root = db.get_project_root()
+    base = os.path.dirname(db.datasets_toml) if db.datasets_toml else os.getcwd()
+    index_path = os.path.join(base or ".", CACHED_INDEX_NAME)
+    index = CachedIndex.read_or_empty(index_path)
+    changed = 0
+
+    for obj in objects:
+        dirty = getattr(obj, "dirty", "")
+        if dirty == "relocated":
+            verb = "Refreshed" if do_it else "Would refresh"
+            print(f"{verb} (relocated): {obj.key} -> {obj.location}")
+            if do_it:
+                if obj.kind == "cached":
+                    index.set_instance_path(
+                        cachetype=obj.cachetype, version=obj.version, hash=obj.hash,
+                        storage_path=_record_portable(obj.location, project_root),
+                    )
+                else:
+                    entry = db.datasets.get(obj.key)
+                    if entry is not None:
+                        index.register_dataset(
+                            key=entry.key,
+                            storage_path=_record_portable(obj.location, project_root),
+                        )
+            changed += 1
+        elif dirty == "missing":
+            verb = "Dropped" if do_it else "Would drop"
+            print(f"{verb} (missing): {obj.key}")
+            if do_it:
+                if obj.kind == "cached":
+                    index.remove_instance(
+                        cachetype=obj.cachetype, version=obj.version, hash=obj.hash,
+                    )
+                else:
+                    entry = db.datasets.get(obj.key)
+                    if entry is not None:
+                        index.remove_dataset(entry.key)
+            changed += 1
+        elif dirty == "untracked":
+            print(f"Left untracked (register by re-fetching/producing): {obj.key}")
+
+    if do_it and changed:
+        index.write(index_path)
+
+    noun = "entry" if changed == 1 else "entries"
+    suffix = " (dry run; pass --yes to apply)" if not do_it else ""
+    print(f"State file: {changed} {noun} to reconcile{suffix}"
+          if not do_it else f"State file: reconciled {changed} {noun}")
 
 
 def _fmt_size(n: int) -> str:
@@ -912,7 +1110,12 @@ def main():
     )
     filter_group.add_argument(
         "--orphan", action="store_true",
-        help="Only unreferenced produced artifacts (no cached.toml root)",
+        help="Only unreferenced produced artifacts (no state-file root)",
+    )
+    filter_group.add_argument(
+        "--dirty", action="store_true",
+        help="Only objects whose state-file record disagrees with disk "
+             "(missing / relocated / untracked)",
     )
     filter_group.add_argument(
         "--older-than", dest="older_than", metavar="AGE",
@@ -948,15 +1151,23 @@ def main():
     _act_excl = act_group.add_mutually_exclusive_group()
     _act_excl.add_argument(
         "--delete", action="store_true",
-        help="Delete the selected produced artifacts (dry run unless --yes)",
+        help="Delete the selected objects — produced artifacts and fetched "
+             "datasets (dry run unless --yes); protected data is skipped",
     )
     _act_excl.add_argument(
         "--move", metavar="DEST",
-        help="Move the selected produced artifacts under DEST (dry run unless --yes)",
+        help="Move the selected objects (artifacts or datasets) under DEST "
+             "(dry run unless --yes); the manifest is not edited",
+    )
+    _act_excl.add_argument(
+        "--refresh", action="store_true",
+        help="Reconcile the state file with disk for the selected objects "
+             "(relocate stale records, drop missing ones; no downloads or moves; "
+             "dry run unless --yes)",
     )
     act_group.add_argument(
         "--yes", "-y", action="store_true",
-        help="Actually perform --delete / --move (otherwise a dry run)",
+        help="Actually perform --delete / --move / --refresh (otherwise a dry run)",
     )
     sync_group = p_list.add_argument_group("object actions (sync)")
     _sync_excl = sync_group.add_mutually_exclusive_group()
