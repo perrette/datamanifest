@@ -1135,6 +1135,10 @@ def _cmd_where(args):
 
 # ----- storage config editing ([_STORAGE]) -----------------------------------
 
+# Storage fields that hold a list (not a scalar path expression).
+_STORAGE_LIST_FIELDS = ("datasets_pools", "datacache_pools")
+
+
 def _valid_storage_field(field: str) -> bool:
     """Whether *field* is a settable ``[_STORAGE]`` key — a folder field
     (``datasets_dir`` / ``datacache_dir``) or a user ``$symbol`` name (a plain
@@ -1159,19 +1163,30 @@ def _cmd_storage_set(args):
     ``--all-hosts`` the project-wide base. Edits the manifest (the committed spec)."""
     if not _valid_storage_field(args.field):
         print(f"Error: invalid field name {args.field!r} (use datasets_dir / "
-              "datacache_dir or a $symbol name).", file=sys.stderr)
+              "datacache_dir, a $symbol, or a *_pools list).", file=sys.stderr)
         sys.exit(1)
+    # A list field (datasets_pools / datacache_pools) takes any number of values
+    # (zero = an explicit empty list, i.e. disabled); a scalar takes exactly one.
+    if args.field in _STORAGE_LIST_FIELDS:
+        value = list(args.value)
+    elif len(args.value) == 1:
+        value = args.value[0]
+    else:
+        print(f"Error: {args.field} takes exactly one VALUE (got {len(args.value)}).",
+              file=sys.stderr)
+        sys.exit(1)
+
     db = _storage_db("edit")
     storage = db.extra.setdefault("_STORAGE", {})
     if args.all_hosts:
-        storage[args.field] = args.value
+        storage[args.field] = value
         where = "all hosts"
     else:
         host = args.host or socket.gethostname()
-        storage.setdefault("_HOST", {}).setdefault(host, {})[args.field] = args.value
+        storage.setdefault("_HOST", {}).setdefault(host, {})[args.field] = value
         where = f'host "{host}"' + ("" if args.host else " (this machine)")
     db.write(db.datasets_toml)
-    print(f"Set {args.field} = {args.value!r} for {where}.")
+    print(f"Set {args.field} = {value!r} for {where}.")
 
 
 def _cmd_storage_unset(args):
@@ -1651,11 +1666,14 @@ def main():
         )
 
     p_st_set = storage_sub.add_parser(
-        "set", help="Set a folder field (datasets_dir/datacache_dir) or a $symbol")
+        "set", help="Set a folder field, a $symbol, or a *_pools list")
     p_st_set.add_argument("field", metavar="FIELD",
-                          help="datasets_dir, datacache_dir, or a user $symbol name")
-    p_st_set.add_argument("value", metavar="VALUE",
-                          help="Path expression (may use $user_data_dir, $repo, $USER, …)")
+                          help="datasets_dir, datacache_dir, a $symbol, or "
+                               "datasets_pools / datacache_pools (a list)")
+    p_st_set.add_argument("value", metavar="VALUE", nargs="*",
+                          help="Path expression(s) (may use $user_data_dir, $repo, "
+                               "$USER, …); a *_pools field accepts several (or "
+                               "none, for an explicit empty list)")
     _add_target_flags(p_st_set)
     p_st_set.set_defaults(func=_cmd_storage_set)
 

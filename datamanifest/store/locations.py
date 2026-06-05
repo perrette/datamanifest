@@ -48,10 +48,12 @@ __all__ = [
     "resolve_path",
     "datasets_dir",
     "datacache_dir",
+    "datasets_pools",
     "dataset_path",
     "is_local_path",
     "is_user_managed",
     "FIELD_DEFAULTS",
+    "POOL_DEFAULTS",
     "PREDEFINED_SYMBOLS",
     "tmp_path",
     "lock_path",
@@ -252,6 +254,64 @@ def datacache_dir(*, project_root="", storage_config=None, env=os.environ,
         "$datacache_dir", project_root=project_root,
         storage_config=storage_config, env=env, host=host,
     )
+
+
+# Built-in read pools probed when ``[_STORAGE].datasets_pools`` is **undefined** —
+# well-known machine-wide locations where datasets may already live (so they are
+# reused instead of re-downloaded). An explicit (possibly empty) ``datasets_pools``
+# replaces these.
+POOL_DEFAULTS = (
+    "$user_data_dir/datamanifest/datasets",
+    "~/.cache/Datasets",
+)
+
+
+def _pools_raw(storage_config, env, host):
+    """The raw ``datasets_pools`` value (a list of path expressions, or ``None``
+    when undefined) via the env > ``_HOST`` glob > base ladder. ``DATAMANIFEST_
+    DATASETS_POOLS`` is ``os.pathsep``-separated."""
+    raw = env.get("DATAMANIFEST_DATASETS_POOLS")
+    if raw is not None:
+        return [p for p in raw.split(os.pathsep) if p]
+    for pattern, mapping in storage_config.get("_HOST", {}).items():
+        if isinstance(mapping, dict) and fnmatch.fnmatch(host, pattern) \
+                and "datasets_pools" in mapping:
+            v = mapping["datasets_pools"]
+            return list(v) if isinstance(v, (list, tuple)) else [v]
+    if "datasets_pools" in storage_config:
+        v = storage_config["datasets_pools"]
+        return list(v) if isinstance(v, (list, tuple)) else [v]
+    return None
+
+
+def datasets_pools(*, project_root="", storage_config=None, env=os.environ,
+                   host=None):
+    """Resolved absolute **read-pool** directories — extra read-only locations
+    probed for an already-present ``<pool>/<key>`` before downloading, so a
+    dataset another project already fetched is reused in place.
+
+    ``[_STORAGE].datasets_pools`` (host-composable via ``_HOST``, or
+    ``DATAMANIFEST_DATASETS_POOLS``) gives the pools; when **undefined** the
+    built-in :data:`POOL_DEFAULTS` are used; an explicit **empty** list disables
+    pools entirely. Each entry is a path expression (``$``-symbols / ``~`` / env).
+    """
+    if storage_config is None:
+        storage_config = {}
+    if host is None:
+        host = socket.gethostname()
+    raw = _pools_raw(storage_config, env, host)
+    exprs = list(POOL_DEFAULTS) if raw is None else raw
+    out = []
+    for expr in exprs:
+        try:
+            p = resolve_path(expr, project_root=project_root,
+                             storage_config=storage_config, env=env, host=host)
+        except Exception:  # noqa: BLE001 - a malformed pool entry is skipped
+            continue
+        ap = os.path.abspath(p)
+        if ap not in out:
+            out.append(ap)
+    return out
 
 
 def dataset_path(storage_path, key, *, project_root="", storage_config=None,

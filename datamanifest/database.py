@@ -934,6 +934,42 @@ def record_dataset_state(db: "Database", entry: "DatasetEntry", path: str) -> No
                      exc_info=True)
 
 
+def resolve_from_pools(db: "Database", entry: "DatasetEntry", extract=None) -> str:
+    """A **read pool** that already holds this dataset's bytes, or ``""``.
+
+    Read pools (``[_STORAGE].datasets_pools``, host-composable, defaulting to the
+    well-known machine-wide locations) are extra read-only directories probed for
+    ``<pool>/<key>`` — so a dataset another project already fetched is reused in
+    place instead of re-downloaded. A declared ``sha256`` is **verified** against
+    the pooled copy before it is adopted (a mismatch is skipped, not bound). The
+    pool is never written to; the caller records the adopted location and the
+    gold standard (new downloads → ``datasets_dir``) is unchanged.
+
+    Skipped for ``skip_download`` / user-managed datasets and for the extracted
+    location (pools hold the non-extracted file)."""
+    if entry.skip_download or storage.is_user_managed(entry.storage_path):
+        return ""
+    eff_extract = entry.extract if extract is None else extract
+    if eff_extract:
+        return ""
+    pools = storage.datasets_pools(
+        project_root=db.get_project_root(), storage_config=db.storage_config,
+    )
+    verify = bool(entry.sha256) and not (db.skip_checksum or entry.skip_checksum)
+    for pool in pools:
+        cand = os.path.join(pool, entry.key)
+        if not (os.path.isfile(cand) or os.path.isdir(cand)):
+            continue
+        if verify:
+            try:
+                if sha256_path(cand) != entry.sha256:
+                    continue            # a different/corrupt copy — do not adopt
+            except OSError:
+                continue
+        return cand
+    return ""
+
+
 def remove_dataset_state(db: "Database", entry: "DatasetEntry") -> None:
     """Drop a fetched dataset's record from the state file (best-effort) — called
     when its bytes are removed, so no stale entry lingers."""

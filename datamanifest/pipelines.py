@@ -36,6 +36,7 @@ from .database import (
     record_dataset_state,
     resolve_existing_path,
     resolve_fetcher,
+    resolve_from_pools,
     resolve_loader_rungs,
     resolve_python_fetcher,
     resolve_shell_or_uri,
@@ -712,6 +713,14 @@ def download_dataset(db, dataset, extract=None, overwrite: bool = False):
             verify_checksum(db, dataset, extract=extract, skip_if_complete=True)
             record_dataset_state(db, dataset, existing)
             return existing
+
+        # Read pools: reuse a checksum-verified copy from a known global location
+        # (e.g. ~/.cache/Datasets) in place, instead of re-downloading.
+        pooled = resolve_from_pools(db, dataset, extract=extract)
+        if pooled:
+            logger.info("Dataset reused from read pool at: %s", pooled)
+            record_dataset_state(db, dataset, pooled)
+            return pooled
 
     # Fetch-ladder rung 3 — cross-language fetch (the rare case). Reached only
     # when this Python tool has no native fetcher and no shell fetcher
