@@ -6,10 +6,10 @@ rationale for the spec to formalize. Additive over schema 4.
 What shipped: ``.datamanifest-state.toml`` with the ``datacache`` / ``datasets``
 namespaces; systematic ``storage_path`` + ``sha256``-on-download recording;
 read-first resolution; non-destructive self-heal with ``missing`` / ``relocated``
-/ ``untracked`` dirty states; ``list --dirty`` / ``--refresh`` and unified
-``--delete`` / ``--move`` over datasets (with the user-managed / ``skip_download``
-guard); atomic (temp + rename) writes; legacy ``cached.toml`` read + forward
-migration. Deferred items below remain deferred (the ``modified`` sha state,
+/ ``untracked`` dirty states; ``list --dirty`` to view and a first-order
+``datamanifest refresh`` to reconcile; unified ``list --delete`` / ``--move``
+over datasets (with the user-managed / ``skip_download`` guard); atomic (temp +
+rename) writes; legacy ``cached.toml`` read + forward migration. Deferred items below remain deferred (the ``modified`` sha state,
 moving fields out of the spec, multiple recorded locations).
 
 ## The split: spec vs state
@@ -130,19 +130,23 @@ visual signal (a red/`✗` marker beside the existing `⚑custom`) and a **`--di
 filter.
 
 **Actions** (explicit, on the selected objects):
-- **`--refresh`** — fix the **state file only** (no downloads, no file moves):
-  refresh *relocated* entries to their actual location, **drop** *missing*
-  entries, and **adopt** *untracked* datasets (record a present-but-unrecorded
-  dataset's location — e.g. data fetched before the state file existed). A pure
-  state↔disk reconcile. A cached *orphan* (a produced artifact with no recipe
-  rooting it) is **not** adopted — that is its own concept, surfaced by
-  ``--orphan``, not a dataset to track. (Active access — download / ``@cached`` —
-  also adopts an untracked object on use; ``--refresh`` is the passive, bulk way
-  to do it without re-fetching.)
+- **`refresh`** (a first-order command, ``datamanifest refresh``) — fix the
+  **state file only** (no downloads, no file moves): refresh *relocated* entries
+  to their actual location, **drop** *missing* entries, and **adopt** *untracked*
+  datasets (record a present-but-unrecorded dataset's location — e.g. data
+  fetched before the state file existed). A pure state↔disk reconcile over the
+  whole inventory. Because it edits only the git-ignored, regenerable state file
+  (no bytes touched), it **applies by default**; ``--dry-run`` previews. A cached
+  *orphan* (a produced artifact with no recipe rooting it) is **not** adopted —
+  that is its own concept, surfaced by ``--orphan``, not a dataset to track.
+  (Active access — download / ``@cached`` — also adopts an untracked object on
+  use; ``refresh`` is the bulk way to do it without re-fetching.) It is a
+  first-order verb, not a ``list`` action, because the state file is core
+  infrastructure the live resolution path depends on, not a listing concern.
 - **`--delete`** — remove the selected objects' **bytes and** their entries
   (works across a filtered set). The only byte-removing action.
 
-Removal is therefore **explicit-only** — `--refresh`/`--delete` are user-invoked;
+Removal is therefore **explicit-only** — `refresh`/`--delete` are user-invoked;
 passive `list` and active resolution never delete.
 
 **Concurrency.** Every write **re-reads the state file, merges** (additive union;

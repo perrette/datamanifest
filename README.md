@@ -90,7 +90,8 @@ datamanifest COMMAND [OPTIONS]
 
 | Command | Description |
 |---|---|
-| `list [SEARCH ...] [--cached\|--datasets] [--present\|--missing\|--all] [--orphan] [--dirty] [--hash P ...] [--older-than AGE] [--format F] [--fields ...] [--delete\|--move DIR\|--refresh] [--yes]` | List datasets and cached artifacts, with their state↔disk status; with `--delete`/`--move`/`--refresh` becomes the maintenance command (dry run by default; `--yes` to apply). `--delete`/`--move` act on both artifacts and fetched datasets (protected data is skipped); `--refresh` reconciles the state file with disk (no downloads/moves) |
+| `list [SEARCH ...] [--cached\|--datasets] [--present\|--missing\|--all] [--orphan] [--dirty] [--hash P ...] [--older-than AGE] [--format F] [--fields ...] [--delete\|--move DIR] [--yes]` | List datasets and cached artifacts, with their state↔disk status; with `--delete`/`--move` becomes the maintenance command (dry run by default; `--yes` to apply). `--delete`/`--move` act on both artifacts and fetched datasets (protected data is skipped) |
+| `refresh [--dry-run]` | Reconcile the state file (`.datamanifest-state.toml`) with disk: relocate stale records, drop missing ones, adopt present-but-untracked datasets. Edits only local state — no downloads/moves — so it applies by default; `--dry-run` previews (use `list --dirty` to see what would change) |
 | `download [NAME ...] [--all] [--overwrite] [--delegate\|--no-delegate]` | Download specific datasets or all of them; `--no-delegate` disables the cross-language fetch rung for the run |
 | `path NAME` | Print the resolved on-disk path (composable in shell) |
 | `add URI [--name N] [--no-download] [--extract] [--delegate\|--no-delegate]` | Register and (by default) download a dataset |
@@ -134,8 +135,9 @@ datamanifest list --cached --orphan --delete --yes  # delete them
 datamanifest list --older-than 30d --delete       # preview artifacts older than 30 days
 
 # Reconcile the state file with disk (after moving data around by hand)
-datamanifest list --dirty                          # show objects whose record ≠ disk
-datamanifest list --dirty --refresh --yes          # relocate stale records, drop missing ones
+datamanifest list --dirty                          # preview: objects whose record ≠ disk
+datamanifest refresh                               # apply: relocate stale, drop missing, adopt untracked
+datamanifest refresh --dry-run                     # same, but preview without writing
 
 # Where is the active manifest?
 datamanifest where
@@ -179,7 +181,7 @@ datamanifest list --cached --push user@hpc          # bulk: push the filtered se
 | Canonical key ordering (stable, cross-tool byte-identical output) | yes |
 | Produce-or-load cache (`@cached`: parameter-hash keying, optional `version=`, `config.toml`/`metadata.toml` sidecars) | yes |
 | `.datamanifest-state.toml` state file (git-ignored inventory of fetched **and** produced object locations + checksums; read-first resolution; dirty states) | yes |
-| `datamanifest list` inspect/maintenance (`--orphan`, `--dirty`, `--delete`, `--move`, `--refresh`) over artifacts and datasets | yes |
+| `datamanifest list` inspect (`--orphan`, `--dirty`, `--delete`, `--move`) + `datamanifest refresh` state reconcile, over artifacts and datasets | yes |
 | Cross-machine sync (`push`/`pull` a stored object over rsync+ssh; writes no manifest; idempotent) | yes |
 
 ## Storage model
@@ -283,8 +285,9 @@ state file is **read-first**: resolving a dataset checks its recorded location
 before any derivation, so a moved object is found where it really lives. It is
 maintained non-destructively — active access self-heals it (registers, relocates;
 never deletes), and `list` surfaces a **dirty** marker (`missing` / `relocated` /
-`untracked`) when a record disagrees with disk. `list --refresh` reconciles it
-(relocate stale records, drop missing ones; no downloads or moves); `list
+`untracked`) when a record disagrees with disk. `datamanifest refresh` reconciles
+it in bulk (relocate stale records, drop missing ones, adopt untracked datasets;
+no downloads or moves — edits only local state, so it applies by default); `list
 --delete` / `--move` act on the bytes and update the record (the spec is never
 edited). Writes always follow the current directive — the recorded location only
 helps *find* existing bytes, never directs a write.

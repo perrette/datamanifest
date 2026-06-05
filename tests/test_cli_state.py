@@ -21,7 +21,7 @@ def _args(**kw):
         search=[], hash=None, invert=False, any=False, cached=False,
         datasets=False, format=None, present=False, missing=False, orphan=False,
         dirty=False, all=False, older_than=None, yes=False, move=None,
-        delete=False, refresh=False,
+        delete=False,
     )
     base.update(kw)
     return types.SimpleNamespace(**base)
@@ -72,8 +72,8 @@ def test_relocated_is_flagged_and_refreshed(tmp_path):
     assert obj.location == os.path.abspath(path)         # found where bytes are
     assert _filter_objects(_enumerate_objects(db), _args(dirty=True))  # surfaced
 
-    # --refresh --yes repoints the recorded location to the actual (derived) one.
-    _refresh(_enumerate_objects(db), _args(refresh=True, yes=True), db)
+    # refresh repoints the recorded location to the actual (derived) one.
+    _refresh(_enumerate_objects(db), db, dry_run=False)
     assert _dataset_obj(db).dirty == ""
     idx2 = CachedIndex.read(state)
     assert os.path.abspath(os.path.join(tmp_path, idx2.dataset_path_of(key))) \
@@ -89,7 +89,7 @@ def test_missing_is_flagged_and_dropped_by_refresh(tmp_path):
     obj = _dataset_obj(db)
     assert obj.dirty == "missing" and not obj.present
 
-    _refresh(_enumerate_objects(db), _args(refresh=True, yes=True), db)
+    _refresh(_enumerate_objects(db), db, dry_run=False)
     # The stale entry is dropped from the state file.
     idx = CachedIndex.read(tmp_path / ".datamanifest-state.toml")
     assert idx.dataset_path_of(key) == ""
@@ -110,8 +110,8 @@ def test_untracked_dataset_is_adopted_by_refresh(tmp_path):
     obj = _dataset_obj(db)
     assert obj.present and obj.dirty == "untracked"
 
-    # --refresh --yes adopts it (records its location); no re-download.
-    _refresh(_enumerate_objects(db), _args(refresh=True, yes=True), db)
+    # refresh adopts it (records its location); no re-download.
+    _refresh(_enumerate_objects(db), db, dry_run=False)
     assert _dataset_obj(db).dirty == ""
     assert CachedIndex.read(state).dataset_path_of(key)      # recorded again
 

@@ -107,8 +107,7 @@ def _heavy_fields(args):
     ``--fields`` shows exactly what's listed; ``--bare`` shows neither.
     """
     heavy = {"size", "created"}
-    if (getattr(args, "delete", False) or getattr(args, "move", None)
-            or getattr(args, "refresh", False)):
+    if getattr(args, "delete", False) or getattr(args, "move", None):
         return set()                       # actions report key/location, not size
     if getattr(args, "fields", None):
         return {f.replace("-", "_") for f in args.fields} & heavy
@@ -522,10 +521,6 @@ def _cmd_list(args):
         _maintain(objects, args, db)
         return
 
-    if getattr(args, "refresh", False):
-        _refresh(objects, args, db)
-        return
-
     if getattr(args, "push", None) or getattr(args, "pull", None):
         from . import sync
 
@@ -578,6 +573,23 @@ def _dataset_protected(db, obj):
         return True, None
     protected = bool(entry.skip_download) or storage.is_user_managed(entry.storage_path)
     return protected, entry
+
+
+def _cmd_refresh(args):
+    """Reconcile the state file (`.datamanifest-state.toml`) with disk.
+
+    First-order maintenance over the whole inventory: relocate stale recorded
+    locations to where the bytes actually are, drop records whose bytes are gone,
+    and adopt present-but-untracked datasets. Edits only the git-ignored,
+    regenerable state file — no downloads, no file moves, no bytes touched — so it
+    **applies by default**; ``--dry-run`` previews. (The live code self-heals the
+    same way on access; this is the bulk, no-refetch way to do it at once.)
+    """
+    db = _get_db()
+    # The whole inventory, unfiltered (orphan-hiding etc. is a view concern; a
+    # reconcile considers every object). Size/created aren't needed.
+    objects = _enumerate_objects(db, heavy=frozenset())
+    _refresh(objects, db, dry_run=args.dry_run)
 
 
 def _maintain(objects, args, db):
@@ -690,17 +702,18 @@ def _remove_path_and_markers(path):
             pass
 
 
-def _refresh(objects, args, db):
-    """``--refresh``: reconcile the state file with disk (no downloads, no file
-    moves). For the selected objects it repoints a *relocated* entry to where the
-    bytes actually are, drops a *missing* entry whose bytes are gone, and
-    **adopts** an *untracked* dataset (records the present-but-unrecorded dataset's
-    location). A cached orphan is left as an orphan (not adopted as a GC root);
-    clean objects are untouched. Defaults to a dry run; ``--yes`` applies.
+def _refresh(objects, db, *, dry_run=False):
+    """Reconcile the state file with disk (no downloads, no file moves) over the
+    given *objects*: repoint a *relocated* entry to where the bytes actually are,
+    drop a *missing* entry whose bytes are gone, and **adopt** an *untracked*
+    dataset (record the present-but-unrecorded dataset's location). A cached
+    orphan is left as an orphan (not adopted as a GC root); clean objects are
+    untouched. Edits only the git-ignored state file, so it **applies by default**;
+    *dry_run* previews without writing.
     """
     from .cache import CACHED_INDEX_NAME, CachedIndex
 
-    do_it = args.yes
+    do_it = not dry_run
     project_root = db.get_project_root()
     base = os.path.dirname(db.datasets_toml) if db.datasets_toml else os.getcwd()
     index_path = os.path.join(base or ".", CACHED_INDEX_NAME)
@@ -761,9 +774,11 @@ def _refresh(objects, args, db):
         index.write(index_path)
 
     noun = "entry" if changed == 1 else "entries"
-    suffix = " (dry run; pass --yes to apply)" if not do_it else ""
-    print(f"State file: {changed} {noun} to reconcile{suffix}"
-          if not do_it else f"State file: reconciled {changed} {noun}")
+    if do_it:
+        print(f"State file: reconciled {changed} {noun}")
+    else:
+        print(f"State file: {changed} {noun} to reconcile "
+              "(dry run; run without --dry-run to apply)")
 
 
 def _fmt_size(n: int) -> str:
@@ -1175,15 +1190,9 @@ def main():
         help="Move the selected objects (artifacts or datasets) under DEST "
              "(dry run unless --yes); the manifest is not edited",
     )
-    _act_excl.add_argument(
-        "--refresh", action="store_true",
-        help="Reconcile the state file with disk for the selected objects "
-             "(relocate stale records, drop missing ones, adopt present-but-"
-             "untracked datasets; no downloads or moves; dry run unless --yes)",
-    )
     act_group.add_argument(
         "--yes", "-y", action="store_true",
-        help="Actually perform --delete / --move / --refresh (otherwise a dry run)",
+        help="Actually perform --delete / --move (otherwise a dry run)",
     )
     sync_group = p_list.add_argument_group("object actions (sync)")
     _sync_excl = sync_group.add_mutually_exclusive_group()
@@ -1312,6 +1321,28 @@ def main():
         help="Print what would change without writing the manifest",
     )
     p_migrate.set_defaults(func=_cmd_migrate)
+
+    # refresh
+    p_refresh = subparsers.add_parser(
+        "refresh",
+        help="Reconcile the state file (.datamanifest-state.toml) with disk: "
+             "relocate stale records, drop missing ones, adopt present-but-"
+             "untracked datasets. Applies by default (edits only local state)",
+        description=(
+            "Reconcile the git-ignored state file with what's on disk: repoint "
+            "records whose bytes moved, drop records whose bytes are gone, and "
+            "adopt present-but-untracked datasets. No downloads, no file moves, "
+            "no bytes touched — so it applies by default; use --dry-run to "
+            "preview. The live code self-heals the same way on access; this does "
+            "it in bulk without re-fetching. Use `list --dirty` to see what would "
+            "change first."
+        ),
+    )
+    p_refresh.add_argument(
+        "--dry-run", action="store_true",
+        help="Preview the reconciliation without writing the state file",
+    )
+    p_refresh.set_defaults(func=_cmd_refresh)
 
     # format
     p_format = subparsers.add_parser(
