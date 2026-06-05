@@ -60,9 +60,10 @@ Two non-obvious points:
    fetched copy is sha256-verified like any other download. The *spec* defines the
    schemes, not the mechanism — Julia would implement them with its own backends
    (or `delegate`); fsspec is a Python implementation detail. This also gives DVC
-   non-HTTP remotes and intake object-store urlpaths a fetch path. On-the-fly /
-   streaming access was considered and **dropped** (already expressible with
-   `skip_download` + a custom loader); retention/TTL was **dropped** too.
+   non-HTTP remotes and intake object-store urlpaths a fetch path. **On-the-fly
+   access shipped** as `add --on-the-fly` = `skip_download` + a built-in fsspec
+   loader (so users don't hand-write one); a standalone streaming *access mode* and
+   retention/TTL were **dropped**.
 
 So the dependency-correct order is:
 
@@ -93,3 +94,44 @@ These are the decisions the spec update hinges on — to discuss before coding:
 
 See `adding-datasets.md` for the user-facing command surface that sits on top of
 these protocols.
+
+## ⇪ Decisions to propagate to the spec repo + DataManifest.jl
+
+These were settled on the Python side but are **cross-language** and must be
+reflected in the canonical spec (`datamanifest.toml`) and ported to (or
+consciously skipped by) the Julia implementation. They are **not** Python-only
+tooling.
+
+1. **Object-store download schemes are normative.** `s3://`, `gs://`, `gcs://`,
+   `az://`, `abfs://`, `abfss://`, `adl://`, `gdrive://` are valid `uri` schemes
+   that mean "fetch this object from the named store, then verify `sha256` as
+   usual." The spec defines the *schemes and semantics*, not the mechanism: Python
+   implements them via fsspec (optional `[fsspec]` extra + backend); Julia
+   implements the ones it can with its own packages, and otherwise `delegate`s or
+   errors with "unsupported scheme." HTTP/HTTPS keep their existing dedicated path
+   and are deliberately **not** in this set.
+
+2. **`skip_download` may point at a *remote* URI (on-the-fly access).** Originally
+   `skip_download = true` meant "the `uri` is a local file the user manages"
+   (resolve to the path, verify it exists, record it). It now **also** covers
+   "remote object opened lazily": when the resolved path is a remote URI *and* the
+   entry carries a loader, `download_dataset` returns the URI as-is — **no local
+   existence check, no state-file record** — and the loader opens it in place.
+   Consequences the spec/Julia must mirror:
+   - `get_dataset_path` / the `path` accessor returns the **remote URI string** for
+     such an entry (not a local filesystem path). Consumers must tolerate that.
+   - A bare remote `skip_download` with **no** loader still errors (no way to read
+     it) — the loader presence is the discriminator between the two meanings.
+   - The on-the-fly loader is bound **language-specifically**: Python uses
+     `[<ds>._LANG.python].loader = "datamanifest.store.loaders:fsspec_loader"`. A
+     peer-language tool ignores that binding and must supply its own
+     (`_LANG.julia.loader`) to support on-the-fly, or treat the entry as
+     unsupported. **Open spec question:** do we keep on-the-fly purely as a
+     per-language loader convention (current Python choice), or add a
+     language-neutral marker (e.g. `access = "lazy"`) so every tool recognizes the
+     intent without a language-specific loader? Decide this in the spec repo.
+   - We chose to let `skip_download` carry **both** meanings rather than introduce a
+     new field; an audit found this non-destructive on the Python side (on-the-fly
+     entries are `skip_download`-protected everywhere it matters). Julia should
+     replicate that protection, or disambiguate with the language-neutral marker if
+     the spec adds one.
