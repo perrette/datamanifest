@@ -136,6 +136,23 @@ def test_database_read_fixture():
     assert db.datasets["herzschuh2023"].extract is True
 
 
+def test_write_keeps_structural_tables_at_top(tmp_path):
+    """[_META]/[_STORAGE] are written at the top, not scattered among datasets —
+    a plain code-point sort would drop '_' between 'Zebra' and 'apple'."""
+    from datamanifest.database import Database
+
+    db = Database(persist=False)
+    db.register_dataset("https://h/Zebra/z.csv", name="Zebra", persist=False)
+    db.register_dataset("https://h/apple/a.csv", name="apple", persist=False)
+    db.extra["_STORAGE"] = {"datasets_dir": "datasets"}
+    db.schema_version = 1
+    out = tmp_path / "out.toml"
+    db.write(str(out))
+
+    tables = [l.strip() for l in out.read_text().splitlines() if l.startswith("[")]
+    assert tables == ["[_META]", "[_STORAGE]", "[Zebra]", "[apple]"]
+
+
 def test_database_round_trip(tmp_path):
     from datamanifest.database import Database
 

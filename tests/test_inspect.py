@@ -51,21 +51,20 @@ def usage_log(tmp_path, monkeypatch):
 
 # ----- CachedIndex round-trip (spec fixture schema) --------------------------
 
-# Two recipes for the index round-trip (schema 2: nested by cachetype, with
-# per-variation instances carrying hash + params). spec-v4 dropped the recipe
-# scope/store fields.
+# Two recipes for the index round-trip (schema 4: cachetype-keyed, instances a
+# hash→storage_path map; params live in each artifact's config.toml, not here).
 _FIX_RECIPES = [
     {
         "cachetype": "esm_20c_anomaly",
         "hash": "83425a30d111562d46c1fce9de7618ea7f1f54e1be72e086cba0ac63c6f2ce9b",
-        "params": {"grid": "5x5"},
+        "storage_path": "cached/esm_20c_anomaly/83425a30",
         "ref": "lgmpre.data:load_20c_esm_anomaly",
         "format": "nc",
     },
     {
         "cachetype": "esm_lgm_anomaly",
         "hash": "40384c4db019d383728340a2d8c5db9c96eb41db0231e93dd944091ca180633c",
-        "params": {},
+        "storage_path": "cached/esm_lgm_anomaly/40384c4d",
         "ref": "lgmpre.data:load_lgm_esm_anomaly",
         "format": "nc",
     },
@@ -76,8 +75,8 @@ def _write_fixture_index(path):
     index = CachedIndex(path=str(path))
     for r in _FIX_RECIPES:
         index.register(
-            cachetype=r["cachetype"], hash=r["hash"], params=r["params"],
-            ref=r["ref"], format=r["format"],
+            cachetype=r["cachetype"], hash=r["hash"],
+            storage_path=r["storage_path"], ref=r["ref"], format=r["format"],
         )
     return index.write()
 
@@ -88,8 +87,9 @@ def test_cached_index_round_trip_recipes(tmp_path):
     recs = {r["cachetype"]: r for r in back.recipe_records()}
     assert set(recs) == {"esm_20c_anomaly", "esm_lgm_anomaly"}
     assert recs["esm_20c_anomaly"]["ref"] == "lgmpre.data:load_20c_esm_anomaly"
+    # instances map hash → recorded storage_path (full artifact dir).
     assert recs["esm_20c_anomaly"]["instances"] == {
-        _FIX_RECIPES[0]["hash"]: {"grid": "5x5"}
+        _FIX_RECIPES[0]["hash"]: _FIX_RECIPES[0]["storage_path"]
     }
     # reachable_keys() is (cachetype, version, hash) — no scope (spec-v4).
     assert back.reachable_keys() == {
@@ -101,7 +101,7 @@ def test_cached_index_round_trip_recipes(tmp_path):
 def test_cached_index_write_is_canonical(tmp_path):
     p = _write_fixture_index(tmp_path / "cached.toml")
     text = (tmp_path / "cached.toml").read_text()
-    # [_META] first, then schema-3 recipe tables keyed/sorted by cachetype.
+    # [_META] first, then schema-4 recipe tables keyed/sorted by cachetype.
     assert text.index("[_META]") < text.index("esm_20c_anomaly")
     assert text.index("esm_20c_anomaly") < text.index("esm_lgm_anomaly")
     # Idempotent: a second write of the read-back index is byte-identical.
@@ -110,38 +110,38 @@ def test_cached_index_write_is_canonical(tmp_path):
 
 
 def test_cached_index_accumulates_variations(tmp_path):
-    # Registering the same recipe with different params accumulates instances —
+    # Registering the same recipe with different hashes accumulates instances —
     # it does not overwrite (the core fix).
     index = CachedIndex(path=str(tmp_path / "cached.toml"))
-    index.register(cachetype="c", hash="h1", params={"n": 1}, ref="m:f")
-    index.register(cachetype="c", hash="h2", params={"n": 2}, ref="m:f")
+    index.register(cachetype="c", hash="h1", storage_path="cached/c/h1", ref="m:f")
+    index.register(cachetype="c", hash="h2", storage_path="cached/c/h2", ref="m:f")
     recs = index.recipe_records()
     assert len(recs) == 1
-    assert recs[0]["instances"] == {"h1": {"n": 1}, "h2": {"n": 2}}
+    assert recs[0]["instances"] == {"h1": "cached/c/h1", "h2": "cached/c/h2"}
     assert index.reachable_keys() == {("c", "", "h1"), ("c", "", "h2")}
 
 
-def test_schema3_version_in_key_storage_path_and_params_as_body(tmp_path):
-    """schema-3 keys recipes ["<cachetype>@<version>"] (bare when unversioned),
-    records a recipe-level storage_path, and writes each instance's params as the
-    body of ["<key>".instances.<hash>] (no params wrapper)."""
+def test_schema4_version_in_key_and_hash_to_path(tmp_path):
+    """schema-4 keys recipes ["<cachetype>@<version>"] (bare when unversioned)
+    and maps each instance hash → its full artifact dir (no params in the index;
+    no recipe-level storage_path)."""
     p = tmp_path / "cached.toml"
     index = CachedIndex(path=str(p))
     index.register(cachetype="mypkg.mod.run", version="v3", hash="83b2",
-                   params={"grid": "5x5"}, ref="mypkg.mod:run", format="pickle",
-                   storage_path="cached/mypkg.mod.run")
-    index.register(cachetype="plain", hash="44de", params={}, ref="m:plain",
-                   storage_path="cached/plain")
+                   storage_path="cached/mypkg.mod.run/v3/83b2",
+                   ref="mypkg.mod:run", format="pickle")
+    index.register(cachetype="plain", hash="44de", storage_path="cached/plain/44de",
+                   ref="m:plain")
     index.write()
     text = p.read_text()
 
-    assert 'schema = 3' in text
+    assert 'schema = 4' in text
     assert '["mypkg.mod.run@v3"]' in text                       # version after @
-    assert '["mypkg.mod.run@v3".instances.83b2]' in text        # instance sub-table
-    assert 'storage_path = "cached/mypkg.mod.run"' in text      # recipe-level path
-    assert 'grid = "5x5"' in text                               # params ARE the body
+    assert '["mypkg.mod.run@v3".instances]' in text            # hash→path map
+    assert '83b2 = "cached/mypkg.mod.run/v3/83b2"' in text      # full artifact dir
+    assert 'params' not in text and 'grid' not in text         # params not in index
     assert '[plain]' in text                                    # unversioned ⇒ bare key
-    assert '[plain.instances.44de]' in text
+    assert '[plain.instances]' in text
 
     # Round-trips identically.
     again = tmp_path / "again.toml"
@@ -151,46 +151,64 @@ def test_schema3_version_in_key_storage_path_and_params_as_body(tmp_path):
 
 def test_entries_with_storage_paths_survive_roundtrip(tmp_path):
     """Guard against a future format change silently wiping recorded entries:
-    several recipes (versioned + unversioned, each with a storage_path and
-    instances) must round-trip read → write → read losslessly and byte-stably."""
+    several recipes (versioned + unversioned, each with per-instance paths) must
+    round-trip read → write → read losslessly and byte-stably."""
     p = tmp_path / "cached.toml"
     idx = CachedIndex(path=str(p))
-    idx.register(cachetype="a.b.run", version="v1", hash="h1", params={"n": 1},
-                 ref="a.b:run", format="pickle", storage_path="cached/a.b.run/v1")
-    idx.register(cachetype="a.b.run", version="v2", hash="h2", params={"n": 2},
-                 ref="a.b:run", format="pickle", storage_path="/scratch/v2")
-    idx.register(cachetype="plain", hash="h3", params={}, ref="m:plain",
-                 storage_path="cached/plain")
+    idx.register(cachetype="a.b.run", version="v1", hash="h1",
+                 ref="a.b:run", format="pickle", storage_path="cached/a.b.run/v1/h1")
+    idx.register(cachetype="a.b.run", version="v2", hash="h2",
+                 ref="a.b:run", format="pickle", storage_path="/scratch/v2/h2")
+    idx.register(cachetype="plain", hash="h3", ref="m:plain",
+                 storage_path="cached/plain/h3")
     idx.write()
     text = p.read_text()
 
     back = CachedIndex.read(p)
     assert back.recipes == idx.recipes                       # nothing dropped/altered
-    assert back.storage_path_of(cachetype="a.b.run", version="v2") == "/scratch/v2"
-    assert back.storage_path_of(cachetype="plain", version="") == "cached/plain"
+    assert back.instance_path_of(cachetype="a.b.run", version="v2", hash="h2") == "/scratch/v2/h2"
+    assert back.instance_path_of(cachetype="plain", version="", hash="h3") == "cached/plain/h3"
     # A second write is byte-identical (stable; no drift).
     again = tmp_path / "again.toml"
     back.write(again)
     assert again.read_text() == text
 
 
-def test_pinned_schema3_fixture_preserves_storage_paths(tmp_path):
-    """A hand-pinned canonical schema-3 file must read back with every recipe's
-    storage_path intact. If a future reader/writer change breaks this, the test
-    fails — forcing a schema bump + migration rather than a silent wipe."""
+def test_pinned_schema4_fixture_preserves_paths(tmp_path):
+    """A hand-pinned canonical schema-4 file must read back with every instance's
+    path intact. If a future reader/writer change breaks this, the test fails —
+    forcing a schema bump + migration rather than a silent wipe."""
+    p = tmp_path / "cached.toml"
+    p.write_text(
+        '[_META]\nschema = 4\n\n'
+        '[greet]\nref = "m:greet"\nformat = "txt"\n\n'
+        '[greet.instances]\naa = "cached/greet/aa"\n\n'
+        '["a.b.run@v2"]\nref = "a.b:run"\nformat = "pickle"\n\n'
+        '["a.b.run@v2".instances]\nbb = "/scratch/v2/bb"\n'
+    )
+    idx = CachedIndex.read(p)
+    assert idx.instance_path_of(cachetype="greet", version="", hash="aa") == "cached/greet/aa"
+    assert idx.instance_path_of(cachetype="a.b.run", version="v2", hash="bb") == "/scratch/v2/bb"
+    assert idx.reachable_keys() == {("greet", "", "aa"), ("a.b.run", "v2", "bb")}
+
+
+def test_legacy_schema3_migrates_to_schema4(tmp_path):
+    """A legacy schema-3 file (recipe storage_path + params-body) reads so each
+    instance inherits <recipe storage_path>/<hash>, params are dropped, and a
+    rewrite emits schema 4."""
     p = tmp_path / "cached.toml"
     p.write_text(
         '[_META]\nschema = 3\n\n'
-        '[greet]\nref = "m:greet"\nformat = "txt"\nstorage_path = "cached/greet"\n\n'
-        '[greet.instances.aa]\nwho = "x"\n\n'
         '["a.b.run@v2"]\nref = "a.b:run"\nformat = "pickle"\n'
         'storage_path = "/scratch/v2"\n\n'
         '["a.b.run@v2".instances.bb]\nn = 2\n'
     )
     idx = CachedIndex.read(p)
-    assert idx.storage_path_of(cachetype="greet", version="") == "cached/greet"
-    assert idx.storage_path_of(cachetype="a.b.run", version="v2") == "/scratch/v2"
-    assert idx.reachable_keys() == {("greet", "", "aa"), ("a.b.run", "v2", "bb")}
+    assert idx.instance_path_of(cachetype="a.b.run", version="v2", hash="bb") == "/scratch/v2/bb"
+    idx.write()
+    text = p.read_text()
+    assert "schema = 4" in text and 'bb = "/scratch/v2/bb"' in text
+    assert "params" not in text and "n = 2" not in text
 
 
 def test_dead_instanceless_recipe_is_dropped_on_read(tmp_path):
@@ -199,18 +217,40 @@ def test_dead_instanceless_recipe_is_dropped_on_read(tmp_path):
     without touching the real, populated entries."""
     p = tmp_path / "cached.toml"
     p.write_text(
-        '[_META]\nschema = 3\n\n'
-        '[memory2]\nformat = ""\nref = ""\nstorage_path = ""\n\n'
+        '[_META]\nschema = 4\n\n'
+        '[memory2]\nformat = ""\nref = ""\n\n'
         '[memory2.instances]\n\n'
-        '["memory2@2"]\nref = "m:p"\nformat = "pickle"\nstorage_path = "/c/ho/memory2"\n\n'
-        '["memory2@2".instances.h]\n\n'
+        '["memory2@2"]\nref = "m:p"\nformat = "pickle"\n\n'
+        '["memory2@2".instances]\nh = "/c/ho/memory2/h"\n'
     )
     idx = CachedIndex.read(p)
     assert ("memory2", "") not in idx.recipes               # dead empty entry gone
     assert ("memory2", "2") in idx.recipes                  # real entry kept
-    assert idx.storage_path_of(cachetype="memory2", version="2") == "/c/ho/memory2"
+    assert idx.instance_path_of(cachetype="memory2", version="2", hash="h") == "/c/ho/memory2/h"
     idx.write()
     assert "[memory2]\n" not in p.read_text()               # self-cleaned on rewrite
+
+
+def test_set_and_remove_instance(tmp_path):
+    """set_instance_path repoints a recorded variation (after a move);
+    remove_instance prunes it (after a delete), dropping the now-empty recipe."""
+    idx = CachedIndex(path=str(tmp_path / "cached.toml"))
+    idx.register(cachetype="ct", hash="h1", storage_path="cached/ct/h1", ref="m:f")
+    idx.register(cachetype="ct", hash="h2", storage_path="cached/ct/h2", ref="m:f")
+
+    # repoint h1; a missing instance returns False and changes nothing.
+    assert idx.set_instance_path(cachetype="ct", version="", hash="h1",
+                                 storage_path="/moved/h1") is True
+    assert idx.instance_path_of(cachetype="ct", version="", hash="h1") == "/moved/h1"
+    assert idx.set_instance_path(cachetype="ct", version="", hash="nope",
+                                 storage_path="/x") is False
+
+    # remove h1, then h2 — the recipe disappears once empty.
+    assert idx.remove_instance(cachetype="ct", version="", hash="h1") is True
+    assert ("ct", "") in idx.recipes
+    assert idx.remove_instance(cachetype="ct", version="", hash="h2") is True
+    assert ("ct", "") not in idx.recipes
+    assert idx.remove_instance(cachetype="ct", version="", hash="h2") is False
 
 
 def test_cachetype_with_at_sign_is_rejected(tmp_path):
@@ -237,14 +277,16 @@ def test_cached_storage_path_replaces_cachetype_dir(tmp_path):
     # Artifact directly under storage_path (no "ct" segment).
     hits = [r for r, _, fs in os.walk(tmp_path / "out") if "data.txt" in fs]
     assert len(hits) == 1 and "/ct/" not in hits[0]
-    rec = CachedIndex.read(proj / "cached.toml").storage_path_of(
-        cachetype="ct", version="")
-    assert rec == str(tmp_path / "out")          # absolute (outside the repo)
+    idx = CachedIndex.read(proj / "cached.toml")
+    h = next(iter(idx.recipes[("ct", "")]["instances"]))
+    rec = idx.instance_path_of(cachetype="ct", version="", hash=h)
+    # Recorded location = the full artifact dir (absolute, outside the repo).
+    assert rec == os.path.join(str(tmp_path / "out"), h)
 
 
 def test_cached_versioned_storage_path_includes_version(tmp_path):
-    """A versioned recipe records the version *in* storage_path (the direct hash
-    parent), and the artifact is storage_path/<hash> — no version re-appended."""
+    """A versioned recipe records the version in the instance path, and the
+    artifact is <datacache_dir>/<cachetype>/<version>/<hash>."""
     proj = tmp_path / "proj"
     proj.mkdir()
     (proj / "datasets.toml").write_text("[_META]\nschema = 1\n")
@@ -254,9 +296,10 @@ def test_cached_versioned_storage_path_includes_version(tmp_path):
         return str(x)
 
     f(x=1)
-    rec = CachedIndex.read(proj / "cached.toml").storage_path_of(
-        cachetype="ct", version="v3")
-    assert rec == "cached/ct/v3"                              # version baked in
+    idx = CachedIndex.read(proj / "cached.toml")
+    h = next(iter(idx.recipes[("ct", "v3")]["instances"]))
+    rec = idx.instance_path_of(cachetype="ct", version="v3", hash=h)
+    assert rec == f"cached/ct/v3/{h}"                         # version in the path
     hits = [r for r, _, fs in os.walk(proj / "cached") if "data.txt" in fs]
     assert len(hits) == 1
     assert hits[0].endswith(os.path.join("cached", "ct", "v3", os.path.basename(hits[0])))
@@ -288,8 +331,10 @@ def test_cached_hit_prefers_recorded_storage_path(tmp_path, monkeypatch):
     assert not (tmp_path / "B").exists()                     # nothing written at the new default
 
 
-def test_schema2_is_read_and_rewritten_as_schema3(tmp_path):
-    """A legacy schema-2 ([[produced]]) file is read and rewritten as schema 3."""
+def test_schema2_is_read_and_rewritten_as_schema4(tmp_path):
+    """A legacy schema-2 ([[produced]]) file is read and rewritten as schema 4.
+    Schema 2 recorded no location, so each instance's path is "" (derived on
+    next access)."""
     p = tmp_path / "cached.toml"
     p.write_text(
         '[_META]\nschema = 2\n\n'
@@ -298,11 +343,11 @@ def test_schema2_is_read_and_rewritten_as_schema3(tmp_path):
     )
     index = CachedIndex.read(p)
     assert index.reachable_keys() == {("c", "", "h1")}
-    assert index.recipes[("c", "")]["instances"] == {"h1": {"n": 1}}
+    assert index.recipes[("c", "")]["instances"] == {"h1": ""}
     index.write()
     text = p.read_text()
-    assert 'schema = 3' in text and '[[produced]]' not in text
-    assert '[c.instances.h1]' in text
+    assert 'schema = 4' in text and '[[produced]]' not in text
+    assert '[c.instances]' in text and 'h1 = ""' in text
 
 
 # ----- @cached produce registers in a sibling cached.toml --------------------
@@ -330,9 +375,10 @@ def test_cached_produce_registers_and_back_points(cache_root, usage_log, tmp_pat
     # ref = "<module>:<qualname>" (qualname includes the enclosing scope).
     assert ":" in rec["ref"]
     assert rec["ref"].split(":", 1)[1].endswith("make_greeting")
-    # one instance, recording the params it was produced with.
-    assert list(rec["instances"].values()) == [{"who": "x"}]
+    # one instance, recording the full artifact dir it was written to (absolute
+    # here, since cache_root is outside the project root).
     artifact_hash = next(iter(rec["instances"]))
+    assert rec["instances"][artifact_hash] == str(cache_root / "greet" / artifact_hash)
 
     # Artifact metadata back-points at that index (audit only). spec-v4 layout:
     # <datacache_dir>/<cachetype>/<hash> — no cached/ prefix, no scope.
