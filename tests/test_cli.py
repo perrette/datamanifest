@@ -740,33 +740,11 @@ def test_match_cached_by_id_addressing():
     assert len(_match_cached_by_id("ct/ab", objs)) == 2        # cachetype-scoped prefix
 
 
-# ----- where: state records + --scan -----------------------------------------
+# ----- where note + list --outside + --scan ----------------------------------
 
-def test_where_storage_root_strips_key_tail():
-    import types
-
-    from datamanifest.cli import _storage_root
-
-    # Plain dataset: the full key is stripped → the storage root remains.
-    key = "github.com/jesstierney/BAYSPLINE/archive/refs/tags/v1.csv"
-    loc = f"/data/here/{key}"
-    plain = types.SimpleNamespace(key=key, extract=False)
-    assert _storage_root(loc, key, plain) == "/data/here"
-
-    # Extract dataset: on disk the *extracted* tail (no .zip) is what's present.
-    zkey = "github.com/brews/bayfox/archive/refs/heads/master.zip"
-    ext_loc = "/data/here/github.com/brews/bayfox/archive/refs/heads/master"
-    extract = types.SimpleNamespace(key=zkey, extract=True)
-    assert _storage_root(ext_loc, zkey, extract) == "/data/here"
-
-    # No manifest entry, tail still matches the raw key.
-    assert _storage_root("/x/y/host/a.csv", "host/a.csv", None) == "/x/y"
-
-    # Explicit storage_path that doesn't follow <root>/<key> → parent folder.
-    assert _storage_root("/weird/place/file.bin", "host/a.csv", None) == "/weird/place"
-
-
-def test_where_folds_pools_and_surfaces_only_offpattern(tmp_path):
+def _outside_project(tmp_path):
+    """A project where 'a' is conformant (reused from a read pool) and 'c' is
+    recorded at an ad-hoc location outside datasets_dir and the pool."""
     pool = tmp_path / "pool" / "example.com"
     pool.mkdir(parents=True)
     (pool / "a.csv").write_bytes(b"a\n")
@@ -786,25 +764,37 @@ def test_where_folds_pools_and_surfaces_only_offpattern(tmp_path):
     stray = tmp_path / "stray" / "example.com"
     stray.mkdir(parents=True)
     (stray / "c.csv").write_bytes(b"c\n")
-    state = tmp_path / ".datamanifest-state.toml"
-    with open(state, "a") as f:
+    with open(tmp_path / ".datamanifest-state.toml", "a") as f:
         f.write(f'\n[datasets."example.com/c.csv"]\n'
                 f'storage_path = "{stray / "c.csv"}"\nsha256 = "deadbeef"\n')
+    return env, stray
+
+
+def test_where_folds_pools_and_notes_outside(tmp_path):
+    env, stray = _outside_project(tmp_path)
 
     out = _run("where", env=env).stdout
     # The read pool is folded as a continuation line under datasets_dir — no
-    # separate "read pools" block.
+    # separate "read pools" block, and no per-record dump.
     assert str(tmp_path / "pool") in out
-    assert "read pools (datasets)" not in out       # no separate pools block
-    # Conformant 'a' (recorded in the pool) is NOT surfaced; only off-pattern 'c',
-    # grouped under its storage root (the key `example.com/c.csv` is stripped, so
-    # the folder shown is the root, not the deep `.../example.com`).
-    assert "datasets recorded outside" in out
-    assert f"- {tmp_path / 'stray'} -> c" in out
-    assert "reuse on download" not in out           # the misleading hint is gone
+    assert "read pools (datasets)" not in out
+    # Just a count + a pointer to `list --outside`; only 'c' is off-pattern.
+    assert "1 dataset stored outside" in out
+    assert "list --outside" in out
 
     scan = _run("where", "--scan", env=env).stdout
     assert "scan" in scan and "b →" in scan   # b is in the pool, not yet local
+
+
+def test_list_outside_filters_to_offpattern_only(tmp_path):
+    env, stray = _outside_project(tmp_path)
+
+    out = _run("list", "--outside", "--datasets", env=env).stdout
+    # 'c' is recorded outside → listed at its stray location (the path tail
+    # survives the renderer's keep-tail truncation); conformant 'a' (in the pool)
+    # and not-yet-fetched 'b' are excluded.
+    assert "c.csv" in out and "stray" in out
+    assert "a.csv" not in out and "b.csv" not in out
 
 
 # ----- add / show / remove / download / verify (command coverage) ------------

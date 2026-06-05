@@ -17,7 +17,7 @@ import socket
 import sys
 
 from . import __version__
-from .config import get_extract_path, logger
+from .config import logger
 
 
 def _get_db():
@@ -281,7 +281,7 @@ def _matches_search(obj, terms, *, any_=False) -> bool:
     return any(hits) if any_ else all(hits)
 
 
-def _filter_objects(objects, args):
+def _filter_objects(objects, args, db=None):
     """Apply the ``list`` *filter* flags to *objects* — narrowing only, never a
     change of output style (the renderer is chosen separately).
 
@@ -331,9 +331,14 @@ def _filter_objects(objects, args):
         out = [o for o in out if o.kind == "datasets" and not o.present]
     if getattr(args, "dirty", False):
         out = [o for o in out if getattr(o, "dirty", "")]
+    outside = getattr(args, "outside", False)
+    if outside and db is not None:
+        ds_roots, dc_roots = _conform_roots(db)
+        out = [o for o in out if _is_outside(o, ds_roots, dc_roots)]
     if args.orphan:
         out = [o for o in out if o.referenced is False]
-    elif not getattr(args, "all", False) and not explicit_selector and not getattr(args, "dirty", False):
+    elif (not getattr(args, "all", False) and not explicit_selector
+          and not getattr(args, "dirty", False) and not outside):
         # Hide produced artifacts not rooted by this project's state file —
         # unless an explicit selector (search / --hash) asked for them.
         out = [o for o in out if not (o.kind == "cached" and o.referenced is False)]
@@ -527,7 +532,7 @@ def _cmd_list(args):
     # filter flag never changes how the list is rendered. Skip the filesystem-
     # heavy fields the chosen output won't show (notably the size walk under
     # --bare — a big speedup for large datasets).
-    objects = _filter_objects(_enumerate_objects(db, _heavy_fields(args)), args)
+    objects = _filter_objects(_enumerate_objects(db, _heavy_fields(args)), args, db)
 
     # ----- actions (operate on the filtered set, report their own output) -----
     if args.delete or args.move:
@@ -1217,93 +1222,38 @@ def _under(loc, root):
     return bool(root) and (loc == root or loc.startswith(root.rstrip(os.sep) + os.sep))
 
 
-def _strip_tail(loc, tail):
-    """``loc`` with the storage *tail* (the object's key-derived relative path)
-    removed — i.e. the storage **root** that holds it (``<root>/<tail>`` →
-    ``<root>``). Returns ``None`` when *loc* does not end with *tail*."""
-    t = (tail or "").replace("/", os.sep)
-    if t and (loc == t or loc.endswith(os.sep + t)):
-        return loc[: -len(t)].rstrip(os.sep) or os.sep
-    return None
+def _conform_roots(db):
+    """``(datasets_roots, cached_roots)`` — the configured locations an object may
+    sit in without being "outside": datasets_dir + the datasets read pools, and
+    datacache_dir + the cached read pools (all absolute)."""
+    from . import storage as storage_mod
+    root = db.get_project_root()
+    cfg = db.storage_config
+
+    def _roots(dir_fn, pools_fn):
+        try:
+            base = [os.path.abspath(dir_fn(project_root=root, storage_config=cfg))]
+        except Exception:  # noqa: BLE001 - an unresolved dir simply isn't a root
+            base = []
+        try:
+            base += list(pools_fn(project_root=root, storage_config=cfg))
+        except Exception:  # noqa: BLE001
+            pass
+        return [r for r in base if r]
+
+    return (_roots(storage_mod.datasets_dir, storage_mod.datasets_pools),
+            _roots(storage_mod.datacache_dir, storage_mod.datacache_pools))
 
 
-def _storage_root(loc, key, entry):
-    """The storage root holding *loc* — *loc* with its key-derived tail stripped,
-    so ``<root>/<host>/<path>`` groups under ``<root>`` rather than the deep folder
-    just above the file. For an extract dataset the on-disk tail is the *extracted*
-    path; we try the entry's exact tail first, then the raw key both ways. Falls
-    back to the parent folder when nothing matches (e.g. an explicit storage_path
-    that does not follow the ``<root>/<key>`` convention)."""
-    tails = []
-    if entry is not None and entry.key:
-        tails.append(get_extract_path(entry.key) if entry.extract else entry.key)
-    if key:
-        tails += [key, get_extract_path(key)]
-    for tail in tails:
-        root = _strip_tail(loc, tail)
-        if root is not None:
-            return root
-    return os.path.dirname(loc)
-
-
-def _where_off_pattern(items, conform_roots, label, on, *, top=12, per=4):
-    """Print the ``(name, loc, root)`` triples whose *loc* is *not* under any of
-    *conform_roots* (the datasets_dir / datacache_dir and the read pools) — the
-    only locations worth surfacing, since conformant ones need no attention.
-
-    They are grouped by their storage *root*, one ``- <root> -> a, b, +N more``
-    line each (top *top* roots, *per* names), so a root holding hundreds of
-    datasets collapses to a single line."""
-    off = [(n, root) for n, loc, root in items
-           if not any(_under(loc, r) for r in conform_roots)]
-    if not off:
-        return
-    groups = {}
-    for name, root in off:
-        groups.setdefault(root, []).append(name)
-    print(_paint(f"\n{label}:", "yellow", on=on))
-    for folder in sorted(groups, key=lambda f: (-len(groups[f]), f))[:top]:
-        names = sorted(groups[folder])
-        shown = ", ".join(names[:per])
-        if len(names) > per:
-            shown += f", +{len(names) - per} more"
-        print(f"  - {folder} -> {shown}")
-    if len(groups) > top:
-        print(f"  … {len(groups) - top} more folder(s) — `datamanifest list`")
-
-
-def _where_recorded(idx, db, project_root, ds_pools, datasets_dir,
-                    dc_pools, datacache_dir, on):
-    """Surface only what sits *outside* the configured locations: datasets not
-    under datasets_dir or a datasets read pool, and cached artifacts not under
-    datacache_dir or a cached read pool. Conformant objects are intentionally
-    not listed (the header already names where they live). Each off-pattern object
-    is shown under its storage root, not the deep folder just above the file."""
-    key_to_name = {e.key: n for n, e in db.datasets.items()}
-    ds_items = []
-    for r in idx.dataset_records():
-        loc = _abs_under(r["storage_path"], project_root)
-        if not loc:
-            continue
-        name = key_to_name.get(r["key"], r["key"])
-        ds_items.append((name, loc, _storage_root(loc, r["key"], db.datasets.get(name))))
-    ds_roots = [r for r in [os.path.abspath(datasets_dir), *ds_pools] if r]
-    _where_off_pattern(
-        ds_items, ds_roots,
-        "datasets recorded outside datasets_dir / read pools", on)
-
-    dc_items = []
-    for r in idx.recipe_records():
-        name = f"{r['cachetype']}{('@' + r['version']) if r['version'] else ''}"
-        for h, sp in r["instances"].items():
-            loc = _abs_under(sp, project_root)
-            if not loc:
-                continue
-            dc_items.append((name, loc, _storage_root(loc, f"{r['cachetype']}/{h}", None)))
-    dc_roots = [r for r in [os.path.abspath(datacache_dir), *dc_pools] if r]
-    _where_off_pattern(
-        dc_items, dc_roots,
-        "cached artifacts recorded outside datacache_dir / read pools", on)
+def _is_outside(obj, ds_roots, dc_roots):
+    """Whether *obj* is materialized outside its configured roots — tracked and
+    present, but not under datasets_dir / datacache_dir or a read pool (e.g. data
+    fetched into an ad-hoc folder, or moved out of the standard layout)."""
+    loc = getattr(obj, "location", "")
+    if not loc or not getattr(obj, "present", False):
+        return False
+    roots = dc_roots if obj.kind == "cached" else ds_roots
+    return not any(_under(loc, r) for r in roots)
 
 
 def _cmd_where(args):
@@ -1372,15 +1322,18 @@ def _cmd_where(args):
     _row("datasets_dir", ds_dir, ds_pools)
     _row("datacache_dir", dc_dir, dc_pools)
 
-    # Recorded locations — a compact grouped summary (full list via `list`).
-    idx = None
-    if os.path.isfile(state_path):
-        try:
-            idx = CachedIndex.read(state_path)
-        except Exception:  # noqa: BLE001 - a broken state file records nothing
-            idx = None
-    if idx is not None:
-        _where_recorded(idx, db, root, ds_pools, ds_dir, dc_pools, dc_dir, on)
+    # A glance at tracked data living outside the configured folders — just a
+    # count and a pointer; `datamanifest list --outside` enumerates them.
+    ds_roots, dc_roots = _conform_roots(db)
+    outside = [o for o in _enumerate_objects(db) if _is_outside(o, ds_roots, dc_roots)]
+    n_ds = sum(1 for o in outside if o.kind == "datasets")
+    n_dc = sum(1 for o in outside if o.kind == "cached")
+    parts = ([f"{n_ds} dataset{'s' if n_ds != 1 else ''}"] if n_ds else []) \
+        + ([f"{n_dc} cached artifact{'s' if n_dc != 1 else ''}"] if n_dc else [])
+    if parts:
+        print(_paint(
+            f"\n{' and '.join(parts)} stored outside datasets_dir / the read "
+            "pools — `datamanifest list --outside` to inspect.", "yellow", on=on))
 
     # --scan: probe the read pools for datasets present there but not at the
     # resolved location (candidates to adopt by `download` / `migrate`).
@@ -1700,6 +1653,11 @@ def main():
         "--dirty", action="store_true",
         help="Only objects whose state-file record disagrees with disk "
              "(missing / relocated / untracked)",
+    )
+    filter_group.add_argument(
+        "--outside", action="store_true",
+        help="Only tracked objects stored outside datasets_dir / datacache_dir "
+             "and the read pools (data fetched into or moved to an ad-hoc folder)",
     )
     filter_group.add_argument(
         "--older-than", dest="older_than", metavar="AGE",

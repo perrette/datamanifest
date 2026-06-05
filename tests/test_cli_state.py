@@ -21,7 +21,7 @@ def _args(**kw):
         search=[], hash=None, invert=False, any=False, cached=False,
         datasets=False, format=None, present=False, missing=False, orphan=False,
         dirty=False, all=False, older_than=None, dry_run=False, move=None,
-        delete=False,
+        delete=False, outside=False,
     )
     base.update(kw)
     return types.SimpleNamespace(**base)
