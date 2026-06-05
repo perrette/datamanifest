@@ -149,6 +149,70 @@ def test_schema3_version_in_key_storage_path_and_params_as_body(tmp_path):
     assert again.read_text() == text
 
 
+def test_entries_with_storage_paths_survive_roundtrip(tmp_path):
+    """Guard against a future format change silently wiping recorded entries:
+    several recipes (versioned + unversioned, each with a storage_path and
+    instances) must round-trip read → write → read losslessly and byte-stably."""
+    p = tmp_path / "cached.toml"
+    idx = CachedIndex(path=str(p))
+    idx.register(cachetype="a.b.run", version="v1", hash="h1", params={"n": 1},
+                 ref="a.b:run", format="pickle", storage_path="cached/a.b.run/v1")
+    idx.register(cachetype="a.b.run", version="v2", hash="h2", params={"n": 2},
+                 ref="a.b:run", format="pickle", storage_path="/scratch/v2")
+    idx.register(cachetype="plain", hash="h3", params={}, ref="m:plain",
+                 storage_path="cached/plain")
+    idx.write()
+    text = p.read_text()
+
+    back = CachedIndex.read(p)
+    assert back.recipes == idx.recipes                       # nothing dropped/altered
+    assert back.storage_path_of(cachetype="a.b.run", version="v2") == "/scratch/v2"
+    assert back.storage_path_of(cachetype="plain", version="") == "cached/plain"
+    # A second write is byte-identical (stable; no drift).
+    again = tmp_path / "again.toml"
+    back.write(again)
+    assert again.read_text() == text
+
+
+def test_pinned_schema3_fixture_preserves_storage_paths(tmp_path):
+    """A hand-pinned canonical schema-3 file must read back with every recipe's
+    storage_path intact. If a future reader/writer change breaks this, the test
+    fails — forcing a schema bump + migration rather than a silent wipe."""
+    p = tmp_path / "cached.toml"
+    p.write_text(
+        '[_META]\nschema = 3\n\n'
+        '[greet]\nref = "m:greet"\nformat = "txt"\nstorage_path = "cached/greet"\n\n'
+        '[greet.instances.aa]\nwho = "x"\n\n'
+        '["a.b.run@v2"]\nref = "a.b:run"\nformat = "pickle"\n'
+        'storage_path = "/scratch/v2"\n\n'
+        '["a.b.run@v2".instances.bb]\nn = 2\n'
+    )
+    idx = CachedIndex.read(p)
+    assert idx.storage_path_of(cachetype="greet", version="") == "cached/greet"
+    assert idx.storage_path_of(cachetype="a.b.run", version="v2") == "/scratch/v2"
+    assert idx.reachable_keys() == {("greet", "", "aa"), ("a.b.run", "v2", "bb")}
+
+
+def test_dead_instanceless_recipe_is_dropped_on_read(tmp_path):
+    """A residual recipe with no instances (e.g. left by an older shape) roots
+    nothing and is dropped on read, so it self-cleans on the next write —
+    without touching the real, populated entries."""
+    p = tmp_path / "cached.toml"
+    p.write_text(
+        '[_META]\nschema = 3\n\n'
+        '[memory2]\nformat = ""\nref = ""\nstorage_path = ""\n\n'
+        '[memory2.instances]\n\n'
+        '["memory2@2"]\nref = "m:p"\nformat = "pickle"\nstorage_path = "/c/ho/memory2"\n\n'
+        '["memory2@2".instances.h]\n\n'
+    )
+    idx = CachedIndex.read(p)
+    assert ("memory2", "") not in idx.recipes               # dead empty entry gone
+    assert ("memory2", "2") in idx.recipes                  # real entry kept
+    assert idx.storage_path_of(cachetype="memory2", version="2") == "/c/ho/memory2"
+    idx.write()
+    assert "[memory2]\n" not in p.read_text()               # self-cleaned on rewrite
+
+
 def test_cachetype_with_at_sign_is_rejected(tmp_path):
     """'@' is reserved as the version separator — a cachetype can't contain it."""
     import pytest
@@ -176,6 +240,26 @@ def test_cached_storage_path_replaces_cachetype_dir(tmp_path):
     rec = CachedIndex.read(proj / "cached.toml").storage_path_of(
         cachetype="ct", version="")
     assert rec == str(tmp_path / "out")          # absolute (outside the repo)
+
+
+def test_cached_versioned_storage_path_includes_version(tmp_path):
+    """A versioned recipe records the version *in* storage_path (the direct hash
+    parent), and the artifact is storage_path/<hash> — no version re-appended."""
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "datasets.toml").write_text("[_META]\nschema = 1\n")
+
+    @cached(cachetype="ct", version="v3", format="txt", project_root=str(proj))
+    def f(*, x=1):
+        return str(x)
+
+    f(x=1)
+    rec = CachedIndex.read(proj / "cached.toml").storage_path_of(
+        cachetype="ct", version="v3")
+    assert rec == "cached/ct/v3"                              # version baked in
+    hits = [r for r, _, fs in os.walk(proj / "cached") if "data.txt" in fs]
+    assert len(hits) == 1
+    assert hits[0].endswith(os.path.join("cached", "ct", "v3", os.path.basename(hits[0])))
 
 
 def test_cached_hit_prefers_recorded_storage_path(tmp_path, monkeypatch):

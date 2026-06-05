@@ -250,36 +250,38 @@ def _key_table_for_call(key, call_kwargs: dict) -> dict:
     return {k: base[k] for k in key if k in base}
 
 
-def _recipe_parent(*, cache_dir, storage_path, cachetype, project_root,
-                   storage_config) -> str:
-    """The recipe's **parent directory** (spec-v4) — parallel to the cachetype;
-    the artifact dir is ``<parent>/[<version>/]<hash>``.
+def _recipe_storage_path(*, cache_dir, storage_path, cachetype, version,
+                         project_root, storage_config) -> str:
+    """The recipe's ``storage_path`` (spec-v4) — the **direct parent of the hash
+    dirs**, with the version baked in (it is known per recipe), so the artifact
+    dir is just ``<storage_path>/<hash>``.
 
-    Precedence: an explicit ``storage_path=`` (replaces ``datacache_dir`` *and*
-    the cachetype — used as the parent verbatim) → a per-call ``cache_dir=``
-    (``<cache_dir>/<cachetype>``, keeps the cachetype subfolder) → the default
-    ``<datacache_dir>/<cachetype>``. Returns an absolute path.
+    Precedence: an explicit ``storage_path=`` is used **verbatim** (the user
+    owns the layout, version included) → a per-call ``cache_dir=`` gives
+    ``<cache_dir>/<cachetype>[/<version>]`` (keeps the cachetype subfolder) → the
+    default ``<datacache_dir>/<cachetype>[/<version>]``. Returns an absolute path.
     """
     if storage_path:
         return locations.resolve_path(
             storage_path, project_root=project_root, storage_config=storage_config,
         )
     if cache_dir:
-        return os.path.join(cache_dir, cachetype)
-    base = locations.datacache_dir(
-        project_root=project_root, storage_config=storage_config,
-    )
-    return os.path.join(base, cachetype)
+        base = os.path.join(cache_dir, cachetype)
+    else:
+        base = os.path.join(
+            locations.datacache_dir(
+                project_root=project_root, storage_config=storage_config,
+            ),
+            cachetype,
+        )
+    return os.path.join(base, version) if version else base
 
 
-def _artifact_dir(parent, version, hash_) -> str:
-    """``<parent>/[<version>/]<hash>`` — the artifact directory under its
-    recipe's *parent* (see :func:`_recipe_parent`)."""
-    parts = [parent]
-    if version:
-        parts.append(version)
-    parts.append(hash_)
-    return os.path.join(*parts)
+def _artifact_dir(storage_path, hash_) -> str:
+    """``<storage_path>/<hash>`` — the artifact directory under its recipe's
+    ``storage_path`` (which already carries the version; see
+    :func:`_recipe_storage_path`)."""
+    return os.path.join(storage_path, hash_)
 
 
 def _record_storage_path(parent, project_root) -> str:
@@ -479,13 +481,14 @@ def cached(
         ``<hash>`` with or without a version. Bumping it isolates artifacts
         across recipe revisions (e.g. preventing stale cross-branch hits).
     storage_path:
-        The recipe's **parent directory** (parallel to the cachetype); the
-        artifact lands at ``<storage_path>/[<version>/]<hash>``. Replaces the
-        default ``<datacache_dir>/<cachetype>`` wholesale (unlike the per-call
-        ``cache_dir=``, which keeps the ``<cachetype>`` subfolder). A relative
-        value resolves against the manifest dir, absolute is used as-is. The
-        resolved parent is recorded in ``cached.toml`` and preferred on the next
-        hit. Default ``""`` ⇒ ``<datacache_dir>/<cachetype>``.
+        The recipe's location — the **direct parent of the hash dirs**, version
+        already baked in; the artifact lands at ``<storage_path>/<hash>`` (no
+        auto-appended version, so a new ``version=`` may point somewhere
+        entirely different). Used **verbatim** (resolved: relative ⇒ manifest
+        dir, absolute as-is), unlike the per-call ``cache_dir=`` which composes
+        ``<cache_dir>/<cachetype>[/<version>]``. The resolved value is recorded
+        in ``cached.toml`` and preferred on the next hit. Default ``""`` ⇒
+        ``<datacache_dir>/<cachetype>[/<version>]``.
     project_root, storage_config:
         Threaded through to the ``$``-symbol resolver / git provenance (optional;
         no ``Database`` is required).
@@ -541,12 +544,13 @@ def cached(
             index_path = _locate_cached_toml(cached_toml, root)
             data_filename = _data_name(basename, fmt)
 
-            # Where THIS call would write under the current config (storage_path
-            # ⇒ verbatim parent; cache_dir ⇒ <cache_dir>/<cachetype>; else
-            # <datacache_dir>/<cachetype>), and the portable form recorded for it.
-            derived_parent = _recipe_parent(
+            # The recipe's storage_path under the current config — the direct
+            # parent of the hash dirs, version baked in (storage_path= verbatim;
+            # cache_dir ⇒ <cache_dir>/<cachetype>[/<version>]; else
+            # <datacache_dir>/<cachetype>[/<version>]) — and its portable form.
+            derived_parent = _recipe_storage_path(
                 cache_dir=cache_dir, storage_path=storage_path, cachetype=ct,
-                project_root=root, storage_config=sconf,
+                version=version, project_root=root, storage_config=sconf,
             )
             sp_record = _record_storage_path(derived_parent, root)
 
@@ -575,7 +579,7 @@ def cached(
             # mismatch must recompute rather than fail to read).
             if cached:
                 for parent in search_parents:
-                    adir = _artifact_dir(parent, version, hash_)
+                    adir = _artifact_dir(parent, hash_)
                     dpath = os.path.join(adir, data_filename)
                     if (
                         materialize.is_complete(adir)
@@ -593,7 +597,7 @@ def cached(
                         return _load_value(dpath, fmt)
 
             # Miss → produce at the derived (current-config) location.
-            artifact_dir = _artifact_dir(derived_parent, version, hash_)
+            artifact_dir = _artifact_dir(derived_parent, hash_)
             result = fn(**kwargs)
             write_value = _default_writer(fmt)
 

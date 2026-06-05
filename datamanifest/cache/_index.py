@@ -131,6 +131,10 @@ class CachedIndex:
                     for h, p in rec.get("instances", {}).items()
                     if isinstance(p, dict)
                 }
+                if not instances:
+                    # A recipe with no produced variations roots nothing — skip it
+                    # (drops dead/residual entries rather than round-tripping them).
+                    continue
                 recipes[(cachetype, version)] = {
                     "storage_path": rec.get("storage_path", ""),
                     "ref": rec.get("ref", ""),
@@ -147,6 +151,8 @@ class CachedIndex:
                     h = inst.get("hash", "")
                     if h:
                         instances[h] = dict(inst.get("params", {}))
+                if not instances:
+                    continue
                 recipes[key] = {
                     "storage_path": "",
                     "ref": rec.get("ref", ""),
@@ -159,12 +165,14 @@ class CachedIndex:
                 if name == "_META" or not isinstance(e, dict):
                     continue
                 ctype, h = e.get("cachetype", ""), e.get("hash", "")
+                if not h:
+                    continue
                 key = (ctype, e.get("version", ""))
                 recipes[key] = {
                     "storage_path": "",
                     "ref": e.get("ref", ""),
                     "format": e.get("format", ""),
-                    "instances": {h: {}} if h else {},
+                    "instances": {h: {}},
                 }
         return cls(recipes=recipes, path=target)
 
