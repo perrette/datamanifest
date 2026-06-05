@@ -628,3 +628,96 @@ def test_storage_show_resolves_for_this_host(tmp_path):
     assert r.returncode == 0, r.stderr
     assert "Resolved for this host" in r.stdout
     assert "myproj" in r.stdout                       # resolved, $user_data_dir expanded
+
+
+# ----- first-order delete / move (by id, like push/pull) -----
+
+def _id_project(tmp_path):
+    """A manifest-backed project with one downloadable file:// dataset."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "a.csv").write_bytes(b"col\n1\n")
+    toml = tmp_path / "datamanifest.toml"
+    toml.write_text(
+        '[_META]\nschema = 1\n\n[_STORAGE]\ndatasets_dir = "datasets"\n\n'
+        f'[mydata]\nuri = "file://{src / "a.csv"}"\n'
+    )
+    return toml
+
+
+def test_delete_by_name_removes_bytes(tmp_path):
+    toml = _id_project(tmp_path)
+    env = _env_with_toml(toml)
+    _run("download", "mydata", env=env)
+    # dry-run keeps it; apply removes the bytes.
+    dry = _run("delete", "mydata", "--dry-run", env=env)
+    assert dry.returncode == 0, dry.stderr
+    run = _run("delete", "mydata", env=env)
+    assert run.returncode == 0, run.stderr
+    assert "Deleted" in run.stdout
+    # the manifest still declares it (delete removes bytes, not the spec).
+    assert "[mydata]" in toml.read_text()
+
+
+def test_move_by_name_relocates_and_repoints_state(tmp_path):
+    toml = _id_project(tmp_path)
+    env = _env_with_toml(toml)
+    _run("download", "mydata", env=env)
+    dest = tmp_path / "archive"
+    run = _run("move", "mydata", str(dest), env=env)
+    assert run.returncode == 0, run.stderr
+    assert dest.exists()
+    state = (tmp_path / ".datamanifest-state.toml").read_text()
+    assert "archive" in state                       # recorded location repointed
+    assert toml.read_text().count("[mydata]") == 1  # manifest unchanged
+
+
+def test_delete_unknown_id_errors(tmp_path):
+    toml = _id_project(tmp_path)
+    r = _run("delete", "does-not-exist", env=_env_with_toml(toml))
+    assert r.returncode != 0
+    assert "no stored object" in (r.stdout + r.stderr).lower()
+
+
+def _orphan_with_hash(cache, cachetype, h):
+    from datamanifest.cache._sidecars import write_config
+
+    artifact = cache / cachetype / h
+    artifact.mkdir(parents=True)
+    (artifact / "data.txt").write_text("v")
+    write_config(str(artifact), cachetype, h, {"x": h})
+    (artifact / ".complete").write_text("")
+    return artifact
+
+
+def test_delete_ambiguous_id_needs_batch(tmp_path):
+    cache = tmp_path / "cache"
+    a = _orphan_with_hash(cache, "ct", "aa11")
+    b = _orphan_with_hash(cache, "ct", "aa22")
+    env = _maint_env(tmp_path, cache)
+
+    # 'aa' matches both → refuses without --batch.
+    r = _run("delete", "aa", env=env)
+    assert r.returncode != 0
+    assert "ambiguous" in (r.stdout + r.stderr).lower()
+    assert a.is_dir() and b.is_dir()
+
+    # --batch deletes all matches.
+    r2 = _run("delete", "aa", "--batch", env=env)
+    assert r2.returncode == 0, r2.stderr
+    assert not a.exists() and not b.exists()
+
+
+def test_match_cached_by_id_addressing():
+    from datamanifest.cache._inspect import CacheObject
+    from datamanifest.cli import _match_cached_by_id
+
+    objs = [
+        CacheObject(kind="cached", location="", cachetype="ct", hash="abc123"),
+        CacheObject(kind="cached", location="", cachetype="ct", hash="abd999"),
+        CacheObject(kind="cached", location="", cachetype="other", hash="abc777"),
+    ]
+    assert len(_match_cached_by_id("ab", objs)) == 3           # prefix matches all
+    assert len(_match_cached_by_id("abc", objs)) == 2          # abc123, abc777
+    assert {o.hash for o in _match_cached_by_id("ct/abc", objs)} == {"abc123"}
+    assert len(_match_cached_by_id("ct/ab", objs)) == 2        # cachetype-scoped prefix

@@ -593,6 +593,81 @@ def _cmd_refresh(args):
     _refresh(objects, db, dry_run=args.dry_run)
 
 
+def _match_cached_by_id(ident, objects):
+    """Produced-artifact objects addressed by *ident* — ``cachetype[/version]/hash``
+    or an (unambiguous) hash prefix — mirroring ``push``/``pull`` addressing."""
+    parts = [p for p in ident.split("/") if p]
+    id_hash = parts[-1] if parts else ""
+    id_head = parts[:-1]
+    out = []
+    for o in objects:
+        if o.kind != "cached":
+            continue
+        if id_head:
+            if len(id_head) == 1 and id_head[0] != o.cachetype:
+                continue
+            if len(id_head) == 2 and not (id_head[0] == o.cachetype
+                                          and id_head[1] == o.version):
+                continue
+            if len(id_head) > 2:
+                continue
+        if o.hash.startswith(id_hash):
+            out.append(o)
+    return out
+
+
+def _match_objects_by_id(db, ident, objects):
+    """The *objects* (from :func:`_enumerate_objects`) addressed by *ident* — a
+    fetched dataset by name/alias/doi, or a produced artifact by
+    ``cachetype[/version]/hash`` / hash prefix. Same addressing as ``push``/``pull``
+    (but it does **not** refuse repo-local objects, which delete/move may act on).
+    """
+    from .database import search_datasets
+
+    ds_names = {name for name, _ in search_datasets(db, ident)}
+    matched = [o for o in objects if o.kind == "datasets" and o.key in ds_names]
+    matched += _match_cached_by_id(ident, objects)
+    return matched
+
+
+def _run_id_action(args, db, *, move):
+    """Engine for the first-order ``delete`` / ``move`` commands: resolve ``args.id``
+    to object(s), enforce the single-vs-``--batch`` rule (an ambiguous id errors
+    unless ``--batch``), then apply via :func:`_maintain`. ``--dry-run`` previews."""
+    objects = _enumerate_objects(db, heavy=frozenset())
+    matched = _match_objects_by_id(db, args.id, objects)
+    if not matched:
+        print(f"Error: no stored object found for id {args.id!r}.", file=sys.stderr)
+        sys.exit(1)
+    if len(matched) > 1 and not args.batch:
+        listing = "\n- ".join(f"{o.kind}  {o.key}" for o in matched)
+        print(
+            f"id {args.id!r} is ambiguous; it matches {len(matched)} objects:\n- "
+            f"{listing}\nGive a more specific id, or pass --batch to act on all.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    margs = argparse.Namespace(
+        delete=not move, move=(args.dest if move else None), dry_run=args.dry_run,
+    )
+    _maintain(matched, margs, db)
+
+
+def _cmd_delete(args):
+    """Delete a stored object's bytes (and prune its state-file record), addressed
+    by id like ``push``/``pull``. This removes the *materialized data*, not the
+    manifest entry (use ``remove`` to drop a dataset's spec). Protected data
+    (user-managed / skip_download) is skipped. ``--dry-run`` previews."""
+    _run_id_action(args, _get_db(), move=False)
+
+
+def _cmd_move(args):
+    """Move a stored object's bytes under DEST and repoint its state-file record
+    (the manifest is not edited), addressed by id like ``push``/``pull``.
+    ``--dry-run`` previews."""
+    _run_id_action(args, _get_db(), move=True)
+
+
 def _maintain(objects, args, db):
     """Run ``--delete`` / ``--move`` over the selected *objects* — produced
     artifacts **and** fetched datasets.
@@ -1540,6 +1615,51 @@ def main():
             help="Transfer all objects matching an ambiguous id instead of erroring",
         )
         p_sync.set_defaults(func=func)
+
+    # delete / move — first-order maintenance of a single stored object, by id
+    # (the same addressing as push/pull). Mirrors `list --delete` / `--move` for
+    # discoverability; an ambiguous id errors unless --batch; --dry-run previews.
+    _ID_DESC = (
+        "The object is addressed by its machine-independent id: a fetched dataset "
+        "by name/alias/doi, or a produced artifact by cachetype[/version]/hash "
+        "(full or an unambiguous hash prefix). An ambiguous id errors unless "
+        "--batch."
+    )
+    p_delete = subparsers.add_parser(
+        "delete",
+        help="Delete a stored object's bytes by id (not the manifest entry)",
+        description=(
+            "Delete a stored object's materialized bytes and prune its state-file "
+            "record. This does NOT edit the manifest — use `remove` to drop a "
+            "dataset's spec. Protected data (user-managed / skip_download) is "
+            f"skipped. {_ID_DESC}"
+        ),
+    )
+    p_delete.add_argument("id", metavar="ID", help="Object identifier")
+    del_opts = p_delete.add_argument_group("options")
+    del_opts.add_argument("--dry-run", action="store_true",
+                          help="Preview without deleting anything")
+    del_opts.add_argument("--batch", action="store_true",
+                          help="Delete all objects matching an ambiguous id")
+    p_delete.set_defaults(func=_cmd_delete)
+
+    p_move = subparsers.add_parser(
+        "move",
+        help="Move a stored object's bytes under DEST by id (updates the state file)",
+        description=(
+            "Move a stored object's bytes under DEST and repoint its state-file "
+            "record; the manifest is not edited (a later re-fetch still follows "
+            f"the datasets_dir directive). {_ID_DESC}"
+        ),
+    )
+    p_move.add_argument("id", metavar="ID", help="Object identifier")
+    p_move.add_argument("dest", metavar="DEST", help="Destination root directory")
+    move_opts = p_move.add_argument_group("options")
+    move_opts.add_argument("--dry-run", action="store_true",
+                           help="Preview without moving anything")
+    move_opts.add_argument("--batch", action="store_true",
+                           help="Move all objects matching an ambiguous id")
+    p_move.set_defaults(func=_cmd_move)
 
     args = parser.parse_args()
     if getattr(args, "func", None) is None:
