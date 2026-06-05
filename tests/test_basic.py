@@ -1208,6 +1208,34 @@ def test_get_dataset_path_v4_datasets_dir_env(tmp_path, monkeypatch):
     )
 
 
+def test_download_honors_manifest_datasets_dir(tmp_path):
+    """download writes to [_STORAGE].datasets_dir (not the repo-local default),
+    so the same path resolve_existing_path/list reads back. Regression: the
+    download pipeline used to omit storage_config from get_dataset_path."""
+    from datamanifest.database import Database, resolve_existing_path
+    from datamanifest.pipelines import download_dataset
+
+    store = tmp_path / "store"
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "f.txt").write_text("payload")
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "datasets.toml").write_text(
+        f'[_STORAGE]\ndatasets_dir = "{store}/ds"\n\n'
+        f'[d]\nuri = "file://{src}/f.txt"\nsha256 = ""\n'
+    )
+
+    db = Database(datasets_toml=str(proj / "datasets.toml"), persist=False)
+    db.datasets_toml = str(proj / "datasets.toml")  # so get_project_root resolves
+    path = download_dataset(db, "d")
+
+    assert str(store / "ds") in path                     # honored datasets_dir
+    assert not (proj / "datasets").exists()              # not the repo-local default
+    assert os.path.isfile(path)
+    assert resolve_existing_path(db, db.datasets["d"]) == path  # download == read
+
+
 def test_skip_download_raises_if_path_missing(tmp_path):
     """skip_download=True raises FileNotFoundError with 'documented URI is' when path absent."""
     from datamanifest.database import Database
