@@ -72,3 +72,75 @@ def test_fsspec_missing_dependency_gives_actionable_error(tmp_path, monkeypatch)
     monkeypatch.setattr(builtins, "__import__", no_fsspec)
     with pytest.raises(ValueError, match=r"datamanifest\[fsspec\]"):
         _fsspec_download("s3://bucket/key", str(tmp_path / "x"))
+
+
+# ----- on-the-fly loader (add --on-the-fly) ----------------------------------
+
+def test_fsspec_loader_parses_json_remotely(tmp_path):
+    fsspec = pytest.importorskip("fsspec")
+    import json
+
+    from datamanifest.store.loaders import fsspec_loader
+    fsspec.filesystem("memory").pipe_file("/b/cfg.json", json.dumps({"k": 42}).encode())
+    assert fsspec_loader("memory://b/cfg.json") == {"k": 42}
+
+
+def test_fsspec_loader_unknown_format_returns_lazy_handle(tmp_path):
+    fsspec = pytest.importorskip("fsspec")
+
+    from datamanifest.store.loaders import fsspec_loader
+    fsspec.filesystem("memory").pipe_file("/b/blob.bin", b"raw")
+    handle = fsspec_loader("memory://b/blob.bin")   # no reader for .bin → OpenFile
+    with handle as fh:
+        assert fh.read() == b"raw"
+
+
+def test_on_the_fly_registers_skip_download_and_loads(tmp_path):
+    fsspec = pytest.importorskip("fsspec")
+    import json
+
+    from datamanifest.database import Database
+    from datamanifest.pipelines import load_dataset
+    from datamanifest.store.loaders import FSSPEC_LOADER_REF
+
+    fsspec.filesystem("memory").pipe_file("/b/cfg.json", json.dumps({"v": 1}).encode())
+    toml = tmp_path / "datamanifest.toml"
+    toml.write_text('[_META]\nschema = 1\n[_STORAGE]\ndatasets_dir = "datasets"\n')
+    db = Database(datasets_toml=str(toml))
+
+    name, entry = db.register_dataset(
+        "memory://b/cfg.json", skip_download=True, lang_python_loader=FSSPEC_LOADER_REF)
+    assert entry.skip_download and entry.lang_python_loader == FSSPEC_LOADER_REF
+    # No download, no state record (nothing local), and the loader streams it.
+    assert load_dataset(db, name) == {"v": 1}
+    assert not (tmp_path / ".datamanifest-state.toml").exists()
+
+
+def test_add_on_the_fly_cli_wiring(tmp_path, monkeypatch, capsys):
+    import types
+
+    try:
+        import tomllib
+    except ModuleNotFoundError:
+        import tomli as tomllib
+
+    from datamanifest import cli
+    from datamanifest.store.loaders import FSSPEC_LOADER_REF
+
+    toml = tmp_path / "datamanifest.toml"
+    toml.write_text('[_META]\nschema = 1\n[_STORAGE]\ndatasets_dir = "datasets"\n')
+    monkeypatch.setenv("DATAMANIFEST_TOML", str(toml))
+
+    args = types.SimpleNamespace(
+        uri="s3://bucket/store.zarr", name=None, extract=False,
+        on_the_fly=True, overwrite=False, no_download=False,
+    )
+    cli._cmd_add(args)
+    assert "on-the-fly" in capsys.readouterr().out
+
+    with open(toml, "rb") as f:
+        data = tomllib.load(f)
+    entry = data["bucket/store"]
+    assert entry["skip_download"] is True
+    assert entry["uri"] == "s3://bucket/store.zarr"
+    assert entry["_LANG"]["python"]["loader"] == FSSPEC_LOADER_REF

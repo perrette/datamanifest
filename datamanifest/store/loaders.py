@@ -3,6 +3,7 @@ Optional packages are imported at call-time with a pip-install hint on failure.
 """
 
 import importlib
+import os
 import sys
 
 if sys.version_info >= (3, 11):
@@ -47,6 +48,58 @@ def default_loader(format: str):
         f'No default loader for format "{format}". '
         "Pass a loader function or register a named loader in [_LOADERS]."
     )
+
+
+def fsspec_loader(path):
+    """Open a remote (fsspec) dataset *path* lazily, **without downloading it** —
+    the built-in loader behind ``add --on-the-fly`` (paired with ``skip_download``,
+    so *path* is the original ``s3://`` / ``gs://`` / … URI).
+
+    Dispatches by the URI's extension to the reader that streams it in place:
+    ``zarr`` / ``nc`` → xarray, ``csv`` / ``parquet`` → pandas (all read fsspec
+    URLs directly). For ``json`` / ``yaml`` / ``toml`` the bytes are opened through
+    fsspec and parsed; any other format returns an ``fsspec`` *OpenFile* — a lazy
+    handle the caller uses as a context manager. Needs fsspec plus the backend for
+    the scheme (``s3fs`` / ``gcsfs`` / ``adlfs`` …) and the format's reader.
+    """
+    clean = path.split("?")[0].rstrip("/")
+    fmt = "tar.gz" if clean.endswith(".tar.gz") \
+        else clean.rsplit(".", 1)[-1].lower() if "." in os.path.basename(clean) else ""
+
+    def _need(mod, extra):
+        try:
+            return importlib.import_module(mod)
+        except ImportError:
+            raise ImportError(
+                f"on-the-fly loading of {fmt or 'this URI'} needs {extra}.")
+
+    if fmt == "zarr":
+        return _need("xarray", "xarray + zarr + the fsspec backend").open_zarr(path)
+    if fmt in ("nc", "nc4", "netcdf", "h5", "hdf5", "dimstack"):
+        return _need("xarray", "xarray + the fsspec backend").open_dataset(path)
+    if fmt == "csv":
+        return _need("pandas", "pandas + the fsspec backend").read_csv(path, comment="#")
+    if fmt == "parquet":
+        return _need("pandas", "pandas + pyarrow + the fsspec backend").read_parquet(path)
+
+    fsspec = _need("fsspec", "fsspec + the backend (s3fs / gcsfs / …)")
+    if fmt == "json":
+        import json
+        with fsspec.open(path, "rt") as fh:
+            return json.load(fh)
+    if fmt in ("yaml", "yml"):
+        yaml = _need("yaml", "pyyaml")
+        with fsspec.open(path, "rt") as fh:
+            return yaml.safe_load(fh)
+    if fmt == "toml":
+        with fsspec.open(path, "rb") as fh:
+            return tomllib.load(fh)
+    # Unknown / binary / text: hand back a lazy fsspec handle (a context manager).
+    return fsspec.open(path)
+
+
+# The portable ref for the built-in fsspec loader, wired by `add --on-the-fly`.
+FSSPEC_LOADER_REF = "datamanifest.store.loaders:fsspec_loader"
 
 
 def _json_loader(path):

@@ -1090,6 +1090,17 @@ def _cmd_add(args):
     if args.extract:
         kwargs["extract"] = True
 
+    # On-the-fly: never download; open the remote URI lazily via the built-in
+    # fsspec loader (a Python-only `_LANG.python.loader`, so a peer tool ignores it).
+    if getattr(args, "on_the_fly", False):
+        from .store.loaders import FSSPEC_LOADER_REF
+        kwargs["skip_download"] = True
+        kwargs["lang_python_loader"] = FSSPEC_LOADER_REF
+        name, _ = db.register_dataset(args.uri, overwrite=args.overwrite, **kwargs)
+        print(f"Registered {name!r} for on-the-fly access (skip_download; opened "
+              "lazily via the built-in fsspec loader).")
+        return
+
     name, entry = db.register_dataset(args.uri, overwrite=args.overwrite, **kwargs)
 
     if not args.no_download:
@@ -1791,6 +1802,11 @@ def main():
     )
     add_opts.add_argument(
         "--no-download", action="store_true", help="Register without downloading"
+    )
+    add_opts.add_argument(
+        "--on-the-fly", dest="on_the_fly", action="store_true",
+        help="Don't download; open the remote URI (s3://, gs://, …) lazily via the "
+             "built-in fsspec loader (sets skip_download + a Python-only loader)",
     )
     add_opts.add_argument(
         "--extract", action="store_true", help="Extract archive after download"
