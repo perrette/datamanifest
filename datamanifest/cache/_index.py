@@ -497,7 +497,13 @@ class CachedIndex:
     def write(self, path: str = "") -> str:
         """Write the state file to *path* (or its bound ``path``, migrating a
         legacy name to the canonical one), canonically ordered. Returns the path
-        written."""
+        written.
+
+        The write is **atomic** — a sibling temp file is filled and then
+        ``os.replace``-renamed into place — so concurrent writers (parallel
+        downloads / ``@cached`` produces, each re-reading and additively merging
+        before writing) never observe or leave a half-written inventory.
+        """
         target = self._canonical_path(path) if path else self.path
         if not target:
             raise ValueError("no path given and CachedIndex has no loaded path")
@@ -511,7 +517,9 @@ class CachedIndex:
                 data.items(), key=lambda kv: (not kv[0].startswith("_"), kv[0])
             )
         }
-        with open(target, "wb") as f:
+        tmp = f"{target}.{os.getpid()}.tmp"
+        with open(tmp, "wb") as f:
             tomli_w.dump(ordered, f)
+        os.replace(tmp, target)
         self.path = target
         return target

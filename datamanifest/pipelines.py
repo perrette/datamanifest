@@ -33,6 +33,7 @@ from .database import (
     get_dataset_path,
     lang_shell_fetcher,
     parse_uri_metadata,
+    record_dataset_state,
     resolve_existing_path,
     resolve_fetcher,
     resolve_loader_rungs,
@@ -689,6 +690,7 @@ def download_dataset(db, dataset, extract=None, overwrite: bool = False):
         )
         if not (os.path.isfile(path) or os.path.isdir(path)):
             _missing_dataset_error(dataset, path)
+        record_dataset_state(db, dataset, path)
         return path
 
     local_path = get_dataset_path(
@@ -708,6 +710,7 @@ def download_dataset(db, dataset, extract=None, overwrite: bool = False):
         if os.path.isfile(existing) or os.path.isdir(existing):
             logger.info("Dataset already exists at: %s", existing)
             verify_checksum(db, dataset, extract=extract, skip_if_complete=True)
+            record_dataset_state(db, dataset, existing)
             return existing
 
     # Fetch-ladder rung 3 — cross-language fetch (the rare case). Reached only
@@ -731,6 +734,7 @@ def download_dataset(db, dataset, extract=None, overwrite: bool = False):
             if delegated is not None:
                 logger.info("Dataset materialized via delegation at: %s", delegated)
                 verify_checksum(db, dataset, extract=extract, skip_if_complete=True)
+                record_dataset_state(db, dataset, delegated)
                 return delegated
 
     if overwrite or not (os.path.isfile(download_path) or os.path.isdir(download_path)):
@@ -784,6 +788,7 @@ def download_dataset(db, dataset, extract=None, overwrite: bool = False):
 
     verify_checksum(db, dataset, extract=extract)
 
+    record_dataset_state(db, dataset, local_path)
     return local_path
 
 
