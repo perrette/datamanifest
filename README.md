@@ -122,6 +122,26 @@ datamanifest update-checksums           # recompute them after regenerating data
 python analysis.py --data "$(datamanifest path file.nc)"   # composable in shell
 ```
 
+A concrete run:
+
+```console
+$ datamanifest add https://raw.githubusercontent.com/mwaskom/seaborn-data/master/iris.csv --name iris
+$ datamanifest add https://raw.githubusercontent.com/mwaskom/seaborn-data/master/penguins.csv --name penguins
+$ datamanifest list
+Datasets
+● iris      csv         3.8 KiB  …ntent.com/mwaskom/seaborn-data/master/iris.csv
+● penguins  csv        13.2 KiB  …t.com/mwaskom/seaborn-data/master/penguins.csv
+
+Cached
+◆ myproj.load_anomaly  pickle  2×  768 B
+    40384c4db019  grid=10x10                                         386 B
+    50f04896d3ee  grid=5x5                                           382 B
+```
+
+The **Cached** group lists the `load_anomaly(grid=…)` results from the
+[`@cached` example](#use-it-from-your-code) above, grouped by function with
+their parameters.
+
 ### Repair: reassociate data on disk
 
 The tool records where every file actually lives (a small git-ignored state
