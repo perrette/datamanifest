@@ -150,8 +150,10 @@ residue from a format change) is corruption, not a tracked-but-missing object �
 **cleaned silently** on read.
 
 Still deferred: the *modified* state in full (expected-vs-actual `sha256` /
-`skip_checksum` rework) and multiple recorded locations (one object synced to
-two places).
+`skip_checksum` rework). Multiple recorded locations per object is **out of
+scope by design** (see Deferred): the record stays a single `storage_path` — the
+last location the object was found at (a cache hit) or written/added to — and
+self-heal keeps refreshing that one value rather than accumulating a set.
 
 ## Unified maintenance surface (the payoff)
 
@@ -190,7 +192,14 @@ fair game, like produced artifacts.
   (spec) and the *actual* checksum (state) relate, and re-verification policy.
 - **Moving** `storage_path` (resolved) and `sha256` (actual) fully out of the
   spec into the state file, leaving the spec as pure recipe.
-- **Multiple recorded locations** for one object (synced to two places).
+- **Multiple recorded locations** for one object (two simultaneous copies on one
+  machine) — **decided out, not just postponed.** `storage_path` stays a single
+  value: the last location the object was found at (cache hit) or written/added
+  to, and it should not grow beyond that. Resolution only needs to find *one*
+  copy (gold standard), so a single last-known location suffices; the cost of a
+  list-valued record (reader/writer, read-first pick, dirty logic, delete/move
+  over all copies) isn't worth it absent a concrete dual-home workflow. A stray
+  second copy simply reads as `untracked` and can be cleaned up explicitly.
 - **Platform-dependent defaults** docs (how to point `datasets_dir`/
   `datacache_dir` at `$user_data_dir`/`$user_cache_dir` per host).
 
