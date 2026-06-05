@@ -42,6 +42,7 @@ datamanifest add https://example.com/data.csv  # register + download + record sh
 datamanifest list                              # what's tracked, and where it lives
 datamanifest path data.csv                     # resolve the on-disk path (for a script)
 datamanifest verify                            # re-check every checksum
+datamanifest storage                           # where data goes on this host; `storage set` to change
 ```
 
 **Commit `datamanifest.toml`** — it's the recipe (what to fetch and how). The
@@ -126,7 +127,6 @@ datamanifest list --dirty       # preview: records that disagree with disk
 datamanifest refresh            # repoint moved files, drop deleted, adopt untracked
 datamanifest refresh --scan     # also discover & adopt copies found elsewhere
 datamanifest where              # the active manifest, state file, and data folders
-datamanifest storage            # the resolved storage config (much the same view)
 ```
 
 `refresh` only edits local state — never your data, never the manifest. To act
