@@ -443,6 +443,42 @@ def _http_download(uri: str, download_path: str) -> None:
     os.replace(partial, download_path)
 
 
+# Object-store URI schemes fetched through fsspec (an optional dependency). HTTP
+# keeps its own httpx path; these are the cloud backends fsspec abstracts.
+_FSSPEC_SCHEMES = frozenset({
+    "s3", "gs", "gcs", "az", "abfs", "abfss", "adl", "gdrive",
+})
+
+
+def _fsspec_download(uri: str, download_path: str, *, overwrite: bool = False) -> None:
+    """Fetch *uri* from an object store (``s3://`` / ``gs://`` / ``az://`` …) to
+    *download_path* via fsspec — a single file, or a whole prefix/store mirrored
+    recursively (e.g. a zarr).
+
+    fsspec is an **optional** dependency, and the backend for the scheme (``s3fs`` /
+    ``gcsfs`` / ``adlfs`` …) must also be installed. Credentials follow fsspec's
+    normal resolution (environment variables, config files, instance metadata).
+    The fetched copy is verified by ``sha256`` afterwards like any other download.
+    """
+    try:
+        import fsspec
+    except ImportError as e:
+        raise ValueError(
+            f"Fetching {uri!r} needs fsspec and the backend for its scheme. "
+            "Install with: pip install 'datamanifest[fsspec]' (plus the backend, "
+            "e.g. s3fs / gcsfs / adlfs)."
+        ) from e
+
+    fs, _, paths = fsspec.core.get_fs_token_paths(uri)
+    rpath = paths[0]
+    if overwrite and os.path.isdir(download_path):
+        shutil.rmtree(download_path)
+    elif overwrite and os.path.isfile(download_path):
+        os.remove(download_path)
+    os.makedirs(os.path.dirname(download_path) or ".", exist_ok=True)
+    fs.get(rpath, download_path, recursive=fs.isdir(rpath))
+
+
 # ----- Scheme dispatch (PipeLines.jl:272-312) -----
 
 def _resolve_scheme(dataset) -> str:
@@ -640,6 +676,11 @@ def _fetch_into_path(
                 shutil.copytree(src, download_path)
             else:
                 shutil.copy2(src, download_path)
+        return
+
+    # Object stores via fsspec (s3://, gs://, az://, …)
+    if scheme in _FSSPEC_SCHEMES:
+        _fsspec_download(dataset.uri, download_path, overwrite=overwrite)
         return
 
     raise ValueError(

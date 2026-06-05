@@ -57,8 +57,9 @@ csv = ["pandas"]
 parquet = ["pandas", "pyarrow"]
 nc = ["xarray", "netcdf4"]
 yaml = ["pyyaml"]
-all = ["pandas", "pyarrow", "xarray", "netcdf4", "pyyaml"]
-dev = ["pytest"]
+fsspec = ["fsspec"]
+all = ["pandas", "pyarrow", "xarray", "netcdf4", "pyyaml", "fsspec"]
+dev = ["pytest", "fsspec"]
 
 [project.scripts]
 datamanifest = "datamanifest.cli:main"

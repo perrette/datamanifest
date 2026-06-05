@@ -207,6 +207,7 @@ full per-source detail.
 | git clone (`git://`, `ssh+git://`, `*.git`) | yes |
 | SSH / rsync (`ssh://`, `sshfs://`, `rsync://`) | yes |
 | Local file copy (`file://`) | yes |
+| Object stores via fsspec (`s3://`, `gs://`, `az://`, …; optional `[fsspec]` + backend) | yes |
 | Multi-URI batch entries (`uris=`) | yes |
 | SHA-256 checksum verification + auto-fill | yes |
 | ZIP / tar / tar.gz extraction | yes |

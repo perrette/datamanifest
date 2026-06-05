@@ -54,11 +54,15 @@ Two non-obvious points:
    The `oid` is a sha256 — **the same value datamanifest already stores as
    `sha256`** — so verification is free.
 
-2. **Object stores (S3 / GCS / Azure / gdrive)** — a *separate, larger* track shared
-   by DVC non-HTTP remotes, some intake urlpaths, and git-annex. Cross-language
-   parity is hard (each language needs its own SDKs/auth). **Deferred**; not needed
-   for the high-value sources (Zenodo, pooch, intake-over-HTTP, CSV), which are all
-   GET. If/when wanted, add one representative scheme (`s3`) at a time.
+2. **Object stores (S3 / GCS / Azure / gdrive)** — **implemented in Python via
+   fsspec** (`s3://` / `gs://` / `az://` … schemes dispatch to `_fsspec_download`;
+   optional `[fsspec]` extra + the backend, e.g. `s3fs`/`gcsfs`/`adlfs`). The
+   fetched copy is sha256-verified like any other download. The *spec* defines the
+   schemes, not the mechanism — Julia would implement them with its own backends
+   (or `delegate`); fsspec is a Python implementation detail. This also gives DVC
+   non-HTTP remotes and intake object-store urlpaths a fetch path. On-the-fly /
+   streaming access was considered and **dropped** (already expressible with
+   `skip_download` + a custom loader); retention/TTL was **dropped** too.
 
 So the dependency-correct order is:
 
