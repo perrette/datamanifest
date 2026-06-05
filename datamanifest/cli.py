@@ -757,15 +757,17 @@ def _run_id_action(args, db, *, move):
         sys.exit(1)
     margs = argparse.Namespace(
         delete=not move, move=(args.dest if move else None), dry_run=args.dry_run,
+        prune=getattr(args, "prune", False),
     )
     _maintain(matched, margs, db)
 
 
 def _cmd_delete(args):
     """Delete a stored object's bytes (and prune its state-file record), addressed
-    by id like ``push``/``pull``. This removes the *materialized data*, not the
-    manifest entry (use ``remove`` to drop a dataset's spec). Protected data
-    (user-managed / skip_download) is skipped. ``--dry-run`` previews."""
+    by id like ``push``/``pull``. By default this removes the *materialized data*,
+    not the manifest entry; ``--prune`` also drops the dataset's entry (= ``remove``;
+    no effect on cached artifacts). Protected data (user-managed / skip_download /
+    lazy_access) is skipped. ``--dry-run`` previews."""
     _run_id_action(args, _get_db(), move=False)
 
 
@@ -805,6 +807,7 @@ def _maintain(objects, args, db):
     index_path = os.path.join(base or ".", CACHED_INDEX_NAME)
     index = CachedIndex.read_or_empty(index_path) if do_it else None
     index_dirty = False
+    manifest_dirty = False
     acted = 0
 
     for obj in objects:
@@ -852,16 +855,23 @@ def _maintain(objects, args, db):
                     )
                     index_dirty = True
             else:
-                print(f"{verb}: {obj.key}  {obj.location}")
+                prune = getattr(args, "prune", False)
+                tag = " (+ entry pruned)" if prune else ""
+                print(f"{verb}{tag}: {obj.key}  {obj.location}")
                 if do_it:
                     _remove_path_and_markers(obj.location)
                     index_dirty |= index.remove_dataset(entry.key)
+                    if prune:
+                        db.datasets.pop(obj.key, None)
+                        manifest_dirty = True
             acted += 1
         else:
             print(f"Skipped ({obj.kind}, protected): {obj.location}")
 
     if index_dirty:
         index.write(index_path)
+    if manifest_dirty and db.datasets_toml:
+        db.write(db.datasets_toml)
 
     noun = "object" if acted == 1 else "objects"
     if do_it:
@@ -2105,12 +2115,13 @@ def main():
     )
     p_delete = subparsers.add_parser(
         "delete",
-        help="Delete a stored object's bytes by id (not the manifest entry)",
+        help="Delete a stored object's bytes by id (--prune also drops the entry)",
         description=(
             "Delete a stored object's materialized bytes and prune its state-file "
-            "record. This does NOT edit the manifest — use `remove` to drop a "
-            "dataset's spec. Protected data (user-managed / skip_download) is "
-            f"skipped. {_ID_DESC}"
+            "record. By default this does NOT edit the manifest (the recipe stays, "
+            "so it can be re-fetched); pass --prune to also drop the dataset's "
+            "manifest entry (= `remove`). Protected data (user-managed / "
+            f"skip_download / lazy_access) is skipped. {_ID_DESC}"
         ),
     )
     p_delete.add_argument("id", metavar="ID", help="Object identifier")
@@ -2119,6 +2130,11 @@ def main():
                           help="Preview without deleting anything")
     del_opts.add_argument("--batch", action="store_true",
                           help="Delete all objects matching an ambiguous id")
+    del_opts.add_argument(
+        "--prune", action="store_true",
+        help="Also drop the dataset's manifest entry (not just the bytes); no "
+             "effect on cached artifacts, which have no entry",
+    )
     p_delete.set_defaults(func=_cmd_delete)
 
     p_move = subparsers.add_parser(

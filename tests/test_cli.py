@@ -676,6 +676,18 @@ def test_delete_by_name_removes_bytes(tmp_path):
     assert "[mydata]" in toml.read_text()
 
 
+def test_delete_prune_also_drops_the_entry(tmp_path):
+    toml = _id_project(tmp_path)
+    env = _env_with_toml(toml)
+    _run("download", "mydata", env=env)
+
+    run = _run("delete", "mydata", "--prune", env=env)
+    assert run.returncode == 0, run.stderr
+    assert "entry pruned" in run.stdout
+    # --prune drops the manifest entry too (= `remove`).
+    assert "[mydata]" not in toml.read_text()
+
+
 def test_move_by_name_relocates_and_repoints_state(tmp_path):
     toml = _id_project(tmp_path)
     env = _env_with_toml(toml)

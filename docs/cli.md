@@ -141,14 +141,16 @@ would change first.
 and adopts datasets present there but not local yet (checksum-gated; no
 downloads or copies) — the active twin of `where --scan`.
 
-### `delete ID [--dry-run] [--batch]`
+### `delete ID [--dry-run] [--batch] [--prune]`
 
-Delete a stored object's **bytes** and prune its state-file record — *not* the
-manifest entry (use `remove` for that). Protected (user-managed) data is
-skipped. The object is addressed by its machine-independent id: a fetched
-dataset by name/alias/doi, a produced artifact by `cachetype[/version]/hash`
-(full or an unambiguous hash prefix). An ambiguous id errors unless `--batch`
-(act on all matches).
+Delete a stored object's **bytes** and prune its state-file record. By default
+the manifest entry stays (the recipe survives, so it can be re-fetched);
+`--prune` also drops the dataset's manifest entry (≡ `remove`; no effect on
+cached artifacts, which have no entry). Protected (user-managed / skip_download /
+lazy_access) data is skipped. The object is addressed by its machine-independent
+id: a fetched dataset by name/alias/doi, a produced artifact by
+`cachetype[/version]/hash` (full or an unambiguous hash prefix). An ambiguous id
+errors unless `--batch` (act on all matches).
 
 ### `move ID DEST [--dry-run] [--batch]`
 
