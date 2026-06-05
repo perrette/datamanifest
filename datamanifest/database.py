@@ -64,6 +64,12 @@ class DatasetEntry:
     sha256: str = ""
     skip_checksum: bool = False
     skip_download: bool = False
+    # Lazy / on-the-fly access (spec): the dataset is NOT downloaded — its `uri`
+    # is opened in place by a (language-specific) loader. A language-neutral marker
+    # distinct from `skip_download` (which means "the uri is an existing local
+    # file"), so a peer-language tool can decide how to honor it. In Python it
+    # pairs with the built-in fsspec loader (see `add --lazy`).
+    lazy_access: bool = False
     extract: bool = False
     format: str = ""
     shell: str = ""
@@ -817,11 +823,12 @@ def get_dataset_path(
     ``$datasets_dir/$key``) resolved via
     :func:`datamanifest.store.locations.dataset_path`: ``$``-symbols,
     ``$key``, ``$USER``/env and ``~`` are interpolated, and a relative result is
-    anchored to *project_root*. ``skip_download`` returns ``entry.uri`` directly
-    (the user manages the file). An explicit *datasets_folder* overrides
+    anchored to *project_root*. ``skip_download`` (the uri is an existing local
+    file) and ``lazy_access`` (the uri is opened in place, not downloaded) both
+    return ``entry.uri`` directly. An explicit *datasets_folder* overrides
     ``[_STORAGE].datasets_dir`` (the ``$datasets_dir`` symbol) for this call.
     """
-    if entry.skip_download:
+    if entry.skip_download or entry.lazy_access:
         return entry.uri
     if datasets_folder:
         storage_config = {**(storage_config or {}), "datasets_dir": datasets_folder}
@@ -958,7 +965,8 @@ def resolve_from_pools(db: "Database", entry: "DatasetEntry", extract=None,
     dataset the **extracted** location ``<pool>/<extract_path>`` is probed (that
     is what the dataset is read from, and what its ``sha256`` is a hash of — this
     tool checksums ``local_path``, the extracted dir, not the archive)."""
-    if entry.skip_download or storage.is_user_managed(entry.storage_path):
+    if entry.skip_download or entry.lazy_access \
+            or storage.is_user_managed(entry.storage_path):
         return ""
     eff_extract = entry.extract if extract is None else extract
     # The probed location matches what the dataset is read from / checksummed:
@@ -1196,9 +1204,11 @@ def _remove_dataset_from_disk(db: "Database", entry: "DatasetEntry") -> None:
     """Delete the on-disk files for *entry* (Databases.jl:589-605).
 
     A user-managed ``storage_path`` (an exact path without ``$key``) is never
-    touched by maintenance (spec-v4); ``skip_download`` entries are external.
+    touched by maintenance (spec-v4); ``skip_download`` / ``lazy_access`` entries
+    are external (no tool-managed local copy).
     """
-    if entry.skip_download or storage.is_user_managed(entry.storage_path):
+    if entry.skip_download or entry.lazy_access \
+            or storage.is_user_managed(entry.storage_path):
         return
     download_path = get_dataset_path(
         entry,

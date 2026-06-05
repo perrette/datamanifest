@@ -272,8 +272,8 @@ def _discover_and_record(db, project_root, env, *, dry_run, no_input,
     # Find, per dataset, the candidate locations that actually hold bytes.
     chosen = {}                       # name -> adopted absolute location
     for name, entry in db.datasets.items():
-        if entry.skip_download or entry.storage_path:
-            continue                  # external / user-managed: leave as declared
+        if entry.skip_download or entry.lazy_access or entry.storage_path:
+            continue                  # external / lazy / user-managed: leave as declared
         hits = _dedupe_abspaths(
             [os.path.join(r, entry.key) for r in roots
              if os.path.exists(os.path.join(r, entry.key))]

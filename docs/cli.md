@@ -18,7 +18,7 @@ A bare `datamanifest` (no subcommand) prints the command list.
 Create a fresh `datamanifest.toml` in the current directory (or `--folder PATH`).
 `--force` overwrites an existing one.
 
-### `add URI|DOI [--name N] [--pick GLOB] [--split] [--no-download] [--extract] [--on-the-fly] [--overwrite]`
+### `add URI|DOI [--name N] [--pick GLOB] [--split] [--no-download] [--extract] [--lazy] [--overwrite]`
 
 Register and (by default) download a dataset. `--name` sets the entry name,
 `--extract` unpacks archives after download, `--no-download` registers only,
@@ -29,11 +29,11 @@ Two independent special forms:
 1. **Zenodo** — a DOI / record URL bundles the record's files into one `uris=`
    dataset (plain HTTPS; declare-only). `--pick GLOB` filters files (repeatable),
    `--split` makes one dataset per file instead, `--name` becomes a name *prefix*.
-2. **`--on-the-fly`** — register an **object-store** URI (`s3://`, `gs://`, …) for
-   lazy access *instead of* downloading: it sets `skip_download` and a built-in
-   fsspec loader, so `load()` opens it in place.
+2. **`--lazy`** — register an **object-store** URI (`s3://`, `gs://`, …) for lazy
+   access *instead of* downloading: it sets `lazy_access` (a language-neutral
+   marker) and a built-in Python fsspec loader, so `load()` opens it in place.
 
-The two are unrelated (Zenodo serves HTTPS files; on-the-fly is for object stores).
+The two are unrelated (Zenodo serves HTTPS files; `--lazy` is for object stores).
 
 ### `import {pooch|csv|urls|intake|dvc} SOURCE [--base-url URL] [--cache-dir DIR] [--overwrite] [--dry-run]`
 

@@ -111,30 +111,24 @@ tooling.
    errors with "unsupported scheme." HTTP/HTTPS keep their existing dedicated path
    and are deliberately **not** in this set.
 
-2. **`skip_download` may point at a *remote* URI (on-the-fly access).** Originally
-   `skip_download = true` meant "the `uri` is a local file the user manages"
-   (resolve to the path, verify it exists, record it). It now **also** covers
-   "remote object opened lazily": when the resolved path is a remote URI *and* the
-   entry carries a loader, `download_dataset` returns the URI as-is — **no local
-   existence check, no state-file record** — and the loader opens it in place.
-   Consequences the spec/Julia must mirror:
-   - `get_dataset_path` / the `path` accessor returns the **remote URI string** for
-     such an entry (not a local filesystem path). Consumers must tolerate that.
-   - A bare remote `skip_download` with **no** loader still errors (no way to read
-     it) — the loader presence is the discriminator between the two meanings.
-   - The on-the-fly loader is bound **language-specifically**: Python uses
+2. **`lazy_access` — a language-neutral marker for "open in place, don't download."**
+   (This supersedes the earlier idea of overloading `skip_download`.) `skip_download`
+   keeps its original sole meaning: "the `uri` is an existing **local** file the user
+   manages." A separate boolean **`lazy_access = true`** marks a dataset that is
+   **not downloaded** — its `uri` (typically an object store, `s3://`…) is opened in
+   place by a loader. Behaviour the spec/Julia must mirror:
+   - `download_dataset` returns the `uri` as-is for a `lazy_access` entry — **no
+     local existence check, no state-file record**; `get_dataset_path` / the `path`
+     accessor returns the **remote URI string** (consumers must tolerate that).
+   - The loader is bound **language-specifically**: Python sets
      `[<ds>._LANG.python].loader = "datamanifest.store.loaders:fsspec_loader"`. A
-     peer-language tool ignores that binding and must supply its own
-     (`_LANG.julia.loader`) to support on-the-fly, or treat the entry as
-     unsupported. **Open spec question:** do we keep on-the-fly purely as a
-     per-language loader convention (current Python choice), or add a
-     language-neutral marker (e.g. `access = "lazy"`) so every tool recognizes the
-     intent without a language-specific loader? Decide this in the spec repo.
-   - We chose to let `skip_download` carry **both** meanings rather than introduce a
-     new field; an audit found this non-destructive on the Python side (on-the-fly
-     entries are `skip_download`-protected everywhere it matters). Julia should
-     replicate that protection, or disambiguate with the language-neutral marker if
-     the spec adds one.
+     peer-language tool reads the language-neutral `lazy_access` flag and honors it
+     its own way (e.g. an `_LANG.julia.loader`), or treats the entry as unsupported.
+     The flag is the cross-language contract; the loader binding is per-language.
+   - A `lazy_access` entry is **external** — like `skip_download`, it is excluded
+     from maintenance (delete/move are protected), from pool scan/adoption
+     (`refresh --scan`, `where --scan`, `migrate` discovery), and is never recorded
+     in the state file. Julia must replicate that protection.
 
 3. **An ambiguous identifier is a fail-loud error.** `search_dataset` resolving an
    identifier (name / alias / **DOI**) that matches **more than one** dataset now

@@ -52,8 +52,8 @@ def default_loader(format: str):
 
 def fsspec_loader(path):
     """Open a remote (fsspec) dataset *path* lazily, **without downloading it** —
-    the built-in loader behind ``add --on-the-fly`` (paired with ``skip_download``,
-    so *path* is the original ``s3://`` / ``gs://`` / … URI).
+    the built-in loader behind ``add --lazy`` (paired with ``lazy_access``, so
+    *path* is the original ``s3://`` / ``gs://`` / … URI).
 
     Dispatches by the URI's extension to the reader that streams it in place:
     ``zarr`` / ``nc`` → xarray, ``csv`` / ``parquet`` → pandas (all read fsspec

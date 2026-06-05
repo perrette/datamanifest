@@ -95,7 +95,7 @@ def test_fsspec_loader_unknown_format_returns_lazy_handle(tmp_path):
         assert fh.read() == b"raw"
 
 
-def test_on_the_fly_registers_skip_download_and_loads(tmp_path):
+def test_lazy_access_registers_and_loads_in_place(tmp_path):
     fsspec = pytest.importorskip("fsspec")
     import json
 
@@ -109,14 +109,16 @@ def test_on_the_fly_registers_skip_download_and_loads(tmp_path):
     db = Database(datasets_toml=str(toml))
 
     name, entry = db.register_dataset(
-        "memory://b/cfg.json", skip_download=True, lang_python_loader=FSSPEC_LOADER_REF)
-    assert entry.skip_download and entry.lang_python_loader == FSSPEC_LOADER_REF
+        "memory://b/cfg.json", lazy_access=True, lang_python_loader=FSSPEC_LOADER_REF)
+    # lazy_access is its own marker — NOT skip_download.
+    assert entry.lazy_access and not entry.skip_download
+    assert entry.lang_python_loader == FSSPEC_LOADER_REF
     # No download, no state record (nothing local), and the loader streams it.
     assert load_dataset(db, name) == {"v": 1}
     assert not (tmp_path / ".datamanifest-state.toml").exists()
 
 
-def test_add_on_the_fly_cli_wiring(tmp_path, monkeypatch, capsys):
+def test_add_lazy_cli_wiring(tmp_path, monkeypatch, capsys):
     import types
 
     try:
@@ -133,14 +135,16 @@ def test_add_on_the_fly_cli_wiring(tmp_path, monkeypatch, capsys):
 
     args = types.SimpleNamespace(
         uri="s3://bucket/store.zarr", name=None, extract=False,
-        on_the_fly=True, overwrite=False, no_download=False,
+        lazy=True, overwrite=False, no_download=False,
     )
     cli._cmd_add(args)
-    assert "on-the-fly" in capsys.readouterr().out
+    assert "lazy" in capsys.readouterr().out.lower()
 
     with open(toml, "rb") as f:
         data = tomllib.load(f)
     entry = data["bucket/store"]
-    assert entry["skip_download"] is True
+    # Only lazy_access is written — no skip_download double-marker.
+    assert entry["lazy_access"] is True
+    assert "skip_download" not in entry
     assert entry["uri"] == "s3://bucket/store.zarr"
     assert entry["_LANG"]["python"]["loader"] == FSSPEC_LOADER_REF

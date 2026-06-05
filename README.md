@@ -110,7 +110,7 @@ bypass auto-discovery. The CLI's verbs are also available in code —
 datamanifest add https://host/path/file.nc                     # a direct URL
 datamanifest add 10.5281/zenodo.1234567 --pick "*.csv"         # a Zenodo record's files
 datamanifest add "https://github.com/u/repo/archive/v2.1.zip" --extract
-datamanifest add s3://bucket/key.zarr --on-the-fly             # open in place, no download
+datamanifest add s3://bucket/key.zarr --lazy                   # open in place, no download
 
 datamanifest list                       # one styled line each, clickable locations
 datamanifest show co2                   # full entry detail

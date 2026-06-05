@@ -722,6 +722,15 @@ def download_dataset(db, dataset, extract=None, overwrite: bool = False):
 
     project_root = project_root_from_paths(db.datasets_toml)
 
+    # Lazy / on-the-fly access: never download; the uri is opened in place by the
+    # loader. Nothing local to verify or record.
+    if dataset.lazy_access:
+        logger.info("Lazy access (not downloaded): %s", dataset.uri)
+        return get_dataset_path(
+            dataset, db.datasets_folder, extract=extract,
+            project_root=project_root, storage_config=db.storage_config,
+        )
+
     if dataset.skip_download:
         logger.info(
             "Skipping download for dataset: %s (skip_download=true)", dataset.uri
@@ -730,14 +739,6 @@ def download_dataset(db, dataset, extract=None, overwrite: bool = False):
             dataset, db.datasets_folder, extract=extract,
             project_root=project_root, storage_config=db.storage_config,
         )
-        # A remote URI handed to a loader (e.g. `add --on-the-fly s3://…`) is
-        # opened lazily — there is nothing local to check for or record. A bare
-        # remote skip_download with no loader still errors (no way to read it).
-        remote = "://" in path and not path.startswith("file://")
-        has_loader = bool(getattr(dataset, "loader", "")
-                          or getattr(dataset, "lang_python_loader", ""))
-        if remote and has_loader:
-            return path
         if not (os.path.isfile(path) or os.path.isdir(path)):
             _missing_dataset_error(dataset, path)
         record_dataset_state(db, dataset, path)

@@ -582,14 +582,16 @@ def _record_portable(path, project_root):
 
 def _dataset_protected(db, obj):
     """Whether a fetched dataset object is protected from delete/move — a
-    user-managed exact ``storage_path`` (no ``$key``) or a ``skip_download`` entry
-    (the URI *is* the file). Returns the entry too (or ``None``)."""
+    user-managed exact ``storage_path`` (no ``$key``), a ``skip_download`` entry
+    (the URI *is* the file), or a ``lazy_access`` entry (opened in place, no local
+    copy). Returns the entry too (or ``None``)."""
     from . import storage
 
     entry = db.datasets.get(obj.key)
     if entry is None:
         return True, None
-    protected = bool(entry.skip_download) or storage.is_user_managed(entry.storage_path)
+    protected = (bool(entry.skip_download) or bool(entry.lazy_access)
+                 or storage.is_user_managed(entry.storage_path))
     return protected, entry
 
 
@@ -640,7 +642,7 @@ def _refresh_scan_pools(db, *, dry_run, datasets_pools=None, datacache_pools=Non
 
     # --- datasets ---
     for name, entry in db.datasets.items():
-        if entry.skip_download or not entry.key:
+        if entry.skip_download or entry.lazy_access or not entry.key:
             continue
         try:
             resolved = resolve_existing_path(db, entry)
@@ -1091,15 +1093,16 @@ def _cmd_add(args):
     if args.extract:
         kwargs["extract"] = True
 
-    # On-the-fly: never download; open the remote URI lazily via the built-in
-    # fsspec loader (a Python-only `_LANG.python.loader`, so a peer tool ignores it).
-    if getattr(args, "on_the_fly", False):
+    # Lazy access: never download; open the remote URI in place. `lazy_access` is
+    # the language-neutral marker; Python pairs it with the built-in fsspec loader
+    # (a Python-only `_LANG.python.loader`, so a peer tool honors lazy its own way).
+    if getattr(args, "lazy", False):
         from .store.loaders import FSSPEC_LOADER_REF
-        kwargs["skip_download"] = True
+        kwargs["lazy_access"] = True
         kwargs["lang_python_loader"] = FSSPEC_LOADER_REF
         name, _ = db.register_dataset(args.uri, overwrite=args.overwrite, **kwargs)
-        print(f"Registered {name!r} for on-the-fly access (skip_download; opened "
-              "lazily via the built-in fsspec loader).")
+        print(f"Registered {name!r} for lazy access (lazy_access; opened in place "
+              "via the built-in fsspec loader, not downloaded).")
         return
 
     name, entry = db.register_dataset(args.uri, overwrite=args.overwrite, **kwargs)
@@ -1363,7 +1366,7 @@ def _cmd_where(args):
 
         found = []
         for name, entry in db.datasets.items():
-            if entry.skip_download or not entry.key:
+            if entry.skip_download or entry.lazy_access or not entry.key:
                 continue
             try:
                 resolved = resolve_existing_path(db, entry)
@@ -1810,9 +1813,9 @@ def main():
         "--no-download", action="store_true", help="Register without downloading"
     )
     add_opts.add_argument(
-        "--on-the-fly", dest="on_the_fly", action="store_true",
-        help="Don't download; open the remote URI (s3://, gs://, …) lazily via the "
-             "built-in fsspec loader (sets skip_download + a Python-only loader)",
+        "--lazy", dest="lazy", action="store_true",
+        help="Don't download; open the remote URI (s3://, gs://, …) in place via "
+             "the built-in fsspec loader (sets lazy_access + a Python-only loader)",
     )
     add_opts.add_argument(
         "--extract", action="store_true", help="Extract archive after download"
