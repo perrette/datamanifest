@@ -1514,8 +1514,16 @@ class Database:
 def migrate_v0_to_v1(db: "Database") -> None:
     """Migrate *db* from v0 inline-code bindings to v1 form (in-place).
 
-    Promotes each dataset's inline-code ``python=`` to the explicit
-    ``[<ds>._LANG.python].fetcher`` binding and sets ``_META.schema = 1``.
+    Promotes each dataset's inline-code language fields to the explicit
+    ``[<ds>._LANG.<lang>].fetcher`` binding and sets ``_META.schema = 1``:
+
+    - ``python=`` (this tool's own language) → ``[<ds>._LANG.python].fetcher``;
+    - a flat ``julia=`` (a foreign-language inline binding kept verbatim by this
+      port) → ``[<ds>._LANG.julia].fetcher`` — a pure structural reshape, not an
+      interpretation of the Julia ref.
+
+    Each promotion is skipped when the corresponding ``_LANG.<lang>.fetcher`` is
+    already set (the v1 form wins over a stray flat field).
 
     The bare per-dataset ``fetcher`` / ``loader`` and the top-level
     ``[_LOADERS]`` map are **supported** spec-v3.4 language-implicit forms, not
@@ -1533,6 +1541,17 @@ def migrate_v0_to_v1(db: "Database") -> None:
         if entry.python and not entry.lang_python_fetcher:
             entry.lang_python_fetcher = entry.python
             entry.python = ""
+        # Promote a flat inline `julia = "Ref"` (v0) → [<ds>._LANG.julia].fetcher.
+        # Julia is foreign to this tool, so the binding is reshaped verbatim under
+        # _LANG (never run); an existing _LANG.julia.fetcher takes precedence.
+        julia_inline = entry.extra.get("julia")
+        if isinstance(julia_inline, str) and julia_inline:
+            lang = entry.extra.setdefault("_LANG", {})
+            if isinstance(lang, dict):
+                julia_block = lang.setdefault("julia", {})
+                if isinstance(julia_block, dict) and not julia_block.get("fetcher"):
+                    julia_block["fetcher"] = julia_inline
+                    entry.extra.pop("julia", None)
         # spec-v3.5: demote legacy [<ds>._LANG.shell].fetcher → bare `shell`.
         lang = entry.extra.get("_LANG")
         if isinstance(lang, dict):

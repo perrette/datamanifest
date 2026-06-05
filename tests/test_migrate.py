@@ -71,6 +71,33 @@ store = "$scratch"
     assert "storage_path" not in data["custom"]
 
 
+def test_migrate_promotes_python_and_julia_inline(tmp_path):
+    """migrate also upgrades v0 inline-code bindings: python= and a flat julia=
+    are promoted to the [<ds>._LANG.<lang>].fetcher form."""
+    toml = _write(tmp_path, """
+[_META]
+schema = 0
+
+[a]
+uri = "https://h/a.csv"
+python = "mymod:fetch"
+
+[b]
+uri = "https://h/b.csv"
+julia = "MyMod.fetch"
+""")
+    summary = migrate_manifest(str(toml))
+    assert "a.python" in summary and "b.julia" in summary
+
+    with open(toml, "rb") as f:
+        data = tomllib.load(f)
+    assert data["a"]["_LANG"]["python"]["fetcher"] == "mymod:fetch"
+    assert "python" not in data["a"]                    # flat field promoted away
+    assert data["b"]["_LANG"]["julia"]["fetcher"] == "MyMod.fetch"
+    assert "julia" not in data["b"]
+    assert data["_META"]["schema"] == 1
+
+
 def test_migrate_dry_run_does_not_write(tmp_path):
     toml = _write(tmp_path, "[_META]\nschema = 1\n\n[d]\nuri = \"https://x.com/h/a.csv\"\n")
     before = toml.read_text()

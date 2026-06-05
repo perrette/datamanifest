@@ -38,15 +38,20 @@ _RETIRED_STORAGE_KEYS = (
 
 
 def migrate_manifest(toml_path, *, env=None, dry_run=False):
-    """Reshape a spec-v3 manifest's ``[_STORAGE]`` to the spec-v4 two-field model.
+    """Upgrade a manifest to the current form: promote v0 inline-code language
+    bindings to ``[_LANG.*]`` **and** reshape a spec-v3 ``[_STORAGE]`` to the
+    spec-v4 two-field model.
 
-    Writes the two folder fields with their defaults, drops the retired keys, and
-    carries each dataset's explicit ``local_path`` over to ``storage_path``. Moves
-    no bytes. Returns a human-readable summary (of what changed, or — with
-    *dry_run* — what would change).
+    Language upgrade (v0 → v1): each dataset's inline ``python=`` → its
+    ``[<ds>._LANG.python].fetcher`` and a flat ``julia=`` →
+    ``[<ds>._LANG.julia].fetcher`` (see :func:`datamanifest.database.migrate_v0_to_v1`).
+    Storage reshape: write the two folder fields with their defaults, drop the
+    retired keys, and carry each dataset's explicit ``local_path`` over to
+    ``storage_path``. Moves no bytes. Returns a human-readable summary (of what
+    changed, or — with *dry_run* — what would change).
     """
     from .cache import CACHED_INDEX_NAME, CachedIndex
-    from .database import Database
+    from .database import Database, migrate_v0_to_v1
 
     toml_path = os.path.abspath(toml_path)
     project_root = os.path.dirname(toml_path)
@@ -64,6 +69,16 @@ def migrate_manifest(toml_path, *, env=None, dry_run=False):
         f"[_STORAGE].datacache_dir = {datacache_dir!r}  (default; edit to relocate)",
     ]
     needs_attention = []
+
+    # Language upgrade (v0 → v1): promote inline python=/julia= into [_LANG.*].
+    # Scan first so the summary can report each promotion, then apply in-place.
+    for name, entry in db.datasets.items():
+        if entry.python and not entry.lang_python_fetcher:
+            changes.append(f"{name}.python → [{name}._LANG.python].fetcher")
+        julia_inline = entry.extra.get("julia")
+        if isinstance(julia_inline, str) and julia_inline:
+            changes.append(f"{name}.julia → [{name}._LANG.julia].fetcher")
+    migrate_v0_to_v1(db)
 
     for name, entry in db.datasets.items():
         old_store = entry.extra.pop("store", "")
