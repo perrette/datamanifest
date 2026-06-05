@@ -149,7 +149,7 @@ def _enumerate_objects(db, heavy=frozenset({"size"})):
     index = None
     referenced = set()
     base = os.path.dirname(db.datasets_toml) if db.datasets_toml else os.getcwd()
-    cached_toml = os.path.join(base or ".", CACHED_INDEX_NAME)
+    cached_toml = CachedIndex.locate(base or ".")
     if os.path.isfile(cached_toml):
         try:
             index = CachedIndex.read(cached_toml)

@@ -438,7 +438,7 @@ def test_cached_hit_reregisters_when_index_deleted(cache_root):
         return f"hi {name}"
 
     produce(name="a")
-    index_path = os.path.join(os.getcwd(), "cached.toml")
+    index_path = os.path.join(os.getcwd(), ".datamanifest-state.toml")
     assert CachedIndex.read(index_path).reachable_keys()
 
     # Delete the index by hand; the artifact itself stays on disk.
@@ -459,7 +459,7 @@ def test_cached_hit_does_not_rewrite_index_when_present(cache_root):
         return name
 
     produce(name="a")
-    index_path = os.path.join(os.getcwd(), "cached.toml")
+    index_path = os.path.join(os.getcwd(), ".datamanifest-state.toml")
     mtime = os.stat(index_path).st_mtime_ns
 
     produce(name="a")  # hit; entry already present -> no rewrite
@@ -479,7 +479,7 @@ def test_cached_registers_instance_location(cache_root):
         return name
 
     produce(name="v")
-    index = CachedIndex.read(os.path.join(os.getcwd(), "cached.toml"))
+    index = CachedIndex.read(os.path.join(os.getcwd(), ".datamanifest-state.toml"))
     rec = {r["cachetype"]: r for r in index.recipe_records()}["t"]
     (h, path), = rec["instances"].items()
     assert path == str(cache_root / "t" / h)
@@ -524,7 +524,7 @@ def test_heal_refreshes_stale_recorded_path(tmp_path):
         return str(x)
 
     f(x=1)
-    idx_path = proj / "cached.toml"
+    idx_path = proj / ".datamanifest-state.toml"
     idx = CachedIndex.read(idx_path)
     (h, good), = idx.recipes[("ct", "")]["instances"].items()
     # Corrupt the recorded location (e.g. an older shape / wrong value).
@@ -553,7 +553,7 @@ def test_hit_finds_artifact_at_recorded_location_after_move(tmp_path):
 
     f(x=1)
     assert calls["n"] == 1
-    idx_path = proj / "cached.toml"
+    idx_path = proj / ".datamanifest-state.toml"
     idx = CachedIndex.read(idx_path)
     (h, loc), = idx.recipes[("ct", "")]["instances"].items()
 

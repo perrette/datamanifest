@@ -121,11 +121,12 @@ def test_cached_index_accumulates_variations(tmp_path):
     assert index.reachable_keys() == {("c", "", "h1"), ("c", "", "h2")}
 
 
-def test_schema4_version_in_key_and_hash_to_path(tmp_path):
-    """schema-4 keys recipes ["<cachetype>@<version>"] (bare when unversioned)
-    and maps each instance hash → its full artifact dir (no params in the index;
-    no recipe-level storage_path)."""
-    p = tmp_path / "cached.toml"
+def test_schema5_datacache_namespace_version_in_key_and_hash_to_path(tmp_path):
+    """schema-5 keys produced recipes under the ``datacache`` namespace as
+    ["<cachetype>@<version>"] (bare when unversioned) and maps each instance
+    hash → its full artifact dir (no params in the index; no recipe-level
+    storage_path)."""
+    p = tmp_path / ".datamanifest-state.toml"
     index = CachedIndex(path=str(p))
     index.register(cachetype="mypkg.mod.run", version="v3", hash="83b2",
                    storage_path="cached/mypkg.mod.run/v3/83b2",
@@ -135,13 +136,13 @@ def test_schema4_version_in_key_and_hash_to_path(tmp_path):
     index.write()
     text = p.read_text()
 
-    assert 'schema = 4' in text
-    assert '["mypkg.mod.run@v3"]' in text                       # version after @
-    assert '["mypkg.mod.run@v3".instances]' in text            # hash→path map
+    assert 'schema = 5' in text
+    assert '[datacache."mypkg.mod.run@v3"]' in text             # version after @
+    assert '[datacache."mypkg.mod.run@v3".instances]' in text   # hash→path map
     assert '83b2 = "cached/mypkg.mod.run/v3/83b2"' in text      # full artifact dir
     assert 'params' not in text and 'grid' not in text         # params not in index
-    assert '[plain]' in text                                    # unversioned ⇒ bare key
-    assert '[plain.instances]' in text
+    assert '[datacache.plain]' in text                          # unversioned ⇒ bare key
+    assert '[datacache.plain.instances]' in text
 
     # Round-trips identically.
     again = tmp_path / "again.toml"
@@ -192,10 +193,10 @@ def test_pinned_schema4_fixture_preserves_paths(tmp_path):
     assert idx.reachable_keys() == {("greet", "", "aa"), ("a.b.run", "v2", "bb")}
 
 
-def test_legacy_schema3_migrates_to_schema4(tmp_path):
+def test_legacy_schema3_migrates_to_schema5(tmp_path):
     """A legacy schema-3 file (recipe storage_path + params-body) reads so each
     instance inherits <recipe storage_path>/<hash>, params are dropped, and a
-    rewrite emits schema 4."""
+    rewrite emits schema 5 under the datacache namespace."""
     p = tmp_path / "cached.toml"
     p.write_text(
         '[_META]\nschema = 3\n\n'
@@ -205,10 +206,27 @@ def test_legacy_schema3_migrates_to_schema4(tmp_path):
     )
     idx = CachedIndex.read(p)
     assert idx.instance_path_of(cachetype="a.b.run", version="v2", hash="bb") == "/scratch/v2/bb"
-    idx.write()
+    idx.write()                          # raw read().write() preserves the path
     text = p.read_text()
-    assert "schema = 4" in text and 'bb = "/scratch/v2/bb"' in text
+    assert "schema = 5" in text and 'bb = "/scratch/v2/bb"' in text
+    assert '[datacache."a.b.run@v2"]' in text
     assert "params" not in text and "n = 2" not in text
+
+
+def test_read_or_empty_migrates_legacy_filename(tmp_path):
+    """Reading a legacy ``cached.toml`` via read_or_empty binds the canonical
+    state-file name, so the next write migrates the filename forward (the old
+    file is left in place, non-destructively)."""
+    legacy = tmp_path / "cached.toml"
+    legacy.write_text(
+        '[_META]\nschema = 4\n\n[greet]\nref = "m:greet"\nformat = "txt"\n\n'
+        '[greet.instances]\naa = "cached/greet/aa"\n'
+    )
+    idx = CachedIndex.read_or_empty(str(tmp_path))     # finds the legacy file
+    assert idx.instance_path_of(cachetype="greet", version="", hash="aa") == "cached/greet/aa"
+    written = idx.write()
+    assert os.path.basename(written) == ".datamanifest-state.toml"
+    assert "schema = 5" in (tmp_path / ".datamanifest-state.toml").read_text()
 
 
 def test_dead_instanceless_recipe_is_dropped_on_read(tmp_path):
@@ -229,6 +247,66 @@ def test_dead_instanceless_recipe_is_dropped_on_read(tmp_path):
     assert idx.instance_path_of(cachetype="memory2", version="2", hash="h") == "/c/ho/memory2/h"
     idx.write()
     assert "[memory2]\n" not in p.read_text()               # self-cleaned on rewrite
+
+
+# ----- datasets namespace (fetched-dataset inventory) ------------------------
+
+def test_datasets_namespace_round_trip(tmp_path):
+    """The state file records fetched datasets (key → storage_path + sha256) in a
+    ``datasets`` namespace, alongside produced recipes, and round-trips them."""
+    p = tmp_path / ".datamanifest-state.toml"
+    idx = CachedIndex(path=str(p))
+    idx.register(cachetype="ct", hash="h1", storage_path="cached/ct/h1", ref="m:f")
+    idx.register_dataset(key="example.com/a.csv",
+                         storage_path="datasets/example.com/a.csv", sha256="abc123")
+    idx.register_dataset(key="example.com/big.zip",
+                         storage_path="datasets/example.com/big.zip")   # skip_checksum
+    written = idx.write()
+    text = open(written).read()
+
+    # Both namespaces present; datacache sorts before datasets.
+    assert '[datacache.ct]' in text
+    assert '[datasets."example.com/a.csv"]' in text
+    assert text.index("[datacache") < text.index("[datasets")
+    # A skip_checksum dataset records only its location (no sha256 line).
+    assert 'sha256 = "abc123"' in text
+    assert text.count("sha256") == 1
+
+    back = CachedIndex.read(p)
+    assert back.dataset_path_of("example.com/a.csv") == "datasets/example.com/a.csv"
+    assert back.dataset_sha256_of("example.com/a.csv") == "abc123"
+    assert back.dataset_path_of("example.com/big.zip") == "datasets/example.com/big.zip"
+    assert back.dataset_sha256_of("example.com/big.zip") == ""
+    assert back.recipes == idx.recipes                      # produced side intact
+    # Idempotent rewrite.
+    again = tmp_path / "again.toml"
+    back.write(again)
+    assert again.read_text() == text
+
+
+def test_register_dataset_is_additive(tmp_path):
+    """register_dataset overwrites with a non-empty value but leaves an existing
+    one untouched on an empty argument (a skip_checksum re-record keeps the sha);
+    set_dataset_path repoints, remove_dataset prunes."""
+    idx = CachedIndex(path=str(tmp_path / ".datamanifest-state.toml"))
+    idx.register_dataset(key="k", storage_path="datasets/k", sha256="sha1")
+    # Re-record without a checksum (skip_checksum): keeps the recorded sha + path.
+    idx.register_dataset(key="k")
+    assert idx.dataset_sha256_of("k") == "sha1"
+    assert idx.dataset_path_of("k") == "datasets/k"
+    # A relocation repoints; a new checksum overwrites.
+    idx.register_dataset(key="k", storage_path="/moved/k", sha256="sha2")
+    assert idx.dataset_path_of("k") == "/moved/k"
+    assert idx.dataset_sha256_of("k") == "sha2"
+
+    assert idx.set_dataset_path("k", "/again/k") is True
+    assert idx.set_dataset_path("absent", "/x") is False
+    assert idx.dataset_path_of("k") == "/again/k"
+
+    assert [r["key"] for r in idx.dataset_records()] == ["k"]
+    assert idx.remove_dataset("k") is True
+    assert idx.remove_dataset("k") is False
+    assert idx.has_dataset("k") is False
 
 
 def test_set_and_remove_instance(tmp_path):
@@ -277,7 +355,7 @@ def test_cached_storage_path_replaces_cachetype_dir(tmp_path):
     # Artifact directly under storage_path (no "ct" segment).
     hits = [r for r, _, fs in os.walk(tmp_path / "out") if "data.txt" in fs]
     assert len(hits) == 1 and "/ct/" not in hits[0]
-    idx = CachedIndex.read(proj / "cached.toml")
+    idx = CachedIndex.read(proj / ".datamanifest-state.toml")
     h = next(iter(idx.recipes[("ct", "")]["instances"]))
     rec = idx.instance_path_of(cachetype="ct", version="", hash=h)
     # Recorded location = the full artifact dir (absolute, outside the repo).
@@ -296,7 +374,7 @@ def test_cached_versioned_storage_path_includes_version(tmp_path):
         return str(x)
 
     f(x=1)
-    idx = CachedIndex.read(proj / "cached.toml")
+    idx = CachedIndex.read(proj / ".datamanifest-state.toml")
     h = next(iter(idx.recipes[("ct", "v3")]["instances"]))
     rec = idx.instance_path_of(cachetype="ct", version="v3", hash=h)
     assert rec == f"cached/ct/v3/{h}"                         # version in the path
@@ -331,8 +409,8 @@ def test_cached_hit_prefers_recorded_storage_path(tmp_path, monkeypatch):
     assert not (tmp_path / "B").exists()                     # nothing written at the new default
 
 
-def test_schema2_is_read_and_rewritten_as_schema4(tmp_path):
-    """A legacy schema-2 ([[produced]]) file is read and rewritten as schema 4.
+def test_schema2_is_read_and_rewritten_as_schema5(tmp_path):
+    """A legacy schema-2 ([[produced]]) file is read and rewritten as schema 5.
     Schema 2 recorded no location, so each instance's path is "" (derived on
     next access)."""
     p = tmp_path / "cached.toml"
@@ -346,8 +424,8 @@ def test_schema2_is_read_and_rewritten_as_schema4(tmp_path):
     assert index.recipes[("c", "")]["instances"] == {"h1": ""}
     index.write()
     text = p.read_text()
-    assert 'schema = 4' in text and '[[produced]]' not in text
-    assert '[c.instances]' in text and 'h1 = ""' in text
+    assert 'schema = 5' in text and '[[produced]]' not in text
+    assert '[datacache.c.instances]' in text and 'h1 = ""' in text
 
 
 # ----- @cached produce registers in a sibling cached.toml --------------------
@@ -366,7 +444,7 @@ def test_cached_produce_registers_and_back_points(cache_root, usage_log, tmp_pat
     assert calls["n"] == 1
 
     # Registered in the sibling cached.toml under the cachetype.
-    index_path = proj / "cached.toml"
+    index_path = proj / ".datamanifest-state.toml"
     assert index_path.is_file()
     index = CachedIndex.read(str(index_path))
     recs = {r["cachetype"]: r for r in index.recipe_records()}
@@ -401,7 +479,7 @@ def test_cached_hit_does_not_duplicate_or_restamp(cache_root, usage_log, tmp_pat
         return f"hello {who}"
 
     make_greeting(who="x")
-    index_path = proj / "cached.toml"
+    index_path = proj / ".datamanifest-state.toml"
     _rec = {r["cachetype"]: r for r in CachedIndex.read(str(index_path)).recipe_records()}["greet"]
     artifact_hash = next(iter(_rec["instances"]))
     metadata_path = cache_root / "greet" / artifact_hash / "metadata.toml"
