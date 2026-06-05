@@ -114,8 +114,9 @@ maintained **non-destructively**, git-style:
   state (like `git status`) for the user to resolve. (Today `list` instead drops
   such an entry by omission — it can't build the object when the bytes are gone;
   under this model it must show it flagged.)
-- **Explicit removal only.** Entries leave the lock via an explicit `--delete`
-  (or `--prune` for missing/dirty), never as a passive side effect.
+- **Explicit removal only.** Entries leave the lock only through a user-invoked
+  `--refresh` (drops *stale/missing* entries) or `--delete` (removes objects) —
+  never as a passive or automatic side effect.
 
 ### Update policy & conflict resolution
 
@@ -139,11 +140,12 @@ signal (a red/`✗` marker beside the existing `⚑custom`) and a **`--dirty`**
 filter.
 
 **Actions** (explicit, on the selected objects):
-- **`--refresh`** — reconcile lock ↔ disk: refresh *relocated* entries, register
-  *untracked* ones, **report** *missing* (does not re-fetch — materialization
-  stays with `download` / re-running the `@cached` function). Non-destructive.
-- **`--delete`** (one object) / **`--prune`** (sweep *missing*) — the only
-  removals, explicit and confirmed.
+- **`--refresh`** — fix the **lock file only** (no downloads, no file moves):
+  refresh *relocated* entries to their actual location and **drop** *stale /
+  missing* entries. A pure lock↔disk reconcile. (Untracked artifacts are picked
+  up by active access, not here.)
+- **`--delete`** — remove the selected objects' **bytes and** their lock entries
+  (works across a filtered set). The only byte-removing action.
 
 **Concurrency.** Every write **re-reads the lock, merges** (additive union;
 last-writer-wins per object), then writes via temp-file + **atomic rename** — so
