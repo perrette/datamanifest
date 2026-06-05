@@ -83,6 +83,45 @@ format = "pickle"
   entry is (re)written on the next access; a `--move`/`--delete` repoints/prunes
   it. No behavior in `datasets.toml` changes.
 
+## Read-resolution: the lock is checked first
+
+Resolving where an object lives (`get_dataset_path` / `download_dataset` /
+`resolve_existing_path` for fetched; the `@cached` hit path for produced)
+**checks the lock's recorded `storage_path` first** — if the bytes are actually
+there (and, for a dataset, checksum-valid when recorded), that is a hit. Only
+then does it fall back to the machine-derived/directive path, and only then (for
+a dataset) download. This is a pure "are the bytes already here?" short-circuit,
+*ahead of* any derivation rule — including for a user-managed exact
+`storage_path` (an earlier run may have recorded a different location).
+
+Produced data already works this way; this generalizes it to fetched data. The
+lock thus becomes the resolver's fast path and the single "where is it" truth: a
+moved object is found at its new home with no re-derive / re-download.
+
+(Where the lock and the directive disagree, or several locations are recorded —
+**conflict resolution** — is a separate discussion.)
+
+## Source of truth: non-destructive updates + a dirty state
+
+The lock is a **first-order source of truth** for *where objects are*, and is
+maintained **non-destructively**, git-style:
+
+- **Additive self-heal (kept).** An object found on disk but absent from the
+  lock is registered; a stale recorded location is refreshed to where the object
+  was found.
+- **No silent removal.** An entry whose recorded object has gone **missing on
+  disk is kept**, not pruned, and surfaced by `list` as a **dirty / "missing"**
+  state (like `git status`) for the user to resolve. (Today `list` instead drops
+  such an entry by omission — it can't build the object when the bytes are gone;
+  under this model it must show it flagged.)
+- **Explicit removal only.** Entries leave the lock via an explicit `--delete`
+  (or a future `--prune` for missing/dirty), never as a passive side effect.
+
+Deferred (the *update policy* / *conflict resolution* discussion): lock-vs-
+directive disagreement, multiple recorded locations, and the boundary between
+*garbage to clean* (malformed residue) and *dirty to flag* (a valid entry whose
+bytes are missing).
+
 ## Unified maintenance surface (the payoff)
 
 Once a fetched dataset has a recorded location in the lock, the same maintenance
