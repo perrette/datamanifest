@@ -742,7 +742,7 @@ def test_match_cached_by_id_addressing():
 
 # ----- where: state records + --scan -----------------------------------------
 
-def test_where_lists_state_records_and_pools(tmp_path):
+def test_where_folds_pools_and_surfaces_only_offpattern(tmp_path):
     pool = tmp_path / "pool" / "example.com"
     pool.mkdir(parents=True)
     (pool / "a.csv").write_bytes(b"a\n")
@@ -753,14 +753,28 @@ def test_where_lists_state_records_and_pools(tmp_path):
         f'[_STORAGE]\ndatasets_dir = "datasets"\ndatasets_pools = ["{tmp_path / "pool"}"]\n'
         '[a]\nuri = "https://example.com/a.csv"\n'
         '[b]\nuri = "https://example.com/b.csv"\n'
+        '[c]\nuri = "https://example.com/c.csv"\n'
     )
     env = _env_with_toml(toml)
-    _run("download", "a", env=env)            # reused from the pool → recorded
+    _run("download", "a", env=env)            # reused from the pool → recorded (conformant)
+
+    # Record c at a location that is neither datasets_dir nor any read pool.
+    stray = tmp_path / "stray" / "example.com"
+    stray.mkdir(parents=True)
+    (stray / "c.csv").write_bytes(b"c\n")
+    state = tmp_path / ".datamanifest-state.toml"
+    with open(state, "a") as f:
+        f.write(f'\n[datasets."example.com/c.csv"]\n'
+                f'storage_path = "{stray / "c.csv"}"\nsha256 = "deadbeef"\n')
 
     out = _run("where", env=env).stdout
-    assert "read pools (datasets)" in out           # configured pool shown
-    assert "recorded:" in out                       # grouped recorded summary
-    assert "→" in out and "a" in out                # dataset 'a' grouped in
+    # The read pool is folded as a continuation line under datasets_dir — no
+    # separate "read pools" block.
+    assert str(tmp_path / "pool") in out
+    assert "read pools (datasets)" not in out       # no separate pools block
+    # Conformant 'a' (recorded in the pool) is NOT surfaced; only off-pattern 'c'.
+    assert "datasets recorded outside" in out
+    assert f"- {stray} -> c" in out
 
     scan = _run("where", "--scan", env=env).stdout
     assert "scan" in scan and "b →" in scan   # b is in the pool, not yet local
@@ -801,17 +815,3 @@ def test_download_then_verify(tmp_path):
     assert dl.returncode == 0, dl.stderr
     v = _run("verify", "foo", env=env)
     assert v.returncode == 0, v.stderr
-
-
-def test_where_common_anchor_heuristic():
-    import os
-
-    from datamanifest.cli import _common_anchor
-
-    # A deep shared parent is used as the anchor.
-    assert _common_anchor(["/a/b/c/d/x", "/a/b/c/e/y"]) == "/a/b/c"
-    # Too high (root / home / one level) → no anchor.
-    assert _common_anchor(["/tmp/x/f", "/var/y/g"]) == ""        # commonpath "/"
-    assert _common_anchor([os.path.expanduser("~") + "/a",
-                           os.path.expanduser("~") + "/b"]) == ""
-    assert _common_anchor([]) == ""
