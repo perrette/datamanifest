@@ -1,0 +1,6 @@
+# Sample pooch registry file (filename  [algo:]hash  [url]).
+# Used by the datamanifest importer tests — no pooch install required.
+gravity-disturbance.nc  bare00112233445566778899aabbccddeeff00112233445566778899aabbccdd
+data/density.csv        sha256:aa112233445566778899aabbccddeeff00112233445566778899aabbccddee
+santiago.tif            md5:9f86d081884c7d659a2feaa0c55ad015
+special.bin             sha256:bb112233445566778899aabbccddeeff00112233445566778899aabbccddee  https://mirror.example.org/special.bin

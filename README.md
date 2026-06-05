@@ -112,7 +112,7 @@ datamanifest COMMAND [OPTIONS]
 
 | Command | Description |
 |---|---|
-| `list [SEARCH ...] [--cached\|--datasets] [--present\|--missing\|--all] [--orphan] [--dirty] [--hash P ...] [--older-than AGE] [--format F] [--fields ...] [--delete\|--move DIR] [--dry-run]` | List datasets and cached artifacts, with their state↔disk status; with `--delete`/`--move` becomes the maintenance command. The filtered selection applies directly (`--dry-run` previews); `--delete`/`--move` act on both artifacts and fetched datasets (protected data is skipped) |
+| `list [SEARCH ...] [--cached\|--datasets] [--present\|--missing\|--all] [--orphan] [--dirty] [--outside] [--hash P ...] [--older-than AGE] [--format F] [--fields ...] [--delete\|--move DIR] [--dry-run]` | List datasets and cached artifacts, with their state↔disk status; with `--delete`/`--move` becomes the maintenance command. `--outside` narrows to tracked objects stored outside `datasets_dir`/`datacache_dir` and the read pools. The filtered selection applies directly (`--dry-run` previews); `--delete`/`--move` act on both artifacts and fetched datasets (protected data is skipped) |
 | `refresh [--scan] [--dry-run]` | Reconcile the state file (`.datamanifest-state.toml`) with disk: relocate stale records, drop missing ones, adopt present-but-untracked datasets. `--scan` also probes the read pools (incl. legacy locations) and adopts pool-present datasets (checksum-gated; no downloads/copies) — the active twin of `where --scan`. Edits only local state, so it applies by default; `--dry-run` previews |
 | `download [NAME ...] [--all] [--overwrite] [--delegate\|--no-delegate]` | Download specific datasets or all of them; `--no-delegate` disables the cross-language fetch rung for the run |
 | `path NAME` | Print the resolved on-disk path (composable in shell) |
@@ -122,9 +122,10 @@ datamanifest COMMAND [OPTIONS]
 | `verify [NAME ...]` | Re-check sha256 checksums; exits nonzero on any mismatch |
 | `update-checksums [NAME ...] [--dry-run]` | Recompute stored checksums from what's on disk |
 | `init [--folder PATH] [--force]` | Create a fresh `datamanifest.toml` in the current directory |
-| `where [--manifest\|--state-file\|--datasets-dir\|--datacache-dir] [--scan]` | Show the active manifest, state file, resolved data dirs (for this host) + read pools, and what the state file records. A selector flag prints just that one bare path (scriptable); `--scan` probes read pools for datasets present there but not local |
+| `where [--manifest\|--state-file\|--datasets-dir\|--datacache-dir] [--scan]` | Show the active manifest, state file, and the data dirs resolved for this host with their read pools folded in; notes how many tracked objects live outside those folders (`list --outside` to inspect). A selector flag prints just that one bare path (scriptable); `--scan` probes read pools for datasets present there but not local |
 | `storage [show]` / `storage set FIELD VALUE… [--host GLOB\|--all-hosts]` / `storage unset FIELD [...]` | Show or edit `[_STORAGE]` without hand-writing the `_HOST` syntax. `set`/`unset` target **this host** by default (a `[_STORAGE._HOST."<hostname>"]` override); `--host GLOB` targets a host pattern, `--all-hosts` the project-wide base. `FIELD` is `datasets_dir`/`datacache_dir`, a user `$symbol`, or a `datasets_pools`/`datacache_pools` list |
 | `migrate FILE [--dry-run]` | Reshape a spec-v3 manifest's `[_STORAGE]` to the spec-v4 two-field model: write `datasets_dir`/`datacache_dir` at their defaults, drop the retired keys, carry `local_path` → `storage_path`. Moves no bytes |
+| `import pooch REGISTRY --base-url URL [--cache-dir DIR] [--overwrite] [--dry-run]` | Import datasets from another tool's registry. For pooch: each `filename [algo:]hash [url]` line becomes a dataset (`uri` = its URL or `base_url + filename`, `sha256` carried over when present). With `--cache-dir` (e.g. `pooch.os_cache('pkg')`) already-downloaded files are adopted in place, checksum-verified — no re-download |
 | `push ID SSH_HOST [--dry-run] [--batch]` | Transfer a stored object **to** an SSH host (rsync over ssh), addressed by id (a dataset's `key`, or `cachetype[/version]/hash`) |
 | `pull ID SSH_HOST [--dry-run] [--batch]` | Transfer a stored object **from** an SSH host (rsync over ssh), same addressing |
 | `delete ID [--dry-run] [--batch]` | Delete a stored object's **bytes** (and prune its state record), addressed by id like `push`/`pull` — *not* the manifest entry (use `remove` for that). Protected data is skipped |
@@ -562,6 +563,8 @@ If you know [Pooch](https://www.fatiando.org/pooch/), think *"Pooch, but with a 
 3. **A cross-language manifest.** This is the core differentiator: the same `datasets.toml` is consumed by sibling implementations in other languages (today [`DataManifest.jl`](https://github.com/awi-esc/DataManifest.jl) for Julia) via the `_LANG` namespace, so projects in different languages share one declaration without stepping on each other. None of the Python tools above target this.
 
 If you only need download-and-checksum in pure Python, Pooch is the more mature choice. `datamanifest` is aimed at multi-dataset, multi-language scientific projects that want the whole dependency declaration in one file.
+
+Already using Pooch? `datamanifest import pooch registry.txt --base-url URL --cache-dir "$(python -c 'import pooch; print(pooch.os_cache("yourpkg"))')"` turns a registry into manifest entries and **adopts the files Pooch already downloaded in place** (checksum-verified), so switching over costs no re-downloads.
 
 ## Acknowledgments
 

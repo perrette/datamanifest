@@ -1582,6 +1582,35 @@ def _cmd_migrate(args):
     ))
 
 
+def _cmd_import(args):
+    """Import datasets declared by another tool (currently pooch) into the active
+    manifest: parse the tool's registry into standard dataset entries, and — with
+    --cache-dir — adopt already-downloaded files in place (no re-download). See
+    :mod:`datamanifest.importers`."""
+    from .importers import IMPORTERS
+
+    importer = IMPORTERS.get(args.tool)
+    if importer is None:                       # defensive (argparse constrains it)
+        print(f"Error: unknown import source {args.tool!r} "
+              f"(supported: {', '.join(sorted(IMPORTERS))}).", file=sys.stderr)
+        sys.exit(1)
+    src = os.path.abspath(args.source)
+    if not os.path.isfile(src):
+        print(f"Error: {src} not found.", file=sys.stderr)
+        sys.exit(1)
+    db = _get_db()
+    if not db.datasets_toml and not args.dry_run:
+        print("Error: no manifest to import into (run inside a project with a "
+              "datamanifest.toml, or `datamanifest init` first).", file=sys.stderr)
+        sys.exit(1)
+    try:
+        print(importer(db, src, base_url=args.base_url, cache_dir=args.cache_dir,
+                       dry_run=args.dry_run, overwrite=args.overwrite))
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
 # ----- argument parser -----
 
 def main():
@@ -1863,6 +1892,39 @@ def main():
     )
     _add_pool_override_flags(p_migrate)
     p_migrate.set_defaults(func=_cmd_migrate)
+
+    # import (from another tool)
+    p_import = subparsers.add_parser(
+        "import",
+        help="Import datasets declared by another tool (pooch) into the manifest",
+    )
+    p_import.add_argument(
+        "tool", choices=["pooch"], help="Source tool (currently: pooch)",
+    )
+    p_import.add_argument(
+        "source", metavar="REGISTRY",
+        help="The tool's registry file (e.g. a pooch registry.txt)",
+    )
+    p_import.add_argument(
+        "--base-url", dest="base_url", default="", metavar="URL",
+        help="Root URL prepended to registry filenames lacking an explicit URL "
+             "column (pooch's base_url; required unless every entry carries a URL)",
+    )
+    p_import.add_argument(
+        "--cache-dir", dest="cache_dir", default="", metavar="DIR",
+        help="The tool's local cache directory (e.g. pooch.os_cache('pkg')); "
+             "already-downloaded files are adopted in place, checksum-verified, "
+             "with no re-download",
+    )
+    p_import.add_argument(
+        "--overwrite", action="store_true",
+        help="Overwrite manifest entries whose name already exists",
+    )
+    p_import.add_argument(
+        "--dry-run", action="store_true",
+        help="Print what would be imported without writing anything",
+    )
+    p_import.set_defaults(func=_cmd_import)
 
     # refresh
     p_refresh = subparsers.add_parser(

@@ -51,7 +51,7 @@ def test_version():
 def test_help_lists_all_subcommands():
     result = _run("--help")
     assert result.returncode == 0
-    for sub in ["list", "download", "path", "add", "remove", "show", "verify", "update-checksums", "init", "where", "migrate", "refresh", "storage", "format"]:
+    for sub in ["list", "download", "path", "add", "remove", "show", "verify", "update-checksums", "init", "where", "migrate", "import", "refresh", "storage", "format"]:
         assert sub in result.stdout, f"subcommand {sub!r} missing from --help output"
 
 
@@ -795,6 +795,35 @@ def test_list_outside_filters_to_offpattern_only(tmp_path):
     # and not-yet-fetched 'b' are excluded.
     assert "c.csv" in out and "stray" in out
     assert "a.csv" not in out and "b.csv" not in out
+
+
+# ----- import (from pooch) ---------------------------------------------------
+
+def test_import_pooch_cli(tmp_path):
+    import hashlib
+
+    # A cache file + a one-line registry referencing it by sha256.
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    blob = b"gravity grid\n"
+    (cache / "g.nc").write_bytes(blob)
+    reg = tmp_path / "registry.txt"
+    reg.write_text(f"g.nc {hashlib.sha256(blob).hexdigest()}\n")
+
+    toml = tmp_path / "datamanifest.toml"
+    toml.write_text('[_META]\nschema = 1\n[_STORAGE]\ndatasets_dir = "datasets"\n')
+    env = _env_with_toml(toml)
+
+    r = _run("import", "pooch", str(reg), "--base-url", "https://data.example.org",
+             "--cache-dir", str(cache), env=env)
+    assert r.returncode == 0, r.stderr
+    assert "Imported 1 dataset" in r.stdout and "adopted from the cache" in r.stdout
+
+    # The dataset is declared and resolves to the in-place cache copy (no download).
+    out = _run("list", "--datasets", env=env).stdout
+    assert "g" in out
+    p = _run("path", "g", env=env)
+    assert p.returncode == 0 and str(cache / "g.nc") in p.stdout
 
 
 # ----- add / show / remove / download / verify (command coverage) ------------
