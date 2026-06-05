@@ -83,6 +83,29 @@ format = "pickle"
   entry is (re)written on the next access; a `--move`/`--delete` repoints/prunes
   it. No behavior in `datasets.toml` changes.
 
+## Unified maintenance surface (the payoff)
+
+Once a fetched dataset has a recorded location in the lock, the same maintenance
+operations that apply to produced artifacts apply to it — one surface for
+everything materialized:
+
+- **Filter / list.** Already spans both kinds (free-text `search`, `--datasets`/
+  `--cached`, `--format`, `--older-than`, `--present`/`--missing`, …). Unchanged.
+- **`--delete`.** Extends to fetched datasets: remove the on-disk bytes **and
+  prune the dataset's lock entry**. (Today delete is `cached`-only.)
+- **`--move DEST`.** Extends to fetched datasets: relocate the bytes **and
+  repoint the lock's recorded `storage_path`** — exactly as for a produced
+  artifact. `datasets.toml` is *not* edited; only the lock's resolved location
+  moves (a subsequent re-fetch still follows the `datasets_dir` directive — gold
+  standard).
+
+**Protections (unchanged rule).** Maintenance never touches data the user owns:
+a dataset whose `storage_path` is a **user-managed exact path** (no `$key`) or
+that is **`skip_download`** (the URI *is* the file) is reported as *skipped*,
+never moved or deleted — the same guard already used for deletion today,
+generalized. Tool-managed (keyed) fetched datasets under `datasets_dir` are
+fair game, like produced artifacts.
+
 ## Scope of this change (additive, low-risk)
 
 - **`datasets.toml` is untouched.** Its `sha256` (expected/contract) and any
