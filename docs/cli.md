@@ -54,7 +54,7 @@ checksum-verified — no re-download**. See
 
 ## Inspect
 
-### `list [SEARCH ...] [filters] [output style] [actions]`
+### `list [SEARCH ...] [filters] [output style] [--delete ... | --move DEST ... | --push SSH_HOST ... | --pull SSH_HOST ...]`
 
 List fetched datasets and the cached artifacts this project's state file roots,
 each with its state↔disk status. Free-text `SEARCH` terms match
@@ -80,14 +80,28 @@ Output style: the default is a styled, grouped, one-line-per-object view with
 clickable `file://` locations; `--bare`/`--names` prints a plain name list
 (scriptable); `--fields FIELD ...` a tab-separated machine table.
 
-Actions — the filtered selection applies directly (`--dry-run` previews):
+Actions — each action flag applies the matching standalone command to the
+filtered selection, **forwarding the rest of the line to that command's own
+options** (the `list` selection replaces its `ID`). Put the filters first, then
+the action flag and its options. The selection applies directly (`--dry-run`
+previews):
 
-- `--delete` — delete the selected objects' bytes (artifacts **and** fetched
-  datasets).
-- `--move DEST` — move them under DEST and repoint their state records (the
-  manifest is not edited).
-- `--push SSH_HOST` / `--pull SSH_HOST` — bulk cross-machine sync of the
-  selection (rsync over ssh).
+- `--delete [--dry-run] [--prune]` — delete the selected objects' bytes
+  (artifacts **and** fetched datasets); `--prune` also drops a dataset's
+  manifest entry. (Same options as the standalone `delete`; `--batch` is
+  irrelevant here — the selection is already explicit — and is ignored.)
+- `--move DEST [--dry-run]` — move them under DEST and repoint their state
+  records (the manifest is not edited). The tail starts with `DEST`.
+- `--push SSH_HOST [--dry-run]` / `--pull SSH_HOST [--dry-run]` — bulk
+  cross-machine sync of the selection (rsync over ssh). The tail starts with
+  `SSH_HOST`.
+
+```
+datamanifest list --cached --orphan --delete --dry-run --prune
+datamanifest list --datasets --older-than 30d --move /archive --dry-run
+datamanifest list --outside --push user@hpc
+datamanifest list --datasets --pull user@hpc --dry-run
+```
 
 Maintenance never touches **user-managed data** — a `skip_download` entry, or a
 fixed `storage_path` with no `$key` — which the tool didn't place.

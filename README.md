@@ -177,12 +177,17 @@ datamanifest refresh --scan --datasets-pools ~/other-project/datasets /shared/da
 ```
 
 `refresh` only edits local state — never your data, never the manifest. To act
-on the bytes themselves, filter with `list` and apply
-`--delete` / `--move DIR` (`--dry-run` previews):
+on the bytes themselves, filter with `list` and apply an action flag. Each flag
+runs the matching standalone command (`delete` / `move` / `push` / `pull`) over
+the selection and **forwards the rest of the line to that command's own
+options** — filters first, then the action flag and its tail (`--dry-run`
+previews):
 
 ```bash
-datamanifest list --cached --orphan --delete       # clean up orphaned cached artifacts
-datamanifest list --older-than 30d --delete --dry-run
+datamanifest list --cached --orphan --delete                 # clean up orphaned cached artifacts
+datamanifest list --older-than 30d --delete --dry-run        # preview; --dry-run goes to delete
+datamanifest list --datasets stale --delete --prune          # also drop the manifest entry
+datamanifest list --older-than 90d --move /archive --dry-run # DEST then options
 ```
 
 ### Put data where you want it

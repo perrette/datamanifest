@@ -298,6 +298,97 @@ def test_list_delete_prunes_cached_toml(tmp_path):
     assert "Nothing to list" in _run("list", h, env=env).stdout
 
 
+# ----- list action flags forward a REMAINDER tail to the standalone parser ----
+
+def test_list_delete_old_store_true_form_is_gone(tmp_path):
+    """The `--delete` flag now captures a REMAINDER tail (delete's own options),
+    not a bare store_true. A flag the OLD action group never knew — handed to it
+    as part of the tail — is parsed by delete's parser, e.g. `--prune`."""
+    cache = tmp_path / "cache"
+    artifact, key = _orphan_artifact(cache, "mytype", {"grid": "5x5"})
+    env = _maint_env(tmp_path, cache)
+
+    # `list --orphan --delete --prune` forwards [--prune] to delete's parser
+    # (an orphan cached artifact has no manifest entry, so --prune is a no-op on
+    # it, but the flag must PARSE — under the old store_true form it could not).
+    run = _run("list", "--orphan", "--delete", "--prune", env=env)
+    assert run.returncode == 0, run.stderr
+    assert not artifact.exists(), "--delete should still remove the orphan"
+
+
+def test_list_delete_tail_dry_run_then_applies(tmp_path):
+    """`list --orphan --delete --dry-run` previews (tail = [--dry-run]); without
+    --dry-run it applies — the REMAINDER tail reaches delete's option parser."""
+    cache = tmp_path / "cache"
+    artifact, key = _orphan_artifact(cache, "mytype", {"grid": "5x5"})
+    env = _maint_env(tmp_path, cache)
+
+    dry = _run("list", "--orphan", "--delete", "--dry-run", env=env)
+    assert dry.returncode == 0, dry.stderr
+    assert artifact.is_dir(), "dry run must not delete"
+    assert "dry run" in dry.stdout.lower()
+
+    run = _run("list", "--orphan", "--delete", env=env)
+    assert run.returncode == 0, run.stderr
+    assert not artifact.exists()
+
+
+def test_list_move_tail_dest_then_options(tmp_path):
+    """`list --orphan --move DEST --dry-run`: the tail starts with DEST then the
+    forwarded options. Dry-run previews; the real run relocates the bytes."""
+    cache = tmp_path / "cache"
+    artifact, key = _orphan_artifact(cache, "mt", {"g": "5x5"})
+    dest = tmp_path / "archive"
+    env = _maint_env(tmp_path, cache)
+
+    dry = _run("list", "--orphan", "--move", str(dest), "--dry-run", env=env)
+    assert dry.returncode == 0, dry.stderr
+    assert artifact.is_dir() and not dest.exists()
+
+    run = _run("list", "--orphan", "--move", str(dest), env=env)
+    assert run.returncode == 0, run.stderr
+    assert not artifact.exists()
+    h = key.split("/", 1)[1]
+    assert (dest / "mt" / h / "data.txt").exists()
+
+
+def test_list_delete_prune_drops_dataset_entry(tmp_path):
+    """`list --datasets <name> --delete --prune` forwards --prune to delete's
+    parser, dropping the dataset's manifest entry (= `remove`), not just bytes."""
+    toml = _id_project(tmp_path)
+    env = _env_with_toml(toml)
+    _run("download", "mydata", env=env)
+
+    run = _run("list", "--datasets", "mydata", "--delete", "--prune", env=env)
+    assert run.returncode == 0, run.stderr
+    assert "entry pruned" in run.stdout
+    assert "[mydata]" not in toml.read_text()        # --prune dropped the entry
+
+
+def test_list_filters_narrow_before_the_action_flag(tmp_path):
+    """Selection filters come BEFORE the action flag and still narrow: a
+    `--datasets` selection leaves a sibling orphan cached artifact untouched."""
+    cache = tmp_path / "cache"
+    artifact, key = _orphan_artifact(cache, "mt", {"g": "5x5"})
+    toml = tmp_path / "datasets.toml"
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "a.csv").write_bytes(b"col\n1\n")
+    toml.write_text(
+        '[_META]\nschema = 1\n\n[_STORAGE]\ndatasets_dir = "datasets"\n\n'
+        f'[mydata]\nuri = "file://{src / "a.csv"}"\n'
+    )
+    env = dict(os.environ)
+    env["DATAMANIFEST_DATACACHE_DIR"] = str(cache)
+    env["DATAMANIFEST_TOML"] = str(toml)
+    _run("download", "mydata", env=env)
+
+    # Delete only datasets — the orphan cached artifact must survive.
+    run = _run("list", "--datasets", "--delete", env=env)
+    assert run.returncode == 0, run.stderr
+    assert artifact.is_dir(), "a --datasets selection must not touch cached orphans"
+
+
 def test_bare_skips_the_size_walk(tmp_path, monkeypatch):
     """--bare (and --fields without size) must not trigger the per-object size
     tree-walk — the scriptable speedup for large datasets."""
@@ -325,16 +416,19 @@ def test_bare_skips_the_size_walk(tmp_path, monkeypatch):
     _enumerate_objects(db, set())               # bare: no walk
     assert calls["n"] == 0
 
-    # _heavy_fields picks the right set per output mode.
+    # _heavy_fields picks the right set per output mode. The action flags are
+    # REMAINDER lists now: None = flag absent, a list = given (e.g. [] for a bare
+    # `--delete`, or its forwarded tail).
     def ns(**k):
-        base = dict(bare=False, fields=None, delete=False, move=None)
+        base = dict(bare=False, fields=None, delete=None, move=None)
         base.update(k)
         return types.SimpleNamespace(**base)
     assert "size" not in _heavy_fields(ns(bare=True))
     assert "size" in _heavy_fields(ns())                     # rich default
     assert "size" in _heavy_fields(ns(fields=["size"]))
     assert "size" not in _heavy_fields(ns(fields=["key"]))
-    assert _heavy_fields(ns(delete=True)) == set()           # actions skip it
+    assert _heavy_fields(ns(delete=[])) == set()             # actions skip it
+    assert _heavy_fields(ns(delete=["--prune"])) == set()    # tail too
 
 
 def test_older_than_filter_excludes_recent():
