@@ -48,6 +48,86 @@ def _add_delegate_flags(group):
     )
 
 
+# ----- shared action option sets -------------------------------------------
+#
+# Each first-order action (delete / move / push / pull) defines its options in
+# exactly ONE place, via the helpers below. The standalone `delete ID` /
+# `move ID DEST` / `push ID SSH_HOST` / `pull ID SSH_HOST` subcommands add the
+# leading positional(s) and then the shared option set; `list --<action> TAIL`
+# reuses the same option set on an id-less parser to parse the forwarded
+# REMAINDER tail (the `list` selection replaces the id).
+
+
+def _add_delete_opts(parser, *, with_batch=True):
+    """Add `delete`'s options (``--dry-run`` / ``--prune``, and ``--batch`` for
+    the id-addressed standalone form). ``--batch`` is irrelevant in the piped
+    ``list --delete`` form (the selection is already explicit) — it is omitted
+    there, but still accepted (see :func:`_idless_action_parser`)."""
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Preview without deleting anything")
+    if with_batch:
+        parser.add_argument("--batch", action="store_true",
+                            help="Delete all objects matching an ambiguous id")
+    parser.add_argument(
+        "--prune", action="store_true",
+        help="Also drop the dataset's manifest entry (not just the bytes); no "
+             "effect on cached artifacts, which have no entry",
+    )
+
+
+def _add_move_opts(parser, *, with_batch=True):
+    """Add `move`'s options (``--dry-run``, plus ``--batch`` for the standalone
+    id form). The ``DEST`` positional is added by the caller (it leads the
+    forwarded tail in the ``list --move DEST`` form)."""
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Preview without moving anything")
+    if with_batch:
+        parser.add_argument("--batch", action="store_true",
+                            help="Move all objects matching an ambiguous id")
+
+
+def _add_sync_opts(parser, *, with_batch=True):
+    """Add `push`/`pull`'s options (``--dry-run``, plus ``--batch`` for the
+    standalone id form). The ``SSH_HOST`` positional is added by the caller."""
+    parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Report the selection (id, kind, paths, size) and transfer nothing",
+    )
+    if with_batch:
+        parser.add_argument(
+            "--batch", action="store_true",
+            help="Transfer all objects matching an ambiguous id instead of erroring",
+        )
+
+
+# The id-less option set each `list` action flag forwards its REMAINDER tail to.
+# ``--batch`` is accepted-and-ignored in the piped form: the `list` selection is
+# already the explicit set, so the single-vs-ambiguous guard does not apply.
+_LIST_ACTION_SPECS = {
+    "delete": {"adder": _add_delete_opts, "positionals": ()},
+    "move": {"adder": _add_move_opts, "positionals": (("dest", "DEST"),)},
+    "push": {"adder": _add_sync_opts, "positionals": (("host", "SSH_HOST"),)},
+    "pull": {"adder": _add_sync_opts, "positionals": (("host", "SSH_HOST"),)},
+}
+
+
+def _idless_action_parser(action):
+    """Build the id-less argparse parser for *action* used to parse the tail
+    forwarded by ``list --<action> TAIL``. It has the action's leading
+    positional(s) (``DEST`` / ``SSH_HOST``) but no ``id``, the action's options,
+    and an accepted-and-ignored ``--batch`` (no-op here)."""
+    spec = _LIST_ACTION_SPECS[action]
+    p = argparse.ArgumentParser(prog=f"datamanifest list --{action}",
+                                add_help=False)
+    for dest, metavar in spec["positionals"]:
+        p.add_argument(dest, metavar=metavar)
+    spec["adder"](p, with_batch=False)
+    # Accept (and ignore) --batch in the piped form for parity with the
+    # standalone command; the explicit selection makes it a no-op.
+    p.add_argument("--batch", action="store_true", help=argparse.SUPPRESS)
+    return p
+
+
 # ----- subcommand implementations -----
 
 # Fields a maintenance object exposes, in display order. ``key``/``hash`` and
@@ -108,7 +188,8 @@ def _heavy_fields(args):
     ``--fields`` shows exactly what's listed; ``--bare`` shows neither.
     """
     heavy = {"size", "created"}
-    if getattr(args, "delete", False) or getattr(args, "move", None):
+    if (getattr(args, "delete", None) is not None
+            or getattr(args, "move", None) is not None):
         return set()                       # actions report key/location, not size
     if getattr(args, "fields", None):
         return {f.replace("-", "_") for f in args.fields} & heavy
@@ -535,28 +616,25 @@ def _cmd_list(args):
     objects = _filter_objects(_enumerate_objects(db, _heavy_fields(args)), args, db)
 
     # ----- actions (operate on the filtered set, report their own output) -----
-    if args.delete or args.move:
-        _maintain(objects, args, db)
-        return
-
-    if getattr(args, "push", None) or getattr(args, "pull", None):
-        from . import sync
-
-        host = args.push or args.pull
-        direction = "push" if args.push else "pull"
-        sync_objects = []
-        for obj in objects:
-            if not obj.present:  # nothing on disk to transfer
-                continue
-            try:
-                sync_objects.append(sync.sync_object_from_location(
-                    db, kind=obj.kind, ident=obj.key, location=obj.location,
-                ))
-            except sync.RemoteRepoError:
-                print(f"Skipped (local, out of scope for sync): {obj.key}",
-                      file=sys.stderr)
-                continue
-        _do_transfer(db, sync_objects, host, direction, args)
+    # Each action flag captures its tail as an argparse REMAINDER list (``None``
+    # = flag not given, ``[]`` = given with no tail). The tail is parsed by the
+    # matching action's id-less parser and applied to the `list` selection, so
+    # each action's options are defined in exactly one place.
+    for action in ("delete", "move", "push", "pull"):
+        tail = getattr(args, action, None)
+        if tail is None:
+            continue
+        sub = _idless_action_parser(action).parse_args(tail)
+        if action in ("delete", "move"):
+            margs = argparse.Namespace(
+                delete=(action == "delete"),
+                move=(sub.dest if action == "move" else None),
+                dry_run=sub.dry_run,
+                prune=getattr(sub, "prune", False),
+            )
+            _maintain(objects, margs, db)
+        else:
+            _list_sync(objects, sub.host, action, sub.dry_run, db)
         return
 
     # ----- output style (explicit; independent of the filters) -----
@@ -1030,6 +1108,29 @@ def _do_transfer(db, objects, host, direction, args):
             print(f"{verb}ed: {plan['kind']} {plan['id']}  -> {host}:{plan['remote']}"
                   if direction == "push" else
                   f"{verb}ed: {plan['kind']} {plan['id']}  <- {host}:{plan['remote']}")
+
+
+def _list_sync(objects, host, direction, dry_run, db):
+    """Push/pull the `list`-selected *objects* to/from *host* — the engine behind
+    ``list --push`` / ``list --pull``. Resolves each present object to a
+    :class:`SyncObject` (skipping repo-local, out-of-scope ones) and transfers
+    the set via :func:`_do_transfer`."""
+    from . import sync
+
+    sync_objects = []
+    for obj in objects:
+        if not obj.present:  # nothing on disk to transfer
+            continue
+        try:
+            sync_objects.append(sync.sync_object_from_location(
+                db, kind=obj.kind, ident=obj.key, location=obj.location,
+            ))
+        except sync.RemoteRepoError:
+            print(f"Skipped (local, out of scope for sync): {obj.key}",
+                  file=sys.stderr)
+            continue
+    _do_transfer(db, sync_objects, host, direction,
+                 argparse.Namespace(dry_run=dry_run))
 
 
 def _cmd_push(args):
@@ -1752,32 +1853,43 @@ def main():
             + "). Available: " + " ".join(_OBJECT_FIELDS) + "."
         ),
     )
-    act_group = p_list.add_argument_group("object actions (maintenance)")
+    # Object actions: each flag captures everything after it as a raw REMAINDER
+    # tail and forwards it to that action's OWN option parser, applied to the
+    # `list` selection (so the options are defined once — see _LIST_ACTION_SPECS).
+    # Selection filters come BEFORE the action flag; the action flag owns the
+    # tail. The four flags are mutually exclusive.
+    act_group = p_list.add_argument_group(
+        "object actions",
+        description=(
+            "Apply a standalone command to the selected objects, forwarding the "
+            "rest of the line to that command. Filters come first, then the "
+            "action flag and its own options. e.g. "
+            "`list --orphan --delete --dry-run --prune`, "
+            "`list --datasets --move /archive --dry-run`, "
+            "`list --outside --push user@hpc`."
+        ),
+    )
     _act_excl = act_group.add_mutually_exclusive_group()
     _act_excl.add_argument(
-        "--delete", action="store_true",
-        help="Delete the selected objects — produced artifacts and fetched "
-             "datasets (--dry-run previews); protected data is skipped",
+        "--delete", nargs=argparse.REMAINDER, default=None, metavar="...",
+        help="Delete the selected objects, forwarding delete's options "
+             "(--dry-run / --prune) — artifacts and fetched datasets; protected "
+             "data is skipped",
     )
     _act_excl.add_argument(
-        "--move", metavar="DEST",
-        help="Move the selected objects (artifacts or datasets) under DEST; "
-             "the manifest is not edited",
+        "--move", nargs=argparse.REMAINDER, default=None, metavar="DEST ...",
+        help="Move the selected objects under DEST, forwarding move's options "
+             "(DEST then --dry-run); the manifest is not edited",
     )
-    act_group.add_argument(
-        "--dry-run", action="store_true",
-        help="Preview a maintenance / sync action (--delete / --move / --push / "
-             "--pull) without changing anything",
+    _act_excl.add_argument(
+        "--push", nargs=argparse.REMAINDER, default=None, metavar="SSH_HOST ...",
+        help="Push the selected objects to SSH_HOST (rsync over ssh), forwarding "
+             "push's options (SSH_HOST then --dry-run)",
     )
-    sync_group = p_list.add_argument_group("object actions (sync)")
-    _sync_excl = sync_group.add_mutually_exclusive_group()
-    _sync_excl.add_argument(
-        "--push", metavar="SSH_HOST",
-        help="Push the selected objects to SSH_HOST (rsync over ssh)",
-    )
-    _sync_excl.add_argument(
-        "--pull", metavar="SSH_HOST",
-        help="Pull the selected objects from SSH_HOST (rsync over ssh)",
+    _act_excl.add_argument(
+        "--pull", nargs=argparse.REMAINDER, default=None, metavar="SSH_HOST ...",
+        help="Pull the selected objects from SSH_HOST (rsync over ssh), "
+             "forwarding pull's options (SSH_HOST then --dry-run)",
     )
     p_list.set_defaults(func=_cmd_list)
 
@@ -2094,14 +2206,7 @@ def main():
         p_sync.add_argument("id", metavar="ID", help="Object identifier")
         p_sync.add_argument("host", metavar="SSH_HOST", help="user@host or host")
         sync_opts = p_sync.add_argument_group("options")
-        sync_opts.add_argument(
-            "--dry-run", action="store_true",
-            help="Report the selection (id, kind, paths, size) and transfer nothing",
-        )
-        sync_opts.add_argument(
-            "--batch", action="store_true",
-            help="Transfer all objects matching an ambiguous id instead of erroring",
-        )
+        _add_sync_opts(sync_opts)
         p_sync.set_defaults(func=func)
 
     # delete / move — first-order maintenance of a single stored object, by id
@@ -2126,15 +2231,7 @@ def main():
     )
     p_delete.add_argument("id", metavar="ID", help="Object identifier")
     del_opts = p_delete.add_argument_group("options")
-    del_opts.add_argument("--dry-run", action="store_true",
-                          help="Preview without deleting anything")
-    del_opts.add_argument("--batch", action="store_true",
-                          help="Delete all objects matching an ambiguous id")
-    del_opts.add_argument(
-        "--prune", action="store_true",
-        help="Also drop the dataset's manifest entry (not just the bytes); no "
-             "effect on cached artifacts, which have no entry",
-    )
+    _add_delete_opts(del_opts)
     p_delete.set_defaults(func=_cmd_delete)
 
     p_move = subparsers.add_parser(
@@ -2149,10 +2246,7 @@ def main():
     p_move.add_argument("id", metavar="ID", help="Object identifier")
     p_move.add_argument("dest", metavar="DEST", help="Destination root directory")
     move_opts = p_move.add_argument_group("options")
-    move_opts.add_argument("--dry-run", action="store_true",
-                           help="Preview without moving anything")
-    move_opts.add_argument("--batch", action="store_true",
-                           help="Move all objects matching an ambiguous id")
+    _add_move_opts(move_opts)
     p_move.set_defaults(func=_cmd_move)
 
     args = parser.parse_args()
