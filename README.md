@@ -204,7 +204,7 @@ datamanifest storage                                                         # s
 
 Pointing the folders at a machine directory (instead of the repo) shares data
 across clones and projects. Path expressions, per-host rules, per-dataset
-overrides and read pools: [storage model](docs/cli.md#storage-model).
+overrides and read pools: [storage model](docs/storage.md).
 
 ### Sync between machines
 

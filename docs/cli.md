@@ -6,8 +6,8 @@ datamanifest COMMAND [OPTIONS]
 
 Every command also documents itself: `datamanifest COMMAND -h`. The
 [README](../README.md) shows the common workflows by example; this page is the
-full per-command reference, plus the [storage model](#storage-model) the
-commands operate on.
+full per-command reference. The [storage model](storage.md) the commands operate
+on has its own page.
 
 A bare `datamanifest` (no subcommand) prints the command list.
 
@@ -245,100 +245,9 @@ none).
 
 ## Storage model
 
-Storage is **two folder fields** set in `[_STORAGE]`:
-
-- `datasets_dir` (default `"datasets"`) — where fetched datasets go.
-- `datacache_dir` (default `"cached"`) — where the produced `@cached` cache goes.
-
-Both default to **relative** paths, so they resolve against the project root
-(the manifest's directory, `$repo`) and you get a visible local `./datasets/`
-and `./cached/` with zero config. The layout is flat — the folder you set **is**
-the location:
-
-- fetched dataset → `<datasets_dir>/<key>`
-- produced artifact → `<datacache_dir>/<cachetype>/[<version>/]<hash>`
-
-### Path expressions
-
-A path expression may interpolate `$`-symbols: the predefined `$user_data_dir` /
-`$user_cache_dir` (straight from `platformdirs`, **bare** — no app name) and
-`$repo` (the project root); the two fields `$datasets_dir` / `$datacache_dir`;
-`$key` (a dataset's storage key); any user-defined bare `[_STORAGE]` key;
-`$USER` / env vars; and `~`. User-defined symbols can be made host-specific in
-`[_STORAGE._HOST."<glob>"]`.
-
-```toml
-[_STORAGE]
-datasets_dir  = "datasets"               # default: repo-local ./datasets/
-datacache_dir = "$user_cache_dir/myproj" # produced artifacts on the machine cache dir
-scratch       = "/tmp/$USER/scratch"     # user-defined symbol
-
-[_STORAGE._HOST."login*.hpc.edu"]
-scratch = "/scratch/$USER"               # host-specific override of a user symbol
-
-[bigsim]                                 # → datasets/bigsim  (default storage_path)
-uri = "https://example.com/bigsim.nc"
-
-[hpc_output]                             # per-dataset override (a path expression)
-storage_path = "$scratch/results/$key"
-format = "nc"
-```
-
-### Resolution ladder
-
-For any field/symbol *name*, first match wins:
-
-1. `DATAMANIFEST_<NAME>` environment variable.
-2. First `[_STORAGE._HOST.<glob>].<name>` whose glob matches the hostname.
-3. `[_STORAGE].<name>` base value.
-4. The predefined symbol or field default.
-
-The only two env vars of note are `DATAMANIFEST_DATASETS_DIR` and
-`DATAMANIFEST_DATACACHE_DIR`.
-
-### Per-dataset override
-
-A dataset may set `storage_path` — a path expression, default
-`$datasets_dir/$key`. A `storage_path` that contains `$key` is a tool-managed
-keyed location; an exact path with no `$key` is a **user-managed** location used
-verbatim that maintenance never touches.
-
-### Centralizing / sharing
-
-Because the default folders are repo-local, point both fields at a machine
-directory to share data across clones or projects — one explicit edit:
-
-```toml
-[_STORAGE]
-datasets_dir  = "$user_data_dir/myproj"
-datacache_dir = "$user_cache_dir/myproj"
-```
-
-### Read pools — don't re-download what you already have
-
-If a dataset (or a `@cached` result) already exists somewhere else on your
-machine — say another project downloaded it — datamanifest can **reuse that copy
-in place** instead of fetching it again. It checks a few **read pools** (extra
-read-only folders); on a match it records the location and uses it, while new
-downloads still go to your own `datasets_dir`.
-
-- **Datasets** are looked up in well-known shared folders by default (e.g.
-  `~/.cache/Datasets`), and a found copy is **checksum-verified** before it's
-  trusted.
-- **`@cached` results** are not shared by default (opt-in) — there's no standard
-  shared location for them, and they carry no content checksum.
-
-Point the tool at your own shared folders with
-`datamanifest storage set datasets_pools <dir> …`; see what's reusable with
-`where --scan` (report) or pull it all in with `refresh --scan` (adopt). Pools
-can differ per machine, and an empty list turns them off.
-
-### The state file
-
-Next to the manifest, the tool keeps a small git-ignored **state file**,
-`.datamanifest-state.toml`, recording *where each object ended up on this
-machine* (and its checksum) — so it never loses track of your data and never
-re-downloads something it can already find. It's local and disposable: delete it
-and it rebuilds itself as you use your data. `list --dirty`, `refresh`, and the
-maintenance actions all operate on it; the full design is in
-[design-state-file.md](design-state-file.md).
+Where data lives on disk — the two `[_STORAGE]` folder fields, `$`-symbols and
+path expressions, the resolution ladder, per-dataset `storage_path`, read pools,
+and the state file — is a property of the **manifest format**, consumed by the
+CLI, the Python API, and peer-language tools alike. It has its own reference:
+**[storage.md](storage.md)**. The [`storage`](#configure-storage) command above
+edits it.
