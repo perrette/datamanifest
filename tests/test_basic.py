@@ -241,6 +241,51 @@ def test_getitem_by_key():
     assert entry.format == "zip"
 
 
+def test_database_convenience_methods(tmp_path):
+    """A custom / file-less Database is fully usable via methods (no module-level
+    default-db wrappers needed): add / download / get_dataset_path / load / delete."""
+    import json
+    import os
+
+    from datamanifest import Database
+
+    src = tmp_path / "src.json"
+    src.write_text(json.dumps({"k": 1}))
+    db = Database(datasets_folder=str(tmp_path / "data"), persist=False)
+
+    name, _ = db.add(f"file://{src}", name="x")
+    assert name == "x"
+    path = db.download_dataset("x")
+    assert os.path.exists(path)
+    assert db.get_dataset_path("x") == path
+    assert db.load_dataset("x") == {"k": 1}      # json loader — no optional deps
+    db.delete_dataset("x")
+    assert "x" not in db.datasets
+
+
+def test_module_functions_accept_db_keyword(tmp_path):
+    """`datamanifest.X(..., db=mydb)` routes to that db's method; without `db=` it
+    uses the auto-discovered default database."""
+    import json
+    import os
+
+    import datamanifest
+    from datamanifest import Database
+
+    src = tmp_path / "s.json"
+    src.write_text(json.dumps({"v": 2}))
+    db = Database(datasets_folder=str(tmp_path / "d"), persist=False)
+
+    datamanifest.add(f"file://{src}", name="y", db=db)
+    assert "y" in db.datasets
+    path = datamanifest.download_dataset("y", db=db)
+    assert os.path.exists(path)
+    assert datamanifest.get_dataset_path("y", db=db) == path
+    assert datamanifest.load_dataset("y", db=db) == {"v": 2}
+    datamanifest.delete_dataset("y", db=db)
+    assert "y" not in db.datasets
+
+
 def test_search_by_doi():
     from datamanifest.database import search_dataset
     db = _fixture_db()

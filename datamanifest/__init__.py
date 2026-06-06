@@ -19,6 +19,7 @@ from .pipelines import (
     _module_get_dataset_path as get_dataset_path,
     _module_load_dataset as load_dataset,
     _module_register_dataset as register_dataset,
+    resolve_db,
 )
 
 __all__ = [
@@ -33,6 +34,7 @@ __all__ = [
     "get_default_database",
     "load_dataset",
     "register_dataset",
+    "resolve_db",
     "validate_loader",
     "validate_loaders",
 ]

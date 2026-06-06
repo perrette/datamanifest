@@ -955,51 +955,50 @@ def load_dataset(db, dataset, loader=None, **kwargs):
     return default_loaders.default_loader(fmt)(path)
 
 
-# ----- module-level convenience wrappers (Item 17) -----
-# These use *_db* (a different signature: name-only, no explicit db arg)
-# to avoid shadowing the db-taking implementations above.
+# ----- module-level convenience wrappers -----
+# Each is a thin alias over the Database method: `datamanifest.X(..., db=None)` ==
+# `resolve_db(db).X(...)` — i.e. the method on the given db, or on the
+# auto-discovered default database when `db` is None. `db.X(...)` is the
+# explicit-db form. `db` is keyword-only so it never collides with positionals.
 
-def _get_default_db():
+def resolve_db(db=None):
+    """Return *db* if given, else the auto-discovered default database."""
+    if db is not None:
+        return db
     from .database import get_default_database
     return get_default_database()
 
 
-def _module_register_dataset(uri: str = "", name: str = "", **kwargs):
-    """Register a dataset in the default database."""
-    return _get_default_db().register_dataset(uri=uri, name=name, **kwargs)
+def _module_register_dataset(*args, db=None, **kwargs):
+    """Register a dataset (the default db unless ``db=`` is given)."""
+    return resolve_db(db).register_dataset(*args, **kwargs)
 
 
-def _module_add(uri: str = "", name: str = "", **kwargs):
-    """Alias for register_dataset (shorter name for interactive use)."""
-    return _module_register_dataset(uri=uri, name=name, **kwargs)
+def _module_add(*args, db=None, **kwargs):
+    """Register a dataset — alias for register_dataset (default db unless ``db=``)."""
+    return resolve_db(db).add(*args, **kwargs)
 
 
-def _module_delete_dataset(name: str, **kwargs):
-    """Delete a dataset from the default database."""
-    from .database import delete_dataset as _delete_dataset
-    return _delete_dataset(_get_default_db(), name, **kwargs)
+def _module_delete_dataset(*args, db=None, **kwargs):
+    """Delete a dataset entry (and its cached files) — default db unless ``db=``."""
+    return resolve_db(db).delete_dataset(*args, **kwargs)
 
 
-def _module_get_dataset_path(name: str, **kwargs):
-    """Return the on-disk path for a dataset in the default database."""
-    db = _get_default_db()
-    _, entry = search_dataset(db, name)
-    from .database import get_dataset_path as _gdp
-    return _gdp(entry, datasets_folder=db.datasets_folder,
-                project_root=db.get_project_root(),
-                storage_config=db.storage_config, **kwargs)
+def _module_get_dataset_path(*args, db=None, **kwargs):
+    """Resolve a dataset's on-disk path — default db unless ``db=``."""
+    return resolve_db(db).get_dataset_path(*args, **kwargs)
 
 
-def _module_download_dataset(name, **kwargs):
-    """Download a dataset from the default database."""
-    return download_dataset(_get_default_db(), name, **kwargs)
+def _module_download_dataset(*args, db=None, **kwargs):
+    """Download a dataset; return its path — default db unless ``db=``."""
+    return resolve_db(db).download_dataset(*args, **kwargs)
 
 
-def _module_download_datasets(names=None, **kwargs):
-    """Download datasets from the default database."""
-    return download_datasets(_get_default_db(), names=names, **kwargs)
+def _module_download_datasets(*args, db=None, **kwargs):
+    """Download several/all datasets — default db unless ``db=``."""
+    return resolve_db(db).download_datasets(*args, **kwargs)
 
 
-def _module_load_dataset(name, loader=None, **kwargs):
-    """Download and load a dataset from the default database."""
-    return load_dataset(_get_default_db(), name, loader=loader, **kwargs)
+def _module_load_dataset(*args, db=None, **kwargs):
+    """Download and load a dataset — default db unless ``db=``."""
+    return resolve_db(db).load_dataset(*args, **kwargs)

@@ -96,25 +96,26 @@ and `version="v2"` to invalidate when the function's *logic* changes.
 parameters; `datamanifest list --orphan --delete` cleans up.
 
 The module-level functions find the project's manifest automatically (walking
-up from the working directory; `DATAMANIFEST_TOML` overrides). To bypass
-auto-discovery, create an explicit `db = datamanifest.Database("datamanifest.toml")`
-and use its methods (`db.register_dataset(...)`) and the db-taking functions in
-`datamanifest.pipelines`. The CLI's verbs are also available in code —
-`datamanifest.add(...)` is handy in a notebook — see the docstrings
-(`help(datamanifest)`) and the [design notes](docs/design-notes.md).
+up from the working directory; `DATAMANIFEST_TOML` overrides). To use a specific
+database instead, either call the function with `db=`
+(`datamanifest.download_dataset("co2", db=mydb)`) or use the database's own
+methods (`mydb.download_dataset("co2")`). Every `datamanifest.X(...)` is just
+`resolve_db(db).X(...)` — the method on `db`, or on the default database when
+`db` is None. See the docstrings (`help(datamanifest)`) and the
+[design notes](docs/design-notes.md).
 
 For library code that wants checksummed downloads into a folder it controls —
 an OS-appropriate data dir, say — a **file-less database** skips the manifest
 entirely: no `datamanifest.toml`, no state file, nothing written but the data.
-The folder accepts the same `$`-symbols as the storage model:
+The folder accepts the same `$`-symbols as the storage model, and the database's
+methods do everything the module-level functions do:
 
 ```python
 from datamanifest import Database
-from datamanifest.pipelines import download_dataset
 
 db = Database(datasets_folder="$user_data_dir/mylib", persist=False)
-db.register_dataset("https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv", name="co2")
-path = download_dataset(db, "co2")   # → ~/.local/share/mylib/gml.noaa.gov/…/co2_annmean_mlo.csv
+db.add("https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv", name="co2")
+path = db.download_dataset("co2")   # → ~/.local/share/mylib/gml.noaa.gov/…/co2_annmean_mlo.csv
 ```
 
 ## Use cases

@@ -1458,6 +1458,42 @@ class Database:
             self.write(self.datasets_toml)
         return (name, entry)
 
+    # ----- convenience methods: the db-taking pipeline/database functions as
+    # Database methods, so a custom / file-less db is fully usable without the
+    # module-level (default-db) wrappers. `db.X(...)` == "this db"; the module
+    # `datamanifest.X(...)` == "the default db". -----
+
+    def add(self, uri: str = "", name: str = "", **kwargs):
+        """Register a dataset (alias for :meth:`register_dataset`)."""
+        return self.register_dataset(uri=uri, name=name, **kwargs)
+
+    def download_dataset(self, name, **kwargs):
+        """Download a dataset declared in this database; return its path."""
+        from .pipelines import download_dataset
+        return download_dataset(self, name, **kwargs)
+
+    def download_datasets(self, names=None, **kwargs):
+        """Download several (or all) of this database's datasets."""
+        from .pipelines import download_datasets
+        return download_datasets(self, names=names, **kwargs)
+
+    def load_dataset(self, name, loader=None, **kwargs):
+        """Download and load a dataset, returning the loaded value."""
+        from .pipelines import load_dataset
+        return load_dataset(self, name, loader=loader, **kwargs)
+
+    def get_dataset_path(self, name, **kwargs):
+        """Resolve the on-disk path for a dataset in this database."""
+        _, entry = search_dataset(self, name)
+        return get_dataset_path(
+            entry, datasets_folder=self.datasets_folder,
+            project_root=self.get_project_root(),
+            storage_config=self.storage_config, **kwargs)
+
+    def delete_dataset(self, name, **kwargs):
+        """Remove a dataset entry and (optionally) its cached files."""
+        return delete_dataset(self, name, **kwargs)
+
     def register_datasets(self, datasets, persist: bool = True, **kwargs):
         if isinstance(datasets, str):
             ext = os.path.splitext(datasets)[1]
