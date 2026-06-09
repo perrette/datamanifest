@@ -1,0 +1,1596 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Declare and manage the datasets used in a scientific project — download, verify, cache, and share them">
+      
+      
+      
+        <link rel="canonical" href="https://perrette.github.io/datamanifest/design-state-file/">
+      
+      
+        <link rel="prev" href="../design-notes/">
+      
+      
+        <link rel="next" href="../design-remote-protocols/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Design: state file - datamanifest</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#design-note-the-state-file-one-inventory-for-fetched-and-produced-data" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="datamanifest" class="md-header__button md-logo" aria-label="datamanifest" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            datamanifest
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Design: state file
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/perrette/datamanifest" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    perrette/datamanifest
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="datamanifest" class="md-nav__button md-logo" aria-label="datamanifest" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    datamanifest
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/perrette/datamanifest" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    perrette/datamanifest
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using it from your code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../use-cases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use cases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adding-datasets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adding datasets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../importing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importing from other tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../language-bindings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Language bindings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../related/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Related projects
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design-notes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design: @cached identity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design: state file
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design: state file
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-split-spec-vs-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The split: spec vs state
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file-layout-schema-5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File layout (schema 5)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Behavior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#read-resolution-the-state-file-is-checked-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read-resolution: the state file is checked first
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#read-pools-machine-wide-reuse-before-downloading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read pools: machine-wide reuse before downloading
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#source-of-truth-non-destructive-updates-a-dirty-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Source of truth: non-destructive updates + a dirty state
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unified-maintenance-surface-the-payoff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unified maintenance surface (the payoff)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scope-of-this-change-additive-low-risk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope of this change (additive, low-risk)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deferred-explicitly-out-of-scope-here" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deferred (explicitly out of scope here)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#migration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Migration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#guiding-principle-follow-the-users-de-facto-layout-never-relocate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Guiding principle: follow the user's de-facto layout, never relocate
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design-remote-protocols/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design: remote protocols vs. import
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-split-spec-vs-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The split: spec vs state
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file-layout-schema-5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File layout (schema 5)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Behavior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#read-resolution-the-state-file-is-checked-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read-resolution: the state file is checked first
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#read-pools-machine-wide-reuse-before-downloading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read pools: machine-wide reuse before downloading
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#source-of-truth-non-destructive-updates-a-dirty-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Source of truth: non-destructive updates + a dirty state
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unified-maintenance-surface-the-payoff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unified maintenance surface (the payoff)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scope-of-this-change-additive-low-risk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope of this change (additive, low-risk)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deferred-explicitly-out-of-scope-here" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deferred (explicitly out of scope here)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#migration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Migration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#guiding-principle-follow-the-users-de-facto-layout-never-relocate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Guiding principle: follow the user's de-facto layout, never relocate
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/perrette/datamanifest/edit/main/design-state-file.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="design-note-the-state-file-one-inventory-for-fetched-and-produced-data">Design note: the state file — one inventory for fetched <strong>and</strong> produced data<a class="headerlink" href="#design-note-the-state-file-one-inventory-for-fetched-and-produced-data" title="Permanent link">&para;</a></h1>
+<p>Status: <strong>implemented</strong> (schema 5; the Python port ships it). Kept as the design
+rationale for the spec to formalize. Additive over schema 4.</p>
+<p>What shipped: <code>.datamanifest-state.toml</code> with the <code>datacache</code> / <code>datasets</code>
+namespaces; systematic <code>storage_path</code> + <code>sha256</code>-on-download recording;
+read-first resolution; non-destructive self-heal with <code>missing</code> / <code>relocated</code>
+/ <code>untracked</code> dirty states; <code>list --dirty</code> to view and a first-order
+<code>datamanifest refresh</code> to reconcile; unified <code>list --delete</code> / <code>--move</code>
+over datasets (with the user-managed / <code>skip_download</code> guard); atomic (temp +
+rename) writes; legacy <code>cached.toml</code> read + forward migration. Deferred items below remain deferred (the <code>modified</code> sha state,
+moving fields out of the spec, multiple recorded locations).</p>
+<h2 id="the-split-spec-vs-state">The split: spec vs state<a class="headerlink" href="#the-split-spec-vs-state" title="Permanent link">&para;</a></h2>
+<p>Two files, two jobs — like a manifest and its lockfile, except ours is the
+<strong>spec</strong> plus a <strong>git-ignored local state file</strong> (resolved per machine, not a
+committed reproducibility lock):</p>
+<ul>
+<li><strong><code>datamanifest.toml</code> — the spec.</strong> <em>What</em> to track and <em>how</em> to obtain it: a
+  dataset's <code>uri</code>/<code>fetcher</code>/<code>shell</code>, a <code>@cached</code> function's code. Hand-authored,
+  <strong>git-committed</strong>, the source of intent. (Default name; <code>datasets.toml</code> /
+  <code>Datasets.toml</code> stay recognized legacy aliases.) <strong>Unchanged by this proposal.</strong></li>
+<li><strong><code>.datamanifest-state.toml</code> — the state file.</strong> <em>Where</em> each object actually
+  landed on this machine: a per-object inventory of resolved on-disk locations
+  (+ a fetched dataset's checksum). Tool-maintained, <strong>git-ignored</strong> (it says
+  nothing about <em>how</em> to re-obtain a resource, so it doesn't help a fresh clone —
+  it is regenerable local state). Hidden dotfile: it exists for the <code>datamanifest</code>
+  CLI to read, not for hand-editing.</li>
+</ul>
+<p>Today the state file already records <strong>produced</strong> artifacts per instance
+(schema 4: <code>hash → on-disk location</code>, params in each artifact's <code>config.toml</code>).
+This note extends it to record <strong>fetched datasets</strong> the same way, so it is one
+inventory of everything materialized — fetched or produced.</p>
+<p>The guiding invariant: the state file is <strong>read-only inventory</strong>. It records
+<em>where things are</em> and is consulted to <em>find</em> an existing object; it never
+directs a <em>write</em>. Writes always follow the current directive (<code>datasets_dir</code> /
+<code>datacache_dir</code> / <code>@cached(storage_path=)</code>) — the gold standard. This already
+holds for produced data and applies verbatim to fetched.</p>
+<h2 id="file-layout-schema-5">File layout (schema 5)<a class="headerlink" href="#file-layout-schema-5" title="Permanent link">&para;</a></h2>
+<p>Two top-level namespaces — <code>datasets</code> (fetched) and <code>datacache</code> (produced) —
+parallel to the two storage fields, so the two kinds never collide and each is
+greppable on its own:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[_META]</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">schema</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">5</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># --- fetched datasets: key → resolved location (+ checksum) ---</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="k">[datasets.</span><span class="s2">&quot;example.com/foo.nc&quot;</span><span class="k">]</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">storage_path</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;datasets/example.com/foo.nc&quot;</span><span class="w">   </span><span class="c1"># systematically recorded</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">sha256</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;abc123…&quot;</span><span class="w">                              </span><span class="c1"># actual; omitted when skip_checksum</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="k">[datasets.</span><span class="s2">&quot;example.com/big.zip&quot;</span><span class="k">]</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="n">storage_path</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;datasets/example.com/big.zip&quot;</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="c1"># no sha256: this dataset has skip_checksum = true</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="c1"># --- produced artifacts: cachetype[@version] → instances{hash → location} ---</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="k">[datacache.</span><span class="s2">&quot;mypkg.run@v3&quot;</span><span class="k">]</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="n">ref</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;mypkg.run:run&quot;</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="n">format</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;pickle&quot;</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="k">[datacache.</span><span class="s2">&quot;mypkg.run@v3&quot;</span><span class="k">.instances]</span>
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="s2">&quot;83b2…&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;cached/mypkg.run/v3/83b2…&quot;</span>
+</code></pre></div>
+<ul>
+<li><strong>Fetched key</strong> is the dataset's existing storage <strong>key</strong> (<code>host/path[#version]</code>)
+  — its identity; it's already what the spec derives. No new id.</li>
+<li><strong>Produced key</strong> keeps schema 4's <code>cachetype[@version]</code> (with <code>@</code> reserved as
+  the version separator) and its <code>instances</code> hash→location map. This is just the
+  current produced-recipe table moved under the <code>datacache</code> namespace.</li>
+<li><code>storage_path</code> is the <strong>full on-disk location</strong> (relative to the manifest dir
+  when under the repo, else absolute — the existing portable convention).</li>
+</ul>
+<h2 id="behavior">Behavior<a class="headerlink" href="#behavior" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Record <code>storage_path</code> systematically.</strong> Every fetched dataset's resolved
+  location is written to the state file — on <strong>download</strong> <em>and</em> on
+  <strong>read-resolution</strong> — exactly as a produced artifact's is. This is the main
+  gain: one place that knows where every object lives, so <code>list</code>, cleanup, sync
+  and move/relocation work uniformly across fetched and produced.</li>
+<li><strong>Record <code>sha256</code> on download, honoring <code>skip_checksum</code>.</strong> When a dataset is
+  downloaded and <code>skip_checksum</code> is not set, store the computed <code>sha256</code> in its
+  entry. With <code>skip_checksum = true</code>, omit it (so a very large dataset needn't be
+  hashed even once). This <code>sha256</code> is the <strong>actual</strong> checksum of what's on disk.</li>
+<li><strong>Gold standard preserved.</strong> The recorded location is consulted to <em>find</em> an
+  existing object, never to direct a fetch/produce; a (re)materialization follows
+  the current directive.</li>
+<li>No behavior in <code>datamanifest.toml</code> changes.</li>
+</ul>
+<h2 id="read-resolution-the-state-file-is-checked-first">Read-resolution: the state file is checked first<a class="headerlink" href="#read-resolution-the-state-file-is-checked-first" title="Permanent link">&para;</a></h2>
+<p>Resolving where an object lives (<code>get_dataset_path</code> / <code>download_dataset</code> /
+<code>resolve_existing_path</code> for fetched; the <code>@cached</code> hit path for produced)
+<strong>checks the state file's recorded <code>storage_path</code> first</strong> — if the bytes are
+actually there (and, for a dataset, checksum-valid when recorded), that is a hit.
+Only then does it fall back to the machine-derived/directive path, and only then
+(for a dataset) download. This is a pure "are the bytes already here?"
+short-circuit, <em>ahead of</em> any derivation rule — including for a user-managed
+exact <code>storage_path</code> (an earlier run may have recorded a different location).</p>
+<p>Produced data already works this way; this generalizes it to fetched data. The
+state file thus becomes the resolver's fast path and the single "where is it"
+truth: a moved object is found at its new home with no re-derive / re-download.</p>
+<h2 id="read-pools-machine-wide-reuse-before-downloading">Read pools: machine-wide reuse before downloading<a class="headerlink" href="#read-pools-machine-wide-reuse-before-downloading" title="Permanent link">&para;</a></h2>
+<p>Resolution has one more rung <em>after</em> the recorded/derived location and <em>before</em>
+download/produce: a list of <strong>read pools</strong> — extra read-only directories where the
+object may already exist because another project on the machine fetched/produced
+it. On a hit the pool copy is <strong>referenced in place</strong> (its location recorded in
+the state file — no copy, no re-download/recompute); writes still go to the
+current <code>datasets_dir</code> / <code>datacache_dir</code> (gold standard).</p>
+<ul>
+<li><code>datasets_pools</code> — probed at <code>&lt;pool&gt;/&lt;key&gt;</code> (the extracted dir
+  <code>&lt;pool&gt;/&lt;extract_path&gt;</code> for an <code>extract</code> dataset, which is also what its
+  <code>sha256</code> hashes). A declared <code>sha256</code> is verified before adoption; a
+  present-but-mismatched copy <strong>warns</strong> (the manifest hash may be stale) rather
+  than silently skipping. <strong>On by default</strong> — when undefined, well-known legacy
+  locations are probed (<code>~/.cache/Datasets</code>, <code>$user_data_dir/datamanifest/datasets</code>).</li>
+<li><code>datacache_pools</code> — probed at <code>&lt;pool&gt;/&lt;cachetype&gt;[/&lt;version&gt;]/&lt;hash&gt;</code>, gated by
+  the artifact's <code>config.toml</code> validation. <strong>Opt-in</strong> (undefined = none): there is
+  no de-facto shared compute location, and produced artifacts carry no content
+  checksum (only their <code>cachetype</code>/<code>version</code>/<code>hash</code> identity).</li>
+</ul>
+<p>Both are ordinary <code>[_STORAGE]</code> fields — host-composable via <code>_HOST</code>, overridable
+by <code>DATAMANIFEST_*_POOLS</code> — so an explicit list replaces the defaults and an empty
+list disables them. The same pool list drives the maintenance scans: <code>where
+--scan</code> reports pool-present-but-not-local datasets, <code>refresh --scan</code> adopts them,
+and <code>migrate</code> seeds the state file from them at upgrade time.</p>
+<h2 id="source-of-truth-non-destructive-updates-a-dirty-state">Source of truth: non-destructive updates + a dirty state<a class="headerlink" href="#source-of-truth-non-destructive-updates-a-dirty-state" title="Permanent link">&para;</a></h2>
+<p>The state file is a <strong>first-order source of truth</strong> for <em>where objects are</em>, and
+is maintained <strong>non-destructively</strong>, git-style. Two code paths touch it and are
+never conflated:</p>
+<ul>
+<li><strong>Active resolution</strong> (<code>get_dataset_path</code>/<code>download</code>/<code>@cached</code>) <strong>self-heals
+  additively</strong>: <em>relocated</em> → refresh the recorded location to where the bytes
+  actually are; <em>untracked</em> → register; <em>missing</em> → (re)materialize at the
+  current directive (download/produce) and record. It <strong>never deletes</strong> — and
+  because any access that consults the state file and finds nothing <em>proceeds to
+  download/produce</em>, it always lands in the relocate/register path, so it cannot
+  leave a stale record. The relocate-refresh is the <strong>only</strong> automatic mutation.</li>
+<li><strong><code>list</code> (passive)</strong> only <strong>labels</strong> state — never mutates.</li>
+</ul>
+<p><strong>Dirty states</strong> (state file ↔ disk), git-style: <code>clean</code> / <code>missing</code> (recorded
+bytes gone) / <code>relocated</code> (recorded <code>L</code>, bytes at derived <code>D</code>) / <code>untracked</code>
+(bytes present, no entry — <em>orphan</em> for produced) / <code>modified</code> (recorded
+<code>sha256</code> ≠ actual; datasets; deferred with the sha rework). <code>list</code> shows a dirty
+visual signal (a red/<code>✗</code> marker beside the existing <code>⚑custom</code>) and a <strong><code>--dirty</code></strong>
+filter.</p>
+<p><strong>Actions</strong> (explicit, on the selected objects):
+- <strong><code>refresh</code></strong> (a first-order command, <code>datamanifest refresh</code>) — fix the
+  <strong>state file only</strong> (no downloads, no file moves): refresh <em>relocated</em> entries
+  to their actual location, <strong>drop</strong> <em>missing</em> entries, and <strong>adopt</strong> <em>untracked</em>
+  datasets (record a present-but-unrecorded dataset's location — e.g. data
+  fetched before the state file existed). A pure state↔disk reconcile over the
+  whole inventory. Because it edits only the git-ignored, regenerable state file
+  (no bytes touched), it <strong>applies by default</strong>; <code>--dry-run</code> previews. A cached
+  <em>orphan</em> (a produced artifact with no recipe rooting it) is <strong>not</strong> adopted —
+  that is its own concept, surfaced by <code>--orphan</code>, not a dataset to track.
+  (Active access — download / <code>@cached</code> — also adopts an untracked object on
+  use; <code>refresh</code> is the bulk way to do it without re-fetching.) It is a
+  first-order verb, not a <code>list</code> action, because the state file is core
+  infrastructure the live resolution path depends on, not a listing concern.
+- <strong><code>--delete</code></strong> — remove the selected objects' <strong>bytes and</strong> their entries
+  (works across a filtered set). The only byte-removing action.</p>
+<p>Removal is therefore <strong>explicit-only</strong> — <code>refresh</code>/<code>--delete</code> are user-invoked;
+passive <code>list</code> and active resolution never delete.</p>
+<p><strong>Concurrency.</strong> Every write <strong>re-reads the state file, merges</strong> (additive union;
+last-writer-wins per object), then writes via temp-file + <strong>atomic rename</strong> — so
+parallel <code>@cached</code>/<code>download</code>s can't clobber each other. Additive-only updates
+make the merge conflict-free.</p>
+<p><strong>Garbage vs dirty.</strong> A <em>malformed</em> entry rooting nothing (e.g. instance-less
+residue from a format change) is corruption, not a tracked-but-missing object —
+<strong>cleaned silently</strong> on read.</p>
+<p>Still deferred: the <em>modified</em> state in full (expected-vs-actual <code>sha256</code> /
+<code>skip_checksum</code> rework). Multiple recorded locations per object is <strong>out of
+scope by design</strong> (see Deferred): the record stays a single <code>storage_path</code> — the
+last location the object was found at (a cache hit) or written/added to — and
+self-heal keeps refreshing that one value rather than accumulating a set.</p>
+<h2 id="unified-maintenance-surface-the-payoff">Unified maintenance surface (the payoff)<a class="headerlink" href="#unified-maintenance-surface-the-payoff" title="Permanent link">&para;</a></h2>
+<p>Once a fetched dataset has a recorded location, the same maintenance operations
+that apply to produced artifacts apply to it — one surface for everything
+materialized:</p>
+<ul>
+<li><strong>Filter / list.</strong> Already spans both kinds (free-text <code>search</code>, <code>--datasets</code>/
+  <code>--cached</code>, <code>--format</code>, <code>--older-than</code>, <code>--present</code>/<code>--missing</code>, …). Unchanged.</li>
+<li><strong><code>--delete</code>.</strong> Extends to fetched datasets: remove the on-disk bytes <strong>and
+  prune the dataset's entry</strong>. (Today delete is <code>cached</code>-only.)</li>
+<li><strong><code>--move DEST</code>.</strong> Extends to fetched datasets: relocate the bytes <strong>and
+  repoint the recorded <code>storage_path</code></strong> — exactly as for a produced artifact.
+  <code>datamanifest.toml</code> is <em>not</em> edited; only the resolved location moves (a
+  subsequent re-fetch still follows the <code>datasets_dir</code> directive — gold standard).</li>
+</ul>
+<p><strong>Protections (unchanged rule).</strong> Maintenance never touches data the user owns:
+a dataset whose <code>storage_path</code> is a <strong>user-managed exact path</strong> (no <code>$key</code>) or
+that is <strong><code>skip_download</code></strong> (the URI <em>is</em> the file) is reported as <em>skipped</em>,
+never moved or deleted — the same guard already used for deletion today,
+generalized. Tool-managed (keyed) fetched datasets under <code>datasets_dir</code> are
+fair game, like produced artifacts.</p>
+<h2 id="scope-of-this-change-additive-low-risk">Scope of this change (additive, low-risk)<a class="headerlink" href="#scope-of-this-change-additive-low-risk" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong><code>datamanifest.toml</code> is untouched.</strong> Its <code>sha256</code> (expected/contract) and any
+  per-dataset <code>storage_path</code> (a <em>directive</em>) stay where they are and keep their
+  current meaning. The state file records the <strong>resolved</strong> location and <strong>actual</strong>
+  checksum alongside — duplication is fine; the state file is derived/disposable.</li>
+<li>No field is <em>moved</em> out of the spec yet. That tighter spec/state split
+  (expected-vs-actual checksum, directive-vs-resolved location) is <strong>deferred</strong>.</li>
+</ul>
+<h2 id="deferred-explicitly-out-of-scope-here">Deferred (explicitly out of scope here)<a class="headerlink" href="#deferred-explicitly-out-of-scope-here" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>sha256 / skip_checksum rework</strong> in the spec: how the <em>expected</em> checksum
+  (spec) and the <em>actual</em> checksum (state) relate, and re-verification policy.</li>
+<li><strong>Moving</strong> <code>storage_path</code> (resolved) and <code>sha256</code> (actual) fully out of the
+  spec into the state file, leaving the spec as pure recipe.</li>
+<li><strong>Multiple recorded locations</strong> for one object (two simultaneous copies on one
+  machine) — <strong>decided out, not just postponed.</strong> <code>storage_path</code> stays a single
+  value: the last location the object was found at (cache hit) or written/added
+  to, and it should not grow beyond that. Resolution only needs to find <em>one</em>
+  copy (gold standard), so a single last-known location suffices; the cost of a
+  list-valued record (reader/writer, read-first pick, dirty logic, delete/move
+  over all copies) isn't worth it absent a concrete dual-home workflow. A stray
+  second copy simply reads as <code>untracked</code> and can be cleaned up explicitly.</li>
+<li><strong>Platform-dependent defaults</strong> docs (how to point <code>datasets_dir</code>/
+  <code>datacache_dir</code> at <code>$user_data_dir</code>/<code>$user_cache_dir</code> per host).</li>
+</ul>
+<h2 id="migration">Migration<a class="headerlink" href="#migration" title="Permanent link">&para;</a></h2>
+<p><code>_META.schema</code> 4 → 5 (a shape change: produced recipes move under the
+<code>datacache</code> namespace, fetched datasets appear under <code>datasets</code>). The reader
+migrates 1–4 forward: schema-4 recipes become <code>datacache.*</code>; older shapes as
+already handled. Fetched-dataset entries simply accrue as datasets are accessed.
+The file itself is renamed <code>cached.toml</code> → <code>.datamanifest-state.toml</code>
+(git-ignored).</p>
+<h3 id="guiding-principle-follow-the-users-de-facto-layout-never-relocate">Guiding principle: follow the user's de-facto layout, never relocate<a class="headerlink" href="#guiding-principle-follow-the-users-de-facto-layout-never-relocate" title="Permanent link">&para;</a></h3>
+<p>A migration (or any default change across versions) should <strong>preserve where the
+user's data already lives</strong> and adjust the <em>defaults</em> to keep matching that
+de-facto choice — never move bytes to fit a new default. Ideally a tool could
+read the recorded locations (the state file's per-object <code>storage_path</code>s), strip
+the known structural suffix (<code>/&lt;key&gt;</code> for a dataset, <code>/&lt;cachetype&gt;[/&lt;version&gt;]/
+&lt;hash&gt;</code> for an artifact), and infer the common <code>datasets_dir</code>/<code>datacache_dir</code>
+<em>pattern</em> the user is implicitly following — writing that compact, editable
+pattern back, with per-object overrides only for genuine outliers.</p>
+<p>In practice this is only worthwhile once the state file is populated; at a
+cold v3→v4 upgrade there's not enough recorded information to infer reliably, so
+the current <code>migrate</code> deliberately stays minimal (write v4 defaults, carry an
+explicit <code>local_path</code>, surface anything it can't translate) and leaves the user
+to set the folder fields. The inference idea is recorded here as the intended
+<em>direction</em> — not an implemented feature.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
