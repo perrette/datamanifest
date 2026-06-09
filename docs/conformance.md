@@ -7,8 +7,8 @@ each tool reads the common fields plus its own `_LANG`-namespaced bindings and p
 the rest verbatim. The format is defined in its own repository,
 [`perrette/datamanifest.toml`](https://github.com/perrette/datamanifest.toml).
 
-You do **not** need this page to use `datamanifest` — the [README](../README.md) covers
-everyday usage. This file is for anyone who needs the cross-tool details: which features
+You do **not** need this page to use `datamanifest` — the
+[quickstart](quickstart.md) and [use cases](use-cases.md) cover everyday usage. This file is for anyone who needs the cross-tool details: which features
 this Python implementation supports, and which version of the shared format it targets.
 
 A deeper, Python-specific walkthrough of the CLI and language bindings lives in

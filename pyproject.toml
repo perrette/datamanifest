@@ -60,6 +60,21 @@ yaml = ["pyyaml"]
 fsspec = ["fsspec"]
 all = ["pandas", "pyarrow", "xarray", "netcdf4", "pyyaml", "fsspec"]
 dev = ["pytest", "fsspec", "pyyaml"]
+docs = [
+    # Pin below MkDocs 2.0: that release drops the plugin/theme/config system
+    # with no migration path and is incompatible with Material for MkDocs.
+    # The 1.x line is stable and is what Material targets.
+    "mkdocs>=1.5,<2",
+    "mkdocs-material>=9.5",
+    "mkdocs-include-markdown-plugin>=6.0",
+]
+
+[project.urls]
+Homepage      = "https://github.com/perrette/datamanifest"
+Repository    = "https://github.com/perrette/datamanifest"
+Issues        = "https://github.com/perrette/datamanifest/issues"
+Documentation = "https://perrette.github.io/datamanifest/"
+Changelog     = "https://github.com/perrette/datamanifest/commits/main"
 
 [project.scripts]
 datamanifest = "datamanifest.cli:main"

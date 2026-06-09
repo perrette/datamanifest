@@ -2,8 +2,8 @@
 
 Language-specific bindings live in a dedicated `_LANG` namespace, so a single
 manifest can serve multiple language implementations without conflicts. The
-[README](../README.md#one-manifest-several-languages) shows the short version;
-this page is the full behaviour: the fetch/load ladders, the bare
+[use cases page](use-cases.md#one-manifest-several-languages) shows the short
+version; this page is the full behaviour: the fetch/load ladders, the bare
 (language-implicit) forms, parameterized bindings, cross-language fetch, and
 the legacy fields still accepted on read.
 

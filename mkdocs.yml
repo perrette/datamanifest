@@ -1,0 +1,84 @@
+site_name: datamanifest
+site_description: Declare and manage the datasets used in a scientific project — download, verify, cache, and share them
+site_url: https://perrette.github.io/datamanifest/
+repo_url: https://github.com/perrette/datamanifest
+repo_name: perrette/datamanifest
+edit_uri: edit/main/
+
+# All narrative content already lives as Markdown in docs/ and README.md.
+# Nothing is duplicated here: the homepage pulls the README in via the
+# include-markdown plugin, and every other page is an existing docs/*.md file.
+docs_dir: docs
+
+theme:
+  name: material
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+
+plugins:
+  - search
+  - include-markdown
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Installation: installation.md
+      - Quickstart: quickstart.md
+  - Guide:
+      - Using it from your code: api.md
+      - Use cases: use-cases.md
+      - Storage model: storage.md
+      - Adding datasets: adding-datasets.md
+      - Importing from other tools: importing.md
+      - Language bindings: language-bindings.md
+      - Related projects: related.md
+  - Reference:
+      - CLI reference: cli.md
+  - Development:
+      - Conformance: conformance.md
+      - Roadmap: roadmap.md
+      - "Design: @cached identity": design-notes.md
+      - "Design: state file": design-state-file.md
+      - "Design: remote protocols vs. import": design-remote-protocols.md

@@ -5,9 +5,9 @@ datamanifest COMMAND [OPTIONS]
 ```
 
 Every command also documents itself: `datamanifest COMMAND -h`. The
-[README](../README.md) shows the common workflows by example; this page is the
-full per-command reference. The [storage model](storage.md) the commands operate
-on has its own page.
+[use cases](use-cases.md) page shows the common workflows by example; this page
+is the full per-command reference. The [storage model](storage.md) the commands
+operate on has its own page.
 
 A bare `datamanifest` (no subcommand) prints the command list.
 
