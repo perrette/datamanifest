@@ -4,8 +4,10 @@
 the same `datasets.toml` can be consumed by sibling implementations (today the Julia
 [`DataManifest.jl`](https://github.com/awi-esc/DataManifest.jl)) without conflict, because
 each tool reads the common fields plus its own `_LANG`-namespaced bindings and preserves
-the rest verbatim. The format is defined in its own repository,
-[`perrette/datamanifest.toml`](https://github.com/perrette/datamanifest.toml).
+the rest verbatim. The format is defined in its own specification,
+[`datamanifest.toml`](https://perrette.github.io/datamanifest.toml). For a
+practical summary of the fields, see the [manifest format](manifest-format.md)
+reference.
 
 You do **not** need this page to use `datamanifest` — the
 [quickstart](quickstart.md) and [use cases](use-cases.md) cover everyday usage. This file is for anyone who needs the cross-tool details: which features

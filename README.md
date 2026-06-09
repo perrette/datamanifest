@@ -18,23 +18,23 @@ dependencies — URLs, git repositories, checksums, formats — in a
 them, and caches your own computed results with the same machinery.
 
 <!-- intro-start -->
-- **One manifest, committed to git.** Your data dependencies — URLs, DOIs,
-  checksums, formats — live in a plain, hand-editable `datamanifest.toml`. Commit
-  the recipe; the bytes and per-machine state stay git-ignored, so a collaborator
-  clones and runs `datamanifest download`.
-- **Declare on the CLI, consume from code.** The CLI manages the project's data —
-  add, verify, repair, sync — without touching code; your analysis code just asks
-  for data by name (`datamanifest.load_dataset("co2")`) and never edits the
-  manifest.
-- **Fetch, verify, extract — from anywhere.** Direct URLs, Zenodo/figshare DOIs,
-  git repos, object stores (`s3://`, `gs://`, …), and bulk imports from pooch,
-  intake or DVC, all checksum-verified and adopted in place when already on disk.
-- **Cache your own results too.** A `@cached` decorator stores expensive
-  computations keyed by their arguments, sharing the same storage and bookkeeping
-  as fetched data.
-- **Shared across languages.** The `datamanifest.toml` format is
-  [shared across languages](https://github.com/perrette/datamanifest.toml), so
-  implementations in other languages (today Julia) read the same file.
+- **A transparent, trackable manifest.** Every dataset a project depends on —
+  URLs, DOIs, checksums, formats — is listed in a single `datamanifest.toml` you
+  can read at a glance and version with git. The format is
+  [language-agnostic](https://perrette.github.io/datamanifest.toml) (today Python
+  and Julia) and can be edited by hand, from code, or through the CLI.
+- **Fetch from a wide range of sources.** Direct URLs, Zenodo/figshare DOIs, git
+  repos, object stores (`s3://`, `gs://`, …), and bulk imports from pooch, intake
+  or DVC — all checksum-verified, extracted, and adopted in place when already on
+  disk.
+- **Cache your own computed data too.** The same tooling backs a robust `@cached`
+  mechanism that stores your own results with PID-lock, keyed by their inputs, to speed up
+  calculations locally. It is a separate, local concern — not a remote source —
+  but shares some of the same benefits such as data management via the CLI.
+- **A powerful CLI for data download, local management and synchronization across
+  machines.** Add and download datasets, inspect and repair what's on disk, move
+  or centralize where data is stored, and push/pull datasets and cached results
+  between machines over rsync+ssh — all without touching your analysis code.
 <!-- intro-end -->
 
 ## Installation

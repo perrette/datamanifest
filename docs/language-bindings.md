@@ -86,8 +86,8 @@ bindings are kept **bare** on write (never promoted into `_LANG.python`), so a
 hand-authored single-language manifest round-trips unchanged.
 
 A full, runnable example manifest — bare loaders/fetchers, a parameterized
-loader, the bare `shell` fetcher — lives in the spec repo:
-[`examples/datasets.toml`](https://github.com/perrette/datamanifest.toml/blob/main/examples/datasets.toml).
+loader, the bare `shell` fetcher — lives in the spec's
+[examples](https://perrette.github.io/datamanifest.toml).
 
 ## Parameterized bindings
 

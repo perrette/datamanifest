@@ -75,6 +75,7 @@ nav:
       - Language bindings: language-bindings.md
       - Related projects: related.md
   - Reference:
+      - Manifest format: manifest-format.md
       - CLI reference: cli.md
   - Development:
       - Conformance: conformance.md
