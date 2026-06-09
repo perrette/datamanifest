@@ -42,7 +42,7 @@ parameters; `datamanifest list --orphan --delete` cleans up.
 
 The `@cached` cache shares the same storage and bookkeeping as fetched data — it
 lands under `datacache_dir` (`./cached/` by default) and shows up in `list`
-alongside your datasets. The [design notes](design-notes.md) cover how an
+alongside your datasets. The [design notes](https://github.com/perrette/datamanifest/blob/main/design/design-notes.md) cover how an
 artifact's identity (`cachetype`, `version`, parameter hash) is derived.
 
 ## Finding the manifest, and targeting a specific database
@@ -54,7 +54,7 @@ database instead, either call the function with `db=`
 methods (`mydb.download_dataset("co2")`). Every `datamanifest.X(...)` is just
 `resolve_db(db).X(...)` — the method on `db`, or on the default database when
 `db` is None. See the docstrings (`help(datamanifest)`) and the
-[design notes](design-notes.md).
+[design notes](https://github.com/perrette/datamanifest/blob/main/design/design-notes.md).
 
 ## A file-less database (no manifest)
 

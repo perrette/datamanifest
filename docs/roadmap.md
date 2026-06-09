@@ -40,6 +40,6 @@ affordance to add later if wanted.)
 
 ## Cross-language decisions to propagate
 
-See [`design-remote-protocols.md`](design-remote-protocols.md) → "Decisions to
+See [`design-remote-protocols.md`](https://github.com/perrette/datamanifest/blob/main/design/design-remote-protocols.md) → "Decisions to
 propagate to the spec repo + DataManifest.jl": object-store URI schemes,
 `lazy_access`, and the ambiguous-identifier fail-loud rule.

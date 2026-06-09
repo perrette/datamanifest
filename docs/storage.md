@@ -122,4 +122,4 @@ machine* (and its checksum) — so it never loses track of your data and never
 re-downloads something it can already find. It's local and disposable: delete it
 and it rebuilds itself as you use your data. `list --dirty`, `refresh`, and the
 maintenance actions all operate on it; the full design is in
-[design-state-file.md](design-state-file.md).
+[design-state-file.md](https://github.com/perrette/datamanifest/blob/main/design/design-state-file.md).

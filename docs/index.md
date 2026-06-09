@@ -66,4 +66,3 @@ A few related tools I maintain, useful in a Markdown-based scientific workflow.
 
 - [Conformance](conformance.md) — the shared manifest format and what this implementation supports.
 - [Roadmap](roadmap.md) — parked ideas and deferred decisions.
-- Design notes: [@cached identity](design-notes.md), [the state file](design-state-file.md), [remote protocols vs. import](design-remote-protocols.md).

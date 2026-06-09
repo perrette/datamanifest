@@ -45,7 +45,7 @@ function with their parameters.
 ## Repair: reassociate data on disk
 
 The tool records where every file actually lives (a small git-ignored
-[state file](design-state-file.md)), so moving data around by hand is
+[state file](https://github.com/perrette/datamanifest/blob/main/design/design-state-file.md)), so moving data around by hand is
 recoverable — `refresh` reconciles the records with disk, and `--scan`
 discovers copies elsewhere on the machine (e.g. downloaded by another project)
 and adopts them, checksum-verified, instead of re-downloading:

@@ -79,6 +79,3 @@ nav:
   - Development:
       - Conformance: conformance.md
       - Roadmap: roadmap.md
-      - "Design: @cached identity": design-notes.md
-      - "Design: state file": design-state-file.md
-      - "Design: remote protocols vs. import": design-remote-protocols.md

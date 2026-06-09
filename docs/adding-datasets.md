@@ -9,7 +9,7 @@
 > sources are pure *import* (declaration parsing) over already-supported download
 > schemes. Only **Git LFS** needs a new *download protocol* (spec-normative,
 > implemented in every language); that work is sequenced first and tracked
-> separately in [`design-remote-protocols.md`](design-remote-protocols.md).
+> separately in [`design-remote-protocols.md`](https://github.com/perrette/datamanifest/blob/main/design/design-remote-protocols.md).
 
 datamanifest distinguishes two verbs by **what you hand the command**:
 
