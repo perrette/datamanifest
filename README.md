@@ -90,17 +90,20 @@ Full documentation lives at **<https://perrette.github.io/datamanifest/>**:
 - [Adding datasets](https://perrette.github.io/datamanifest/adding-datasets/) · [Importing from other tools](https://perrette.github.io/datamanifest/importing/)
 - [Language bindings](https://perrette.github.io/datamanifest/language-bindings/) · [Related projects](https://perrette.github.io/datamanifest/related/)
 
-## Related projects
+## From the same author
 
-The [`datamanifest.toml` format](https://github.com/perrette/datamanifest.toml)
-is shared across languages:
-[`awi-esc/DataManifest.jl`](https://github.com/awi-esc/DataManifest.jl) (Julia,
-same author) reads the same manifest. `datamanifest` overlaps with
-[pooch](https://www.fatiando.org/pooch/),
-[intake](https://intake.readthedocs.io) and
-[pystow](https://github.com/cthoyt/pystow) — see
-[related projects](https://perrette.github.io/datamanifest/related/) for how it
-compares.
+A small toolkit for a Markdown-first scientific workflow.
+
+**Scientific writing & data**
+
+- [**texmark**](https://perrette.github.io/texmark/) — write scientific articles in Markdown and submit them to any journal (Markdown → LaTeX/PDF).
+- [**papers**](https://perrette.github.io/papers/) — command-line BibTeX bibliography and PDF library manager.
+- [**datamanifest**](https://perrette.github.io/datamanifest/) — declarative, reproducible dataset management. *(See also the [datamanifest.toml](https://perrette.github.io/datamanifest.toml/) format spec and the [DataManifest.jl](https://awi-esc.github.io/DataManifest.jl/) Julia port.)*
+
+**Voice helpers** — handy for dictating and proofreading drafts by ear
+
+- [**scribe**](https://perrette.github.io/scribe/) — speech-to-text dictation (Whisper).
+- [**bard**](https://perrette.github.io/bard/) — text-to-speech reader (Kokoro / Piper).
 
 ## Acknowledgments
 
