@@ -815,6 +815,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../manifest-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Manifest format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../cli/" class="md-nav__link">
         
   
@@ -1140,8 +1168,8 @@ read as bindings in the running tool's <strong>own language</strong> (here, Pyth
 bindings are kept <strong>bare</strong> on write (never promoted into <code>_LANG.python</code>), so a
 hand-authored single-language manifest round-trips unchanged.</p>
 <p>A full, runnable example manifest — bare loaders/fetchers, a parameterized
-loader, the bare <code>shell</code> fetcher — lives in the spec repo:
-<a href="https://github.com/perrette/datamanifest.toml/blob/main/examples/datasets.toml"><code>examples/datasets.toml</code></a>.</p>
+loader, the bare <code>shell</code> fetcher — lives in the spec's
+<a href="https://perrette.github.io/datamanifest.toml">examples</a>.</p>
 <h2 id="parameterized-bindings">Parameterized bindings<a class="headerlink" href="#parameterized-bindings" title="Permanent link">&para;</a></h2>
 <p>A binding (a <code>fetcher</code>, a <code>loader</code>, or an entry in the <code>[_LANG.python.loaders]</code>
 map) may be a <code>{ ref, args, kwargs }</code> table instead of a plain string, so one

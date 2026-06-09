@@ -800,6 +800,34 @@
   
   
     <li class="md-nav__item">
+      <a href="manifest-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Manifest format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="cli/" class="md-nav__link">
         
   
@@ -1053,23 +1081,23 @@
 <h1 id="datamanifestpy">datamanifest[py]<a class="headerlink" href="#datamanifestpy" title="Permanent link">&para;</a></h1>
 <p>Keep track of the datasets used in a scientific project.</p>
 <ul>
-<li><strong>One manifest, committed to git.</strong> Your data dependencies — URLs, DOIs,
-  checksums, formats — live in a plain, hand-editable <code>datamanifest.toml</code>. Commit
-  the recipe; the bytes and per-machine state stay git-ignored, so a collaborator
-  clones and runs <code>datamanifest download</code>.</li>
-<li><strong>Declare on the CLI, consume from code.</strong> The CLI manages the project's data —
-  add, verify, repair, sync — without touching code; your analysis code just asks
-  for data by name (<code>datamanifest.load_dataset("co2")</code>) and never edits the
-  manifest.</li>
-<li><strong>Fetch, verify, extract — from anywhere.</strong> Direct URLs, Zenodo/figshare DOIs,
-  git repos, object stores (<code>s3://</code>, <code>gs://</code>, …), and bulk imports from pooch,
-  intake or DVC, all checksum-verified and adopted in place when already on disk.</li>
-<li><strong>Cache your own results too.</strong> A <code>@cached</code> decorator stores expensive
-  computations keyed by their arguments, sharing the same storage and bookkeeping
-  as fetched data.</li>
-<li><strong>Shared across languages.</strong> The <code>datamanifest.toml</code> format is
-  <a href="https://github.com/perrette/datamanifest.toml">shared across languages</a>, so
-  implementations in other languages (today Julia) read the same file.</li>
+<li><strong>A transparent, trackable manifest.</strong> Every dataset a project depends on —
+  URLs, DOIs, checksums, formats — is listed in a single <code>datamanifest.toml</code> you
+  can read at a glance and version with git. The format is
+  <a href="https://perrette.github.io/datamanifest.toml">language-agnostic</a> (today Python
+  and Julia) and can be edited by hand, from code, or through the CLI.</li>
+<li><strong>Fetch from a wide range of sources.</strong> Direct URLs, Zenodo/figshare DOIs, git
+  repos, object stores (<code>s3://</code>, <code>gs://</code>, …), and bulk imports from pooch, intake
+  or DVC — all checksum-verified, extracted, and adopted in place when already on
+  disk.</li>
+<li><strong>Cache your own computed data too.</strong> The same tooling backs a robust <code>@cached</code>
+  mechanism that stores your own results with PID-lock, keyed by their inputs, to speed up
+  calculations locally. It is a separate, local concern — not a remote source —
+  but shares some of the same benefits such as data management via the CLI.</li>
+<li><strong>A powerful CLI for data download, local management and synchronization across
+  machines.</strong> Add and download datasets, inspect and repair what's on disk, move
+  or centralize where data is stored, and push/pull datasets and cached results
+  between machines over rsync+ssh — all without touching your analysis code.</li>
 </ul>
 <h2 id="get-started">Get started<a class="headerlink" href="#get-started" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span>datamanifestpy

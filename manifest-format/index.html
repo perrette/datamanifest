@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://perrette.github.io/datamanifest/conformance/">
+        <link rel="canonical" href="https://perrette.github.io/datamanifest/manifest-format/">
       
       
-        <link rel="prev" href="../cli/">
+        <link rel="prev" href="../related/">
       
       
-        <link rel="next" href="../roadmap/">
+        <link rel="next" href="../cli/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Conformance - datamanifest</title>
+        <title>Manifest format - datamanifest</title>
       
     
     
@@ -78,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#conformance-the-shared-manifest-format" class="md-skip">
+        <a href="#manifest-format-datamanifesttoml" class="md-skip">
           Skip to content
         </a>
       
@@ -114,7 +114,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Conformance
+              Manifest format
             
           </span>
         </div>
@@ -656,8 +656,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -668,11 +670,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
           <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
@@ -693,7 +695,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -708,10 +710,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../manifest-format/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Manifest format
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -727,6 +756,92 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#top-level-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Top-level layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dataset-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dataset fields
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#language-bindings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Language bindings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-full-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A full example
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-normative-specification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The normative specification
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -771,8 +886,6 @@
       
   
   
-    
-  
   
   
     
@@ -785,11 +898,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
         
           
           <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
@@ -810,7 +923,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
@@ -825,37 +938,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Conformance
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../conformance/" class="md-nav__link">
         
   
   
@@ -871,59 +957,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#targeted-format-version" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Targeted format version
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#implemented-capabilities" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Implemented capabilities
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#conformance-tests" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Conformance tests
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -991,10 +1024,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#targeted-format-version" class="md-nav__link">
+  <a href="#top-level-layout" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Targeted format version
+        Top-level layout
       
     </span>
   </a>
@@ -1002,10 +1035,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#implemented-capabilities" class="md-nav__link">
+  <a href="#dataset-fields" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Implemented capabilities
+        Dataset fields
       
     </span>
   </a>
@@ -1013,10 +1046,43 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#conformance-tests" class="md-nav__link">
+  <a href="#language-bindings" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Conformance tests
+        Language bindings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-full-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A full example
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-normative-specification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The normative specification
       
     </span>
   </a>
@@ -1040,7 +1106,7 @@
 
 
   
-    <a href="https://github.com/perrette/datamanifest/edit/main/conformance.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/perrette/datamanifest/edit/main/manifest-format.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
     </a>
@@ -1048,89 +1114,206 @@
   
 
 
-<h1 id="conformance-the-shared-manifest-format">Conformance &amp; the shared manifest format<a class="headerlink" href="#conformance-the-shared-manifest-format" title="Permanent link">&para;</a></h1>
-<p><code>datamanifest</code> reads and writes a manifest format that is <strong>shared across languages</strong> —
-the same <code>datasets.toml</code> can be consumed by sibling implementations (today the Julia
-<a href="https://github.com/awi-esc/DataManifest.jl"><code>DataManifest.jl</code></a>) without conflict, because
-each tool reads the common fields plus its own <code>_LANG</code>-namespaced bindings and preserves
-the rest verbatim. The format is defined in its own specification,
-<a href="https://perrette.github.io/datamanifest.toml"><code>datamanifest.toml</code></a>. For a
-practical summary of the fields, see the <a href="../manifest-format/">manifest format</a>
-reference.</p>
-<p>You do <strong>not</strong> need this page to use <code>datamanifest</code> — the
-<a href="../quickstart/">quickstart</a> and <a href="../use-cases/">use cases</a> cover everyday usage. This file is for anyone who needs the cross-tool details: which features
-this Python implementation supports, and which version of the shared format it targets.</p>
-<p>A deeper, Python-specific walkthrough of the CLI and language bindings lives in
-<a href="../cli/"><code>cli.md</code></a> and <a href="../language-bindings/"><code>language-bindings.md</code></a>.</p>
-<h2 id="targeted-format-version">Targeted format version<a class="headerlink" href="#targeted-format-version" title="Permanent link">&para;</a></h2>
-<p>This release targets <strong>spec-v4</strong> of the shared format.</p>
-<h2 id="implemented-capabilities">Implemented capabilities<a class="headerlink" href="#implemented-capabilities" title="Permanent link">&para;</a></h2>
+<h1 id="manifest-format-datamanifesttoml">Manifest format (<code>datamanifest.toml</code>)<a class="headerlink" href="#manifest-format-datamanifesttoml" title="Permanent link">&para;</a></h1>
+<p>This page describes the structure of the manifest file — the fields you write by
+hand or that the CLI writes for you. It is a practical reference for this Python
+implementation. The format is shared across languages and defined normatively in
+its own specification: the
+<a href="https://perrette.github.io/datamanifest.toml"><code>datamanifest.toml</code> spec</a>. For the
+cross-tool details — which features this implementation supports and which spec
+version it targets — see <a href="../conformance/">Conformance</a>.</p>
+<p>The canonical filename is <code>datamanifest.toml</code>; <code>datasets.toml</code> and
+<code>Datasets.toml</code> are also recognized when walking up from the working directory.</p>
+<h2 id="top-level-layout">Top-level layout<a class="headerlink" href="#top-level-layout" title="Permanent link">&para;</a></h2>
+<p>A manifest is a TOML document containing:</p>
+<ul>
+<li><strong>one table per dataset</strong>, keyed by the dataset name — the common case;</li>
+<li><strong><code>[_LANG.python.loaders]</code></strong> — an optional <code>format → loader</code> map of project-wide
+  default loaders (see <a href="../language-bindings/">Language bindings</a>);</li>
+<li><strong><code>[_STORAGE]</code></strong> — optional configuration of where data lives on disk (see
+  <a href="../storage/">Storage model</a>);</li>
+<li><strong><code>[_META]</code></strong> — optional schema marker (<code>schema = 1</code>).</li>
+</ul>
+<p>Keys beginning with <code>_</code> are <strong>structural</strong> — they are not datasets. Unknown <code>_*</code>
+tables (and any foreign-language <code>_LANG.*</code> subtrees) are preserved verbatim on
+write, so a manifest shared with another tool round-trips losslessly.</p>
+<p>A minimal manifest is just dataset tables:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[co2]</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">uri</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv&quot;</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">sha256</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;…&quot;</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">format</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;csv&quot;</span>
+</code></pre></div>
+<h2 id="dataset-fields">Dataset fields<a class="headerlink" href="#dataset-fields" title="Permanent link">&para;</a></h2>
+<p>Every field is optional. Types are TOML types; defaults are the empty
+string / empty list / <code>false</code> unless noted.</p>
 <table>
 <thead>
 <tr>
-<th>Capability</th>
-<th>Status</th>
-<th>Notes</th>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+<th>Meaning</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>lang-read</code></td>
-<td>✅</td>
-<td>Parse the <code>_LANG</code> namespace and the language-implicit ("bare") forms — a per-dataset <code>fetcher</code>/<code>loader</code> and the top-level <code>[_LOADERS]</code> format→binding map, read as Python (spec-v3.4) — then apply the fetch/load ladders. Explicit <code>_LANG.python</code> wins over the bare counterpart; a binding present for the running language (bare or explicit) that fails is an error — fail-loud, no silent fall-through (spec-v3.6).</td>
+<td><code>uri</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>Single source URI: HTTP(S), <code>git</code>/<code>*.git</code>, <code>ssh</code>/<code>sshfs</code>/<code>rsync</code>, object store (<code>s3://</code>, <code>gs://</code>, …), or <code>file://</code>. Mutually exclusive with <code>uris</code>.</td>
 </tr>
 <tr>
-<td><code>lang-write</code></td>
-<td>✅</td>
-<td>Regenerate <code>_LANG.python</code> from explicit bindings only; keep bare <code>fetcher</code>/<code>loader</code>/<code>shell</code> and <code>[_LOADERS]</code> bare (never promoted); preserve foreign <code>_LANG.*</code> and unknown <code>_*</code> tables verbatim (lossless round-trip).</td>
+<td><code>uris</code></td>
+<td>array of string</td>
+<td><code>[]</code></td>
+<td>Several source URIs materialized into one dataset folder. Mutually exclusive with <code>uri</code>.</td>
 </tr>
 <tr>
-<td><code>shell-fetch</code></td>
-<td>✅</td>
-<td>Run the dataset's bare <code>shell</code> command template (spec-v3.5 canonical, language-agnostic) in the fetch ladder, else the legacy <code>_LANG.shell.fetcher</code> fallback.</td>
+<td><code>sha256</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>Expected SHA-256 of the download. Auto-filled on first successful fetch and verified at fetch time.</td>
 </tr>
 <tr>
-<td><code>storage</code></td>
-<td>✅</td>
-<td>Two folder fields in <code>[_STORAGE]</code> — <code>datasets_dir</code> (default <code>"datasets"</code>) and <code>datacache_dir</code> (default <code>"cached"</code>), both repo-local by default. Path expressions interpolate <code>$user_data_dir</code>/<code>$user_cache_dir</code> (bare <code>platformdirs</code>, no app name), <code>$repo</code> (project root), <code>$datasets_dir</code>/<code>$datacache_dir</code>, <code>$key</code>, user-defined <code>[_STORAGE]</code> symbols, <code>$USER</code>/env vars, <code>~</code>. Per-host overrides in <code>[_STORAGE._HOST."&lt;glob&gt;"]</code>; per-dataset <code>storage_path</code> override. Resolution ladder per name: <code>DATAMANIFEST_&lt;NAME&gt;</code> env → <code>[_STORAGE._HOST.&lt;glob&gt;]</code> → <code>[_STORAGE]</code> → default; the two env vars of note are <code>DATAMANIFEST_DATASETS_DIR</code>/<code>DATAMANIFEST_DATACACHE_DIR</code>.</td>
+<td><code>format</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>Format hint used to pick a loader (<code>csv</code>, <code>nc</code>, <code>parquet</code>, <code>json</code>, <code>zip</code>, <code>tar.gz</code>, …). Inferred from the URI when absent.</td>
 </tr>
 <tr>
-<td><code>binding-args</code></td>
-<td>✅</td>
-<td>The <code>{ ref, args, kwargs }</code> table binding form with <code>$var</code> substitution.</td>
+<td><code>version</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>Dataset version; participates in the storage key, so multiple versions coexist on disk.</td>
 </tr>
 <tr>
-<td><code>byte-identity</code></td>
-<td>✅</td>
-<td>Canonical lexicographic key ordering (this implementation is the reference).</td>
+<td><code>branch</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>For git sources: the branch or tag to clone.</td>
 </tr>
 <tr>
-<td><code>cache-produce</code></td>
-<td>✅</td>
-<td><code>@cached</code> produce-or-load: parameter-hash keying, optional recipe <code>version</code>, <code>config.toml</code>/<code>metadata.toml</code> sidecars; artifacts land at <code>&lt;datacache_dir&gt;/&lt;cachetype&gt;/[&lt;version&gt;/]&lt;hash&gt;</code>.</td>
+<td><code>doi</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>DOI of the dataset; also usable as a lookup/search key.</td>
 </tr>
 <tr>
-<td><code>inspect</code></td>
-<td>✅</td>
-<td>The <code>cached.toml</code> index and the <code>datamanifest list</code> maintenance surface (filter + <code>--delete</code>/<code>--move</code>, dry-run by default; never an automatic collector).</td>
+<td><code>extract</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>After download, unpack the archive (<code>zip</code> / <code>tar</code> / <code>tar.gz</code>) and use the extracted directory as the dataset path.</td>
 </tr>
 <tr>
-<td><code>sync</code></td>
-<td>✅</td>
-<td>Cross-machine <code>push</code>/<code>pull</code> over rsync+ssh, addressed by machine-independent id (a fetched dataset's <code>key</code>, or a produced artifact's <code>cachetype[/version]/hash</code>); the object lands under the receiver's own <code>datasets_dir</code>/<code>datacache_dir</code>, resolved best-effort from the remote env (<code>source ~/.bashrc</code>) then <code>[_STORAGE._HOST]</code>/default; writes no manifest; idempotent. A <code>$repo</code>-relative object is not syncable, so the default repo-local folders must be pointed at a machine-global location to sync.</td>
+<td><code>aliases</code></td>
+<td>array of string</td>
+<td><code>[]</code></td>
+<td>Alternative names the dataset can be looked up by.</td>
 </tr>
 <tr>
-<td><code>delegation</code></td>
-<td>✅</td>
-<td>Cross-language fetch (rung 3): runs a foreign-language fetcher by invoking the local Julia <code>DataManifest</code> env (<code>julia --project=… -e 'using DataManifest; download_dataset(Database("…"), "…")'</code>) when present, materializing into the shared store; logs a warning and falls through to <code>uri</code> when the Julia env is absent. Fetched-only; on by default and probe-gated; the <code>delegate</code> field / <code>--delegate</code> / <code>--no-delegate</code> toggles it.</td>
+<td><code>description</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>Human-readable description.</td>
+</tr>
+<tr>
+<td><code>requires</code></td>
+<td>array of string</td>
+<td><code>[]</code></td>
+<td>Names of datasets fetched before this one; defines a dependency graph resolved in topological order.</td>
+</tr>
+<tr>
+<td><code>skip_download</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Treat the dataset as externally provided — return the <code>uri</code>/path and attempt no download.</td>
+</tr>
+<tr>
+<td><code>skip_checksum</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Disable checksum verification for this dataset.</td>
+</tr>
+<tr>
+<td><code>storage_path</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>Per-dataset location override (a path expression; default <code>$datasets_dir/$key</code>). See <a href="../storage/">Storage model</a>.</td>
+</tr>
+<tr>
+<td><code>delegate</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Allow cross-language fetch delegation to a peer <code>datamanifest</code> CLI.</td>
 </tr>
 </tbody>
 </table>
-<h2 id="conformance-tests">Conformance tests<a class="headerlink" href="#conformance-tests" title="Permanent link">&para;</a></h2>
-<p><code>tests/test_conformance.py</code> downloads the pinned shared fixture tarball, verifies every
-file against a recorded per-file SHA-256 hash (<code>tests/conformance_pin.toml</code>), and runs only
-the fixtures whose declared capabilities are a subset of those implemented above, skipping
-the rest with a reason.</p>
+<p><code>host</code>, <code>path</code>, and <code>scheme</code> are <strong>derived</strong> from the URI; the tools omit them on
+write.</p>
+<h2 id="language-bindings">Language bindings<a class="headerlink" href="#language-bindings" title="Permanent link">&para;</a></h2>
+<p>By default a dataset is downloaded from its <code>uri</code> and loaded by the built-in
+loader for its <code>format</code>. Both steps can be overridden with <code>module:function</code>
+references (never inline code):</p>
+<ul>
+<li><strong>bare <code>fetcher</code></strong> — a Python <code>module:function</code> called to produce the bytes
+  instead of (or in addition to) downloading the <code>uri</code>;</li>
+<li><strong>bare <code>loader</code></strong> — a Python <code>module:function</code> called to load the dataset into
+  memory, overriding the format default;</li>
+<li><strong>bare <code>shell</code></strong> — a command template run to fetch the data (with <code>$download_path</code>,
+  <code>$uri</code>, <code>$key</code>, … substitutions); language-agnostic, no loader.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[regridded]</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">format</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;nc&quot;</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">fetcher</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;mypkg.build:regrid&quot;</span><span class="w">      </span><span class="c1"># produce the bytes in Python</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">loader</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;mypkg.io:open_regridded&quot;</span><span class="w"> </span><span class="c1"># override the default .nc loader</span>
+</code></pre></div>
+<p>A binding may instead be a <code>{ ref, args, kwargs }</code> table so one function is reused
+across datasets that differ only in arguments, with <code>$var</code> substitution in string
+values:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[esm_5x5.loader]</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">ref</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;mypkg.io:load_esm&quot;</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">args</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;$path&quot;</span><span class="p">]</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">kwargs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">grid</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;5x5&quot;</span><span class="w"> </span><span class="p">}</span>
+</code></pre></div>
+<p>Bindings can also be written per-language under <code>[&lt;dataset&gt;._LANG.&lt;lang&gt;]</code>, and
+project-wide format defaults under <code>[_LANG.python.loaders]</code>. The bare forms above
+are the common single-language case; the
+<a href="../language-bindings/">Language bindings</a> page covers the full <code>_LANG</code> namespace,
+the loaders map, and the fetch/load resolution ladders.</p>
+<h2 id="storage">Storage<a class="headerlink" href="#storage" title="Permanent link">&para;</a></h2>
+<p>Where data lives is configured in <code>[_STORAGE]</code> (two folder fields,
+<code>datasets_dir</code> and <code>datacache_dir</code>, both repo-local by default) and per dataset
+via <code>storage_path</code>. This is its own topic — see the
+<a href="../storage/">Storage model</a> page.</p>
+<h2 id="a-full-example">A full example<a class="headerlink" href="#a-full-example" title="Permanent link">&para;</a></h2>
+<p>The manifest below declares four real datasets fetched from PANGAEA, a CMIP6
+output over SSH, and a GitHub release archive:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[CMIP6_lgm_tos]</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">uri</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;ssh://albedo1.dmawi.de:/albedo/work/projects/p_forclima/preproc_data_esmvaltool/LGM/recipe_cmip6_lgm_tos_20241114_151009/preproc/lgm/tos_CLIM&quot;</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">sha256</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;7f28454b5c399226f923be60393ecbb2983c15538f9733864e5ce0f9f4b83601&quot;</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="k">[herzschuh2023]</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">uri</span><span class="w">     </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://doi.pangaea.de/10.1594/PANGAEA.930512?format=zip&quot;</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">format</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;zip&quot;</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="n">sha256</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;4e40e43ac0f1ddea125cb5314eee46e332aacbcb18aff7efbf59f1d8b1d84a13&quot;</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="n">doi</span><span class="w">     </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;10.1594/PANGAEA.930512&quot;</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="n">extract</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="k">[jonkers2024]</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="n">uri</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://download.pangaea.de/dataset/962852/files/LGM_foraminifera_assemblages_20240110.csv&quot;</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="n">sha256</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;35ee6e8b94dc355973276da609fb18846ee1156d0fa848c1a9b221edd3715513&quot;</span>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="n">doi</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;10.1594/PANGAEA.962852&quot;</span>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="k">[</span><span class="s2">&quot;jesstierney/lgmDA&quot;</span><span class="k">]</span>
+<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="n">uri</span><span class="w">     </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://github.com/jesstierney/lgmDA/archive/refs/tags/v2.1.zip&quot;</span>
+<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="n">sha256</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;da5f85235baf7f858f1b52ed73405f5d4ed28a8f6da92e16070f86b724d8bb25&quot;</span>
+<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="n">extract</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</code></pre></div>
+<h2 id="the-normative-specification">The normative specification<a class="headerlink" href="#the-normative-specification" title="Permanent link">&para;</a></h2>
+<p>This page is a practical summary, not the contract. The authoritative,
+cross-language definition — the full field list, the resolution ladders, the
+preservation rules, and the conformance fixtures — lives in the
+<a href="https://perrette.github.io/datamanifest.toml"><code>datamanifest.toml</code> specification</a>.</p>
 
 
 
