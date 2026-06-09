@@ -951,90 +951,6 @@
 
               
             
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../design-notes/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Design: @cached identity
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../design-state-file/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Design: state file
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../design-remote-protocols/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Design: remote protocols vs. import
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
           </ul>
         </nav>
       
@@ -1185,7 +1101,7 @@ add the HadCRUT5 global temperature series next to it:</p>
 function with their parameters.</p>
 <h2 id="repair-reassociate-data-on-disk">Repair: reassociate data on disk<a class="headerlink" href="#repair-reassociate-data-on-disk" title="Permanent link">&para;</a></h2>
 <p>The tool records where every file actually lives (a small git-ignored
-<a href="../design-state-file/">state file</a>), so moving data around by hand is
+<a href="https://github.com/perrette/datamanifest/blob/main/design/design-state-file.md">state file</a>), so moving data around by hand is
 recoverable — <code>refresh</code> reconciles the records with disk, and <code>--scan</code>
 discovers copies elsewhere on the machine (e.g. downloaded by another project)
 and adopts them, checksum-verified, instead of re-downloading:</p>
