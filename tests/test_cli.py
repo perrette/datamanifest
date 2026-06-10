@@ -1185,6 +1185,28 @@ def test_archive_level_record_is_refresh_business_not_normalize(tmp_path):
     assert "reconciled 0 entries" in _run("refresh", env=env).stdout
 
 
+def test_normalize_never_replaces_extracted_dir_with_archive_bytes(tmp_path):
+    # Regression: an archive-level record once made normalize plan a raw byte
+    # copy of the zip onto the extracted-dir path — replacing the real
+    # extracted directory (possibly in a shared pool) with a zip file named
+    # like the dir, and the archive-level checksum even passed. Whatever
+    # normalize decides to do with such a record, applying it must leave the
+    # extracted tree intact and the archive in place — so no assertion here on
+    # what normalize reports, only on the bytes.
+    env, extracted, archive = _extract_project(tmp_path)
+    inner = os.path.join(extracted, "data", "a.csv")
+    with open(inner, "rb") as f:
+        before = f.read()
+    _repoint_state_to_archive(tmp_path)
+
+    r = _run("normalize", env=env)                  # real run, not --dry-run
+    assert r.returncode == 0, r.stderr
+    assert os.path.isdir(extracted)                 # still a directory…
+    with open(inner, "rb") as f:
+        assert f.read() == before                   # …with its content intact
+    assert os.path.isfile(archive)                  # archive untouched
+
+
 def test_normalize_extracts_archive_only_record(tmp_path):
     # Record points at the archive and the extracted dir is gone: normalize
     # re-extracts at the directive (local work, no download), keeps the archive.
