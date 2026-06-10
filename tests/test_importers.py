@@ -139,7 +139,8 @@ def test_import_pooch_adopts_cache(tmp_path):
     # The md5 entry keeps its md5 as the checksum (preserved, not replaced by a
     # computed sha256); the cached file is still adopted in place. The state file
     # records sha256 only for sha256 datasets, so the md5 entry carries none there.
-    assert _manifest(toml)["m"]["checksum"] == f"md5:{hashlib.md5(b'mass\n').hexdigest()}"
+    md5_hex = hashlib.md5(b"mass\n").hexdigest()
+    assert _manifest(toml)["m"]["checksum"] == f"md5:{md5_hex}"
     assert idx.dataset_path_of("data.example.org/m.bin")
     assert not idx.datasets["data.example.org/m.bin"].get("sha256")
 
