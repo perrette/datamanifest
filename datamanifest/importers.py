@@ -7,8 +7,9 @@ record (no re-download). So all sources share one declaration + cache-adoption p
 
 Two CLI verbs sit on top (see ``datamanifest/cli.py``):
 
-- ``add <reference>`` — a pointer to data (a direct URL, or a **Zenodo** DOI/record
-  that expands to its files). :func:`import_zenodo`.
+- ``add <reference>`` — a pointer to data (a direct URL, a **Zenodo** DOI/record, or
+  a **PANGAEA** DOI, each of which expands to its files). :func:`import_zenodo`,
+  :func:`import_pangaea`.
 - ``import <tool> <file>`` — another tool's catalog: **pooch** registry, a generic
   **csv** / **urls** list, **intake** catalog, or **DVC** files. :data:`IMPORTERS`.
 
@@ -336,6 +337,251 @@ def import_zenodo(db, ref, *, fetch_json=None, name="", picks=None, split=False,
         db, specs, dry_run=dry_run, overwrite=overwrite)
     return _summary(f"Zenodo record {rid}", rows, declared, adopted, skipped,
                     dry_run=dry_run, cache=False)
+
+
+# ----- PANGAEA (by DOI / doi.pangaea.de URL) ---------------------------------
+
+_PANGAEA_JSONLD = "https://doi.pangaea.de/10.1594/PANGAEA.{id}?format=metadata_jsonld"
+_PANGAEA_TEXTFILE = "https://doi.pangaea.de/10.1594/PANGAEA.{id}?format=textfile"
+_PANGAEA_FILE = "https://download.pangaea.de/dataset/{id}/files/{name}"
+_PANGAEA_ES = ("https://ws.pangaea.de/es/pangaea/panmd/_search"
+               "?q=parentIdDataSet:{id}&size=1000")
+
+
+def pangaea_dataset_id(ref):
+    """The PANGAEA dataset id from a DOI (``10.1594/PANGAEA.<id>``) or a
+    ``doi.pangaea.de`` / ``doi.org`` DOI URL, or ``""`` when *ref* is not a PANGAEA
+    reference. A ref that already pins a ``?format=`` representation is treated as a
+    plain URL (returns ``""``): the caller chose a concrete file, so honor it
+    verbatim rather than re-resolving the dataset."""
+    ref = (ref or "").strip()
+    if "format=" in ref.lower():
+        return ""
+    m = re.search(r"10\.1594/PANGAEA\.(\d+)", ref, re.I)
+    return m.group(1) if m else ""
+
+
+def classify_pangaea(jsonld):
+    """Classify a PANGAEA dataset from its schema.org JSON-LD ``distribution``.
+
+    Returns ``(kind, url)``:
+
+    - ``"file"``  — a single uploaded file; *url* is its direct download URL.
+    - ``"table"`` — a ``?format=textfile`` representation; *url* is that URL. This is
+      EITHER a tabular dataset (the textfile is the data) OR a file collection (the
+      textfile is a matrix listing the files); the two are only distinguishable from
+      the textfile's own column header (see :func:`pangaea_is_filelist`).
+    - ``"zip"``   — only a zip representation; *url* is the ``?format=zip`` URL. A
+      publication-series parent or a login-gated bundle; the caller checks for child
+      datasets before falling back to the zip.
+    - ``("", "")`` — no recognizable distribution.
+    """
+    dists = jsonld.get("distribution") or []
+    if isinstance(dists, dict):
+        dists = [dists]
+    textfile = zipurl = directfile = ""
+    for d in dists:
+        url = (d or {}).get("contentUrl", "") or ""
+        enc = ((d or {}).get("encodingFormat", "") or "").lower()
+        low = url.lower()
+        if "format=textfile" in low or "tab-separated" in enc:
+            textfile = textfile or url
+        elif "format=zip" in low or enc == "application/zip":
+            zipurl = zipurl or url
+        elif "/files/" in low and "format=" not in low:
+            directfile = directfile or url
+    if directfile:
+        return "file", directfile
+    if textfile:
+        return "table", textfile
+    if zipurl:
+        return "zip", zipurl
+    return "", ""
+
+
+def pangaea_restricted(jsonld):
+    """A human-readable access restriction if the dataset is not freely accessible
+    (PANGAEA flags these in JSON-LD), else ``""``."""
+    if jsonld.get("isAccessibleForFree") is False:
+        return jsonld.get("conditionsOfAccess") or "restricted access"
+    return ""
+
+
+def _split_pangaea_header(lines):
+    """Consume a PANGAEA textfile's ``/* DATA DESCRIPTION ... */`` comment block from
+    *lines* (a line iterator) and return ``(column_header, rows)`` — the data column
+    header line and an iterator over the remaining data rows. Returns ``("", iter)``
+    if the comment block is unterminated."""
+    it = iter(lines)
+    in_comment = False
+    for raw in it:
+        s = raw.rstrip("\r\n")
+        if not in_comment and s.lstrip().startswith("/*"):
+            in_comment = not s.rstrip().endswith("*/")
+            continue
+        if in_comment:
+            if s.rstrip().endswith("*/"):
+                in_comment = False
+            continue
+        return s, it                       # first line past the comment = columns
+    return "", it
+
+
+def pangaea_is_filelist(column_header):
+    """True when a PANGAEA textfile's column header is the file-collection schema:
+    a leading ``Binary`` column plus a ``Binary (Hash)`` (MD5) column. A plain
+    tabular dataset has data columns here instead."""
+    cols = [c.strip() for c in column_header.split("\t")]
+    return bool(cols) and cols[0] == "Binary" and "Binary (Hash)" in cols
+
+
+def parse_pangaea_filelist(column_header, rows, dataset_id, *, picks=None):
+    """Parse a file-collection textfile into ``[(filename, md5)]``. The ``Binary``
+    column is the filename and ``Binary (Hash)`` the MD5; *picks* (globs) filter by
+    filename. Drains the *rows* iterator."""
+    cols = [c.strip() for c in column_header.split("\t")]
+    i_name, i_hash = cols.index("Binary"), cols.index("Binary (Hash)")
+    out = []
+    for raw in rows:
+        parts = raw.rstrip("\r\n").split("\t")
+        if len(parts) <= max(i_name, i_hash):
+            continue
+        name, md5 = parts[i_name].strip(), parts[i_hash].strip()
+        if not name or (picks and not any(fnmatch.fnmatch(name, p) for p in picks)):
+            continue
+        out.append((name, md5))
+    return out
+
+
+def _pangaea_specs(dataset_id, *, fetch_json, get_lines, picks, split, name, taken,
+                   notes, visited):
+    """Resolve one PANGAEA dataset id into dataset specs (recursing into a parent
+    series' children). Pure dispatch over the injected fetchers; appends human notes
+    (restricted / fell-back-to-zip / truncated) to *notes*."""
+    if dataset_id in visited:
+        return []
+    visited.add(dataset_id)
+    doi = f"10.1594/PANGAEA.{dataset_id}"
+    jsonld = fetch_json(_PANGAEA_JSONLD.format(id=dataset_id))
+    title = jsonld.get("name", "") or ""
+    restricted = pangaea_restricted(jsonld)
+    if restricted:
+        notes.append(f"{doi}: {restricted} — skipped")
+        return []
+    kind, url = classify_pangaea(jsonld)
+
+    if kind == "file":
+        nm = name or _unique_name(_slug(title) or f"pangaea-{dataset_id}", taken)
+        return [{"name": nm, "uri": url, "doi": doi, "description": title}]
+
+    if kind == "table":
+        column_header, rows = _split_pangaea_header(get_lines(url))
+        if not pangaea_is_filelist(column_header):
+            # A plain tabular dataset: the textfile IS the data. Store its URL; the
+            # rows iterator is left undrained so the stream closes without download.
+            nm = name or _unique_name(_slug(title) or f"pangaea-{dataset_id}", taken)
+            return [{"name": nm, "uri": url, "doi": doi, "description": title}]
+        files = parse_pangaea_filelist(column_header, rows, dataset_id, picks=picks)
+        if not files:
+            notes.append(f"{doi}: no files matched")
+            return []
+        if split:
+            specs = []
+            for fname, md5 in files:
+                base = name + "/" + fname if name else os.path.splitext(fname)[0]
+                specs.append({
+                    "name": _unique_name(base, taken),
+                    "uri": _PANGAEA_FILE.format(id=dataset_id, name=fname),
+                    "doi": doi, "description": title,
+                    "hash_algo": "md5", "hash_value": md5,
+                })
+            return specs
+        # Bundle the collection's files into one uris= dataset (per-file md5s are
+        # not retained on a bundle — use --split to keep them as checksums).
+        bundle_name = name or _slug(title) or f"pangaea-{dataset_id}"
+        uris = [_PANGAEA_FILE.format(id=dataset_id, name=fname) for fname, _ in files]
+        if len(uris) == 1:
+            return [{"name": _unique_name(bundle_name, taken), "uri": uris[0],
+                     "doi": doi, "description": title}]
+        return [{"name": _unique_name(bundle_name, taken), "uris": uris,
+                 "doi": doi, "description": title}]
+
+    if kind == "zip":
+        es = fetch_json(_PANGAEA_ES.format(id=dataset_id))
+        hits = (es.get("hits", {}) or {}).get("hits", []) or []
+        total = (es.get("hits", {}) or {}).get("total", len(hits))
+        if isinstance(total, dict):                 # ES 7+ returns {value, relation}
+            total = total.get("value", len(hits))
+        if hits:
+            if total > len(hits):
+                notes.append(f"{doi}: {total} child datasets, only the first "
+                             f"{len(hits)} enumerated")
+            specs = []
+            for h in hits:
+                cid = str(h.get("_id", "")).strip()
+                if cid:
+                    specs += _pangaea_specs(
+                        cid, fetch_json=fetch_json, get_lines=get_lines, picks=picks,
+                        split=split, name="", taken=taken, notes=notes,
+                        visited=visited)
+            return specs
+        # Zip-only with no enumerable children: keep the zip as one dataset.
+        notes.append(f"{doi}: stored as a single zip (no child datasets found)")
+        nm = name or _unique_name(_slug(title) or f"pangaea-{dataset_id}", taken)
+        return [{"name": nm, "uri": url, "doi": doi, "description": title,
+                 "extract": True}]
+
+    notes.append(f"{doi}: no downloadable representation found — skipped")
+    return []
+
+
+def import_pangaea(db, ref, *, fetch_json=None, get_lines=None, name="", picks=None,
+                   split=False, dry_run=False, overwrite=False):
+    """Resolve a PANGAEA DOI / ``doi.pangaea.de`` URL through PANGAEA's web services
+    and declare it (declare-only — run ``download`` to fetch). Classifies the
+    dataset from its JSON-LD:
+
+    - a tabular dataset → one entry whose ``uri`` is the ``?format=textfile`` data;
+    - a single uploaded file → one entry pointing at the file;
+    - a file collection → its files (bundled into one ``uris=`` dataset by default;
+      ``--split`` makes one dataset per file, each carrying the file's MD5; ``--pick``
+      filters by filename);
+    - a publication-series parent → one entry per child dataset (each child's own
+      DOI), or the series zip when no children are enumerable.
+
+    *fetch_json* / *get_lines* are injectable for testing (JSON-LD + Elasticsearch,
+    and the streamed textfile, respectively)."""
+    dataset_id = pangaea_dataset_id(ref)
+    if not dataset_id:
+        raise ValueError(f"{ref!r} is not a recognizable PANGAEA DOI or dataset URL")
+    if fetch_json is None:
+        def fetch_json(url):
+            import httpx
+            r = httpx.get(url, follow_redirects=True, timeout=30.0)
+            r.raise_for_status()
+            return r.json()
+    if get_lines is None:
+        def get_lines(url):
+            import httpx
+            with httpx.stream("GET", url, follow_redirects=True, timeout=60.0) as r:
+                r.raise_for_status()
+                yield from r.iter_lines()
+
+    notes, taken = [], set(db.datasets)
+    specs = _pangaea_specs(dataset_id, fetch_json=fetch_json, get_lines=get_lines,
+                           picks=picks, split=split, name=name, taken=taken,
+                           notes=notes, visited=set())
+    if not specs:
+        msg = f"PANGAEA dataset {dataset_id}: nothing to import."
+        return msg + ("\n  (" + "; ".join(notes) + ")" if notes else "")
+
+    rows, declared, adopted, skipped = _declare_specs(
+        db, specs, dry_run=dry_run, overwrite=overwrite)
+    summary = _summary(f"PANGAEA dataset {dataset_id}", rows, declared, adopted,
+                       skipped, dry_run=dry_run, cache=False)
+    if notes:
+        summary += "\n  (" + "; ".join(notes) + ")"
+    return summary
 
 
 def _require_yaml():

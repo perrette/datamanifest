@@ -8,6 +8,7 @@ and cache-adoption cases build their own files + hashes.
 import hashlib
 import json
 import os
+import re
 
 try:
     import tomllib
@@ -17,10 +18,14 @@ except ModuleNotFoundError:  # Python < 3.11
 from datamanifest.cache import CachedIndex
 from datamanifest.database import Database
 from datamanifest.importers import (
+    classify_pangaea,
     import_csv,
+    import_pangaea,
     import_pooch,
     import_urls,
     import_zenodo,
+    pangaea_dataset_id,
+    pangaea_is_filelist,
     parse_pooch_registry,
     parse_zenodo_record,
     zenodo_record_id,
@@ -405,3 +410,244 @@ def test_import_dvc_import_url_uses_dep_url(tmp_path):
     import_dvc(db, str(tmp_path / "file.csv.dvc"))
     # An import-url out takes the dep URL verbatim (no remote needed).
     assert _manifest(toml)["file"]["uri"] == "https://host/file.csv"
+
+
+# ----- PANGAEA ---------------------------------------------------------------
+
+def _jsonld_table(id, title):
+    """A tabular / file-collection dataset's JSON-LD (textfile + html only)."""
+    return {
+        "@type": "Dataset", "name": title,
+        "distribution": [
+            {"contentUrl": f"https://doi.pangaea.de/10.1594/PANGAEA.{id}"
+                           "?format=textfile",
+             "encodingFormat": "text/tab-separated-values"},
+            {"contentUrl": f"https://doi.pangaea.de/10.1594/PANGAEA.{id}?format=html",
+             "encodingFormat": "text/html"},
+        ],
+    }
+
+
+def _jsonld_file(id, title, filename):
+    """A single uploaded-file dataset's JSON-LD (direct download URL)."""
+    return {
+        "@type": "Dataset", "name": title,
+        "distribution": [
+            {"contentUrl": f"https://download.pangaea.de/dataset/{id}/files/{filename}",
+             "encodingFormat": "application/vnd.ms-excel"},
+        ],
+    }
+
+
+def _jsonld_zip(id, title):
+    """A publication-series parent's JSON-LD (zip-only)."""
+    return {
+        "@type": "Dataset", "name": title,
+        "distribution": [
+            {"contentUrl": f"https://doi.pangaea.de/10.1594/PANGAEA.{id}?format=zip",
+             "encodingFormat": "application/zip"},
+        ],
+    }
+
+
+_TABULAR_TAB = (
+    "/* DATA DESCRIPTION:\n"
+    "Citation:\tHerzschuh, U et al. (2023): Reconstruction significances\n"
+    "Parameter(s):\tAGE [ka BP]\n"
+    "*/\n"
+    "Age [ka BP]\tTemperature [°C]\n"
+    "0\t1.2\n"
+    "1\t1.3\n"
+)
+
+_COLLECTION_TAB = (
+    "/* DATA DESCRIPTION:\n"
+    "Citation:\tWinkler, K et al. (2025): HILDA+ version 2.0\n"
+    "Parameter(s):\tBinary Object (Binary) * PI: Winkler, Karina\n"
+    "\tBinary Object (MD5 Hash) (Binary (Hash)) * PI: Winkler, Karina\n"
+    "*/\n"
+    "Binary\tBinary (Size) [Bytes]\tBinary (Charset)\tBinary (Type)\tBinary (Hash)\n"
+    "Readme.md\t1.8 kBytes\tUTF-8\ttext/plain\t5df2d37b8ab9e5a13bfd444caf972dd8\n"
+    "map_1960.png\t1.9 MBytes\t\timage/png\t4b074a57577f75681f35ff1d7786480a\n"
+    "data_eckert4.zip\t3.6 GBytes\t\tapplication/zip\t52e9807827b23cee7923cfedd207ba3b\n"
+)
+
+
+def _fake_fetchers(jsonld_by_id, tab_by_id=None, children_by_id=None):
+    """Build (fetch_json, get_lines) that route by the PANGAEA id / ES query in the
+    URL — no network."""
+    tab_by_id = tab_by_id or {}
+    children_by_id = children_by_id or {}
+
+    def fetch_json(url):
+        if "parentIdDataSet:" in url:
+            pid = url.split("parentIdDataSet:")[1].split("&")[0]
+            return children_by_id.get(pid, {"hits": {"total": 0, "hits": []}})
+        did = re.search(r"PANGAEA\.(\d+)", url).group(1)
+        return jsonld_by_id[did]
+
+    def get_lines(url):
+        did = re.search(r"PANGAEA\.(\d+)", url).group(1)
+        return iter(tab_by_id[did].splitlines())
+
+    return fetch_json, get_lines
+
+
+def test_pangaea_dataset_id_detection():
+    assert pangaea_dataset_id("10.1594/PANGAEA.930512") == "930512"
+    assert pangaea_dataset_id("https://doi.pangaea.de/10.1594/PANGAEA.930512") \
+        == "930512"
+    assert pangaea_dataset_id("https://doi.org/10.1594/PANGAEA.962852") == "962852"
+    # An explicit ?format= pins a concrete representation → treated as a plain URL.
+    assert pangaea_dataset_id(
+        "https://doi.pangaea.de/10.1594/PANGAEA.930512?format=zip") == ""
+    assert pangaea_dataset_id("10.5281/zenodo.99") == ""
+    assert pangaea_dataset_id("https://example.com/x.csv") == ""
+
+
+def test_classify_pangaea():
+    assert classify_pangaea(_jsonld_table("930590", "t"))[0] == "table"
+    kind, url = classify_pangaea(_jsonld_file("945445", "x", "db.xlsx"))
+    assert kind == "file" and url.endswith("/files/db.xlsx")
+    kind, url = classify_pangaea(_jsonld_zip("930512", "p"))
+    assert kind == "zip" and url.endswith("?format=zip")
+
+
+def test_pangaea_is_filelist():
+    table_cols = "Age [ka BP]\tTemperature [°C]"
+    coll_cols = "Binary\tBinary (Size) [Bytes]\tBinary (Type)\tBinary (Hash)"
+    assert not pangaea_is_filelist(table_cols)
+    assert pangaea_is_filelist(coll_cols)
+
+
+def test_import_pangaea_tabular(tmp_path):
+    db, toml = _project(tmp_path)
+    fj, gl = _fake_fetchers({"930590": _jsonld_table("930590", "Reconstruction sig")},
+                            {"930590": _TABULAR_TAB})
+    summary = import_pangaea(db, "10.1594/PANGAEA.930590", fetch_json=fj,
+                             get_lines=gl)
+    assert "Imported 1 dataset" in summary
+    entry = _manifest(toml)["reconstruction-sig"]
+    assert entry["uri"].endswith("/10.1594/PANGAEA.930590?format=textfile")
+    assert entry["doi"] == "10.1594/PANGAEA.930590"
+    assert "uris" not in entry
+
+
+def test_import_pangaea_single_file(tmp_path):
+    db, toml = _project(tmp_path)
+    fj, gl = _fake_fetchers(
+        {"945445": _jsonld_file("945445", "Radiometric DB", "radio.xlsx")})
+    import_pangaea(db, "10.1594/PANGAEA.945445", fetch_json=fj, get_lines=gl)
+    entry = _manifest(toml)["radiometric-db"]
+    assert entry["uri"] == "https://download.pangaea.de/dataset/945445/files/radio.xlsx"
+    assert entry["doi"] == "10.1594/PANGAEA.945445"
+
+
+def test_import_pangaea_collection_bundles(tmp_path):
+    db, toml = _project(tmp_path)
+    fj, gl = _fake_fetchers({"974335": _jsonld_table("974335", "HILDA+ v2.0")},
+                            {"974335": _COLLECTION_TAB})
+    summary = import_pangaea(db, "10.1594/PANGAEA.974335", fetch_json=fj, get_lines=gl)
+    # Three files bundle into ONE uris= dataset named from the title.
+    assert "Imported 1 dataset" in summary
+    entry = _manifest(toml)["hilda-v2-0"]
+    assert len(entry["uris"]) == 3
+    assert entry["uris"][0] == \
+        "https://download.pangaea.de/dataset/974335/files/Readme.md"
+    assert entry["doi"] == "10.1594/PANGAEA.974335"
+
+
+def test_import_pangaea_collection_split_and_pick(tmp_path):
+    db, toml = _project(tmp_path)
+    fj, gl = _fake_fetchers({"974335": _jsonld_table("974335", "HILDA+ v2.0")},
+                            {"974335": _COLLECTION_TAB})
+    summary = import_pangaea(db, "10.1594/PANGAEA.974335", fetch_json=fj, get_lines=gl,
+                             split=True, picks=["*.zip"])
+    # --pick narrows to the one .zip file; --split makes it its own dataset.
+    assert "Imported 1 dataset" in summary
+    data = _manifest(toml)
+    assert "data_eckert4" in data
+    assert data["data_eckert4"]["uri"].endswith("/files/data_eckert4.zip")
+    assert "readme" not in data and "map_1960" not in data
+
+
+def test_import_pangaea_parent_expands_children(tmp_path):
+    db, toml = _project(tmp_path)
+    children = {"930512": {"hits": {"total": 2, "hits": [
+        {"_id": "930590"}, {"_id": "930604"}]}}}
+    jsonld = {
+        "930512": _jsonld_zip("930512", "LegacyClimate 1.0"),
+        "930590": _jsonld_table("930590", "Asian samples"),
+        "930604": _jsonld_table("930604", "European samples"),
+    }
+    fj, gl = _fake_fetchers(
+        jsonld, {"930590": _TABULAR_TAB, "930604": _TABULAR_TAB}, children)
+    summary = import_pangaea(db, "10.1594/PANGAEA.930512", fetch_json=fj, get_lines=gl)
+    # One entry per child, each carrying its OWN DOI (not the parent's).
+    assert "Imported 2 dataset(s)" in summary
+    data = _manifest(toml)
+    assert data["asian-samples"]["doi"] == "10.1594/PANGAEA.930590"
+    assert data["european-samples"]["doi"] == "10.1594/PANGAEA.930604"
+    assert "930512" not in str(data)        # the parent itself is not an entry
+
+
+def test_import_pangaea_parent_zip_fallback(tmp_path):
+    db, toml = _project(tmp_path)
+    fj, gl = _fake_fetchers({"911242": _jsonld_zip("911242", "Series")})
+    summary = import_pangaea(db, "10.1594/PANGAEA.911242", fetch_json=fj, get_lines=gl)
+    # No enumerable children → keep the series zip as a single (extracted) dataset.
+    assert "Imported 1 dataset" in summary and "single zip" in summary
+    entry = _manifest(toml)["series"]
+    assert entry["uri"].endswith("?format=zip")
+    assert entry["extract"] is True
+
+
+def test_import_pangaea_restricted_skipped(tmp_path):
+    db, toml = _project(tmp_path)
+    jl = _jsonld_table("848185", "Moratorium data")
+    jl["isAccessibleForFree"] = False
+    jl["conditionsOfAccess"] = "signup required"
+    fj, gl = _fake_fetchers({"848185": jl})
+    summary = import_pangaea(db, "10.1594/PANGAEA.848185", fetch_json=fj, get_lines=gl)
+    assert "nothing to import" in summary and "signup required" in summary
+    assert _manifest(toml) == {"_META": {"schema": 1},
+                               "_STORAGE": {"datasets_dir": "datasets"}}
+
+
+def test_import_pangaea_rejects_non_pangaea(tmp_path):
+    db, _ = _project(tmp_path)
+    try:
+        import_pangaea(db, "https://example.com/x.csv",
+                       fetch_json=lambda u: {}, get_lines=lambda u: iter([]))
+    except ValueError as e:
+        assert "PANGAEA" in str(e)
+    else:
+        raise AssertionError("expected a ValueError for a non-PANGAEA reference")
+
+
+def test_add_routes_pangaea_reference(tmp_path, monkeypatch, capsys):
+    import types
+
+    from datamanifest import cli, importers
+
+    toml = tmp_path / "datamanifest.toml"
+    toml.write_text('[_META]\nschema = 1\n')
+    monkeypatch.setenv("DATAMANIFEST_TOML", str(toml))
+
+    seen = {}
+
+    def stub(db, ref, **kw):
+        seen.update(ref=ref, kw=kw)
+        return "STUB PANGAEA"
+
+    monkeypatch.setattr(importers, "import_pangaea", stub)
+    args = types.SimpleNamespace(
+        uri="10.1594/PANGAEA.974335", name="hilda", pick=["*.zip"], split=True,
+        extract=False, overwrite=False, no_download=False,
+    )
+    cli._cmd_add(args)
+
+    assert "STUB PANGAEA" in capsys.readouterr().out
+    assert seen["ref"] == "10.1594/PANGAEA.974335"
+    assert seen["kw"]["name"] == "hilda" and seen["kw"]["picks"] == ["*.zip"]
+    assert seen["kw"]["split"] is True

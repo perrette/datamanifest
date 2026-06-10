@@ -1187,15 +1187,24 @@ def _cmd_path(args):
 def _cmd_add(args):
     db = _get_db()
 
-    # A Zenodo DOI / record URL expands to one dataset per file in the record
+    # A Zenodo / PANGAEA DOI (or record URL) expands to the dataset's files
     # (declare-only — records can be large; `download` fetches). A plain URL is a
-    # single dataset (the normal path below).
-    from .importers import import_zenodo, zenodo_record_id
+    # single dataset (the normal path below). A PANGAEA ref pinning an explicit
+    # ?format= is left as a plain URL (pangaea_dataset_id returns "").
+    from .importers import (
+        import_pangaea, import_zenodo, pangaea_dataset_id, zenodo_record_id,
+    )
     if zenodo_record_id(args.uri):
         print(import_zenodo(db, args.uri, name=args.name or "",
                             picks=getattr(args, "pick", None) or None,
                             split=getattr(args, "split", False),
                             overwrite=args.overwrite))
+        return
+    if pangaea_dataset_id(args.uri):
+        print(import_pangaea(db, args.uri, name=args.name or "",
+                             picks=getattr(args, "pick", None) or None,
+                             split=getattr(args, "split", False),
+                             overwrite=args.overwrite))
         return
 
     kwargs = {}
@@ -1915,21 +1924,24 @@ def main():
     p_add = subparsers.add_parser("add", help="Register (and optionally download) a dataset")
     p_add.add_argument(
         "uri", metavar="URI",
-        help="Dataset URI, or a Zenodo DOI / record URL (expands to its files)",
+        help="Dataset URI, or a Zenodo / PANGAEA DOI / record URL (expands to its "
+             "files; a PANGAEA series expands to one entry per child dataset)",
     )
     add_opts = p_add.add_argument_group("options")
     add_opts.add_argument(
         "--name", "-n", metavar="N",
-        help="Name for the dataset entry (a name *prefix* for a Zenodo record)",
+        help="Name for the dataset entry (a name *prefix* for a Zenodo record / a "
+             "split PANGAEA collection)",
     )
     add_opts.add_argument(
         "--pick", metavar="GLOB", action="append",
-        help="For a Zenodo record: add only files matching GLOB (repeatable)",
+        help="For a Zenodo record / PANGAEA file collection: add only files "
+             "matching GLOB (repeatable)",
     )
     add_opts.add_argument(
         "--split", action="store_true",
-        help="For a Zenodo record: add one dataset per file instead of bundling "
-             "the record into a single uris= dataset (the default)",
+        help="For a Zenodo record / PANGAEA file collection: add one dataset per "
+             "file instead of bundling into a single uris= dataset (the default)",
     )
     add_opts.add_argument(
         "--no-download", action="store_true", help="Register without downloading"
