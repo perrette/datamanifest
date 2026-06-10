@@ -1744,8 +1744,8 @@ read pools for datasets present there but not local — the report twin of
 <code>--no-delegate</code> disables the cross-language fetch rung for the run (<code>--delegate</code>
 forces it on); see <a href="../language-bindings/#cross-language-fetch">language-bindings.md</a>.</p>
 <h3 id="verify-name"><code>verify [NAME ...]</code><a class="headerlink" href="#verify-name" title="Permanent link">&para;</a></h3>
-<p>Re-check sha256 checksums (default: all present datasets); exits nonzero on any
-mismatch.</p>
+<p>Re-check checksums in each dataset's declared algorithm (default: all present
+datasets); exits nonzero on any mismatch.</p>
 <h3 id="update-checksums-name-dry-run"><code>update-checksums [NAME ...] [--dry-run]</code><a class="headerlink" href="#update-checksums-name-dry-run" title="Permanent link">&para;</a></h3>
 <p>Recompute stored checksums from what's on disk (e.g. after regenerating data).</p>
 <h2 id="maintain">Maintain<a class="headerlink" href="#maintain" title="Permanent link">&para;</a></h2>

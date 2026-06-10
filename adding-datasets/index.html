@@ -1286,21 +1286,22 @@ protocol</em> (spec-normative, implemented in every language), tracked in
 <p>The test: is the argument <em>another tool's manifest</em> → <code>import</code>; is it <em>a pointer to
 data</em> → <code>add</code>.</p>
 <p>Both verbs end at the same place: standard <code>datamanifest.toml</code> entries (<code>uri</code>,
-<code>sha256</code>, optional <code>doi</code>/<code>description</code>/<code>extract</code>), plus — where a local copy
+<code>checksum</code>, optional <code>doi</code>/<code>description</code>/<code>extract</code>), plus — where a local copy
 already exists — an in-place adoption recorded in the state file so nothing is
 re-downloaded.</p>
-<p>A note on checksums: several sources publish <strong>md5</strong> (Zenodo, PANGAEA, DVC), not sha256.
-datamanifest verifies sha256, so for those an entry is declared without <code>sha256</code>;
-the md5 is verified on first download (or against an adopted local file) and the
-<strong>sha256 is computed and recorded</strong> at that point. Git LFS is the exception — its
-pointer already carries the sha256, so no download is needed to set it.</p>
+<p>A note on checksums: the <code>checksum</code> field carries its algorithm as <code>&lt;algo&gt;:&lt;hex&gt;</code>.
+Sources that publish <strong>md5</strong> (Zenodo, PANGAEA, DVC) are recorded as
+<code>checksum = "md5:…"</code> and verified in md5 on first download (or against an adopted
+local file) — not re-hashed to sha256. A source with <strong>no</strong> published digest gets
+one computed (as <code>sha256:…</code>) at that point. Git LFS would carry its <code>sha256:</code>
+straight from the pointer (no download needed to set it).</p>
 <hr />
 <h2 id="add-add-datasets-from-a-reference"><code>add</code> — add dataset(s) from a reference<a class="headerlink" href="#add-add-datasets-from-a-reference" title="Permanent link">&para;</a></h2>
 <h3 id="a-direct-url">A direct URL<a class="headerlink" href="#a-direct-url" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>datamanifest<span class="w"> </span>add<span class="w"> </span>https://www.ncei.noaa.gov/woa/temperature.nc
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>datamanifest<span class="w"> </span>add<span class="w"> </span><span class="s2">&quot;https://zenodo.org/records/1234567/files/grid.zip&quot;</span><span class="w"> </span>--extract
 </code></pre></div>
-<p>One dataset; downloads and records its sha256 by default (<code>--no-download</code> to defer).</p>
+<p>One dataset; downloads and records its <code>checksum</code> (as <code>sha256:…</code>) by default (<code>--no-download</code> to defer).</p>
 <h3 id="a-doi-or-data-repository-record-zenodo-figshare-osf-dryad">A DOI or data-repository record — Zenodo / figshare / OSF / Dryad<a class="headerlink" href="#a-doi-or-data-repository-record-zenodo-figshare-osf-dryad" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>datamanifest<span class="w"> </span>add<span class="w"> </span><span class="m">10</span>.5281/zenodo.1234567<span class="w">          </span><span class="c1"># by DOI</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>datamanifest<span class="w"> </span>add<span class="w"> </span>https://zenodo.org/records/1234567<span class="w">   </span><span class="c1"># or by record URL</span>
@@ -1311,8 +1312,8 @@ in it. Each entry gets:</p>
 <li><code>uri</code> — the file's direct download link,</li>
 <li><code>doi</code> — the record DOI (so the provenance is first-class, not just a label),</li>
 <li><code>description</code> — the record title,</li>
-<li><code>sha256</code> — filled on first download (Zenodo/figshare publish md5, which is
-  verified during the download).</li>
+<li><code>checksum</code> — the published md5 recorded as <code>md5:…</code> and verified on download
+  (a digest-less source is computed as <code>sha256:…</code> instead).</li>
 </ul>
 <p>Options:</p>
 <ul>
@@ -1388,8 +1389,8 @@ checksum-verified — no re-download. See the README for full detail.</p>
 </code></pre></div>
 <p>An intake catalog lists several named <em>sources</em>, each with a <code>driver</code> and
 <code>args.urlpath</code>. Each source with a concrete file <code>urlpath</code> becomes a dataset
-(<code>uri = urlpath</code>). intake catalogs carry <strong>no checksums</strong>, so <code>sha256</code> is filled on
-first download. Sources whose driver/urlpath isn't a fetchable file (templated
+(<code>uri = urlpath</code>). intake catalogs carry <strong>no checksums</strong>, so <code>checksum</code> is computed
+(as <code>sha256:…</code>) on first download. Sources whose driver/urlpath isn't a fetchable file (templated
 parameters, server protocols) are reported and skipped; <code>--driver</code> narrows to
 selected drivers.</p>
 <h3 id="dvc">DVC<a class="headerlink" href="#dvc" title="Permanent link">&para;</a></h3>
@@ -1432,14 +1433,14 @@ left for DVC/you to resolve, and reported as such.</p>
 <td>Zenodo/figshare/OSF DOI</td>
 <td><code>add</code></td>
 <td>API</td>
-<td>md5 → sha256 on download</td>
+<td>md5 carried as <code>checksum</code></td>
 <td>—</td>
 </tr>
 <tr>
 <td>PANGAEA DOI</td>
 <td><code>add</code></td>
 <td>web services</td>
-<td>md5 (collections) → sha256 on download</td>
+<td>md5 (collections) carried as <code>checksum</code></td>
 <td>—</td>
 </tr>
 <tr>

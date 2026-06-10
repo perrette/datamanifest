@@ -1139,9 +1139,9 @@ tables (and any foreign-language <code>_LANG.*</code> subtrees) are preserved ve
 write, so a manifest shared with another tool round-trips losslessly.</p>
 <p>A minimal manifest is just dataset tables:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[co2]</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">uri</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv&quot;</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">sha256</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;…&quot;</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">format</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;csv&quot;</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">uri</span><span class="w">      </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv&quot;</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">checksum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;sha256:…&quot;</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">format</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;csv&quot;</span>
 </code></pre></div>
 <h2 id="dataset-fields">Dataset fields<a class="headerlink" href="#dataset-fields" title="Permanent link">&para;</a></h2>
 <p>Every field is optional. Types are TOML types; defaults are the empty
@@ -1169,10 +1169,16 @@ string / empty list / <code>false</code> unless noted.</p>
 <td>Several source URIs materialized into one dataset folder. Mutually exclusive with <code>uri</code>.</td>
 </tr>
 <tr>
-<td><code>sha256</code></td>
+<td><code>checksum</code></td>
 <td>string</td>
 <td><code>""</code></td>
-<td>Expected SHA-256 of the download. Auto-filled on first successful fetch and verified at fetch time.</td>
+<td>Expected content digest as <code>&lt;algo&gt;:&lt;hex&gt;</code> (e.g. <code>sha256:…</code>, <code>md5:…</code>; a bare hex value is read as <code>sha256</code>). Auto-filled (as <code>sha256:</code>) on first successful fetch and verified — in the declared algorithm — at fetch time.</td>
+</tr>
+<tr>
+<td><code>sha256</code> <em>(legacy)</em></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>Deprecated alias for <code>checksum</code>: a bare SHA-256 hex, read as <code>checksum = "sha256:&lt;hex&gt;"</code> and rewritten as <code>checksum</code> on the next save.</td>
 </tr>
 <tr>
 <td><code>format</code></td>
@@ -1289,25 +1295,25 @@ via <code>storage_path</code>. This is its own topic — see the
 <p>The manifest below declares four real datasets fetched from PANGAEA, a CMIP6
 output over SSH, and a GitHub release archive:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[CMIP6_lgm_tos]</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">uri</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;ssh://albedo1.dmawi.de:/albedo/work/projects/p_forclima/preproc_data_esmvaltool/LGM/recipe_cmip6_lgm_tos_20241114_151009/preproc/lgm/tos_CLIM&quot;</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">sha256</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;7f28454b5c399226f923be60393ecbb2983c15538f9733864e5ce0f9f4b83601&quot;</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">uri</span><span class="w">      </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;ssh://albedo1.dmawi.de:/albedo/work/projects/p_forclima/preproc_data_esmvaltool/LGM/recipe_cmip6_lgm_tos_20241114_151009/preproc/lgm/tos_CLIM&quot;</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">checksum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;sha256:7f28454b5c399226f923be60393ecbb2983c15538f9733864e5ce0f9f4b83601&quot;</span>
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
 <a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="k">[herzschuh2023]</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">uri</span><span class="w">     </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://doi.pangaea.de/10.1594/PANGAEA.930512?format=zip&quot;</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">format</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;zip&quot;</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="n">sha256</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;4e40e43ac0f1ddea125cb5314eee46e332aacbcb18aff7efbf59f1d8b1d84a13&quot;</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="n">doi</span><span class="w">     </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;10.1594/PANGAEA.930512&quot;</span>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="n">extract</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">uri</span><span class="w">      </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://doi.pangaea.de/10.1594/PANGAEA.930512?format=zip&quot;</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">format</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;zip&quot;</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="n">checksum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;sha256:4e40e43ac0f1ddea125cb5314eee46e332aacbcb18aff7efbf59f1d8b1d84a13&quot;</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="n">doi</span><span class="w">      </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;10.1594/PANGAEA.930512&quot;</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="n">extract</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
 <a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>
 <a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="k">[jonkers2024]</span>
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="n">uri</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://download.pangaea.de/dataset/962852/files/LGM_foraminifera_assemblages_20240110.csv&quot;</span>
-<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="n">sha256</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;35ee6e8b94dc355973276da609fb18846ee1156d0fa848c1a9b221edd3715513&quot;</span>
-<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="n">doi</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;10.1594/PANGAEA.962852&quot;</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="n">uri</span><span class="w">      </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://download.pangaea.de/dataset/962852/files/LGM_foraminifera_assemblages_20240110.csv&quot;</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="n">checksum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;sha256:35ee6e8b94dc355973276da609fb18846ee1156d0fa848c1a9b221edd3715513&quot;</span>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="n">doi</span><span class="w">      </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;10.1594/PANGAEA.962852&quot;</span>
 <a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>
 <a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="k">[</span><span class="s2">&quot;jesstierney/lgmDA&quot;</span><span class="k">]</span>
-<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="n">uri</span><span class="w">     </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://github.com/jesstierney/lgmDA/archive/refs/tags/v2.1.zip&quot;</span>
-<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="n">sha256</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;da5f85235baf7f858f1b52ed73405f5d4ed28a8f6da92e16070f86b724d8bb25&quot;</span>
-<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="n">extract</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="n">uri</span><span class="w">      </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://github.com/jesstierney/lgmDA/archive/refs/tags/v2.1.zip&quot;</span>
+<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="n">checksum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;sha256:da5f85235baf7f858f1b52ed73405f5d4ed28a8f6da92e16070f86b724d8bb25&quot;</span>
+<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="n">extract</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
 </code></pre></div>
 <h2 id="the-normative-specification">The normative specification<a class="headerlink" href="#the-normative-specification" title="Permanent link">&para;</a></h2>
 <p>This page is a practical summary, not the contract. The authoritative,
