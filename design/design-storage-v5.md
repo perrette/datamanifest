@@ -1,9 +1,9 @@
 # Design note: storage v5 — global defaults, scoped config, and the transfer surface
 
-Status: **agreed design** (settled 2026-06-10); **phase 1 implemented** in the
-Python port (defaults, `$project`, `.datamanifest/`, scoped config files +
-ladder, `config` command, `migrate` changes, `POOL_DEFAULTS`) — spec repo +
-Julia alignment still pending. Phases 2–4 not implemented. Supersedes the
+Status: **agreed design** (settled 2026-06-10); **implemented in the Python
+port** (all four phases: defaults + scoped config, the generalized push/pull
+operands + `normalize`, git-remote targets + `default_remote`, `export`) —
+spec repo + Julia alignment still pending. Supersedes the
 spec-v4 repo-local defaults; builds on the state file (see `design-state-file.md`,
 whose read-first resolution is what makes these changes safe). Cross-language:
 the parts marked **spec-normative** below must go to the spec repo and be

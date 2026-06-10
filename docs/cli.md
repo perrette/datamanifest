@@ -278,6 +278,22 @@ datamanifest config                   # show resolved config + raw rules
 `datamanifest storage` is a deprecated alias of `config` (`--all-hosts` maps to
 `--project`).
 
+### `export DEST [TERM...] [--dry-run]`
+
+Copy the selected datasets to `DEST/<key>` (keyed layout), verify declared
+checksums during the copy, and write a manifest copy into `DEST` pinning
+`datasets_dir = "."`. The result is simultaneously:
+
+- a **read pool** — consumers add it to `datasets_pools`;
+- a **standalone datamanifest project** — `cd` into it and `verify` / `list` /
+  `path` work as-is.
+
+Export is read-only on the source, so it *includes* user-managed and
+`skip_download` datasets — the manually-obtained data a fresh clone cannot
+re-download is exactly what is worth bundling (`lazy_access` entries have no
+local bytes and are skipped). There is no byte-level `import` verb: consume a
+bundle via pools or as a project.
+
 ## Manifest tools
 
 ### `format [FILE] [-i]`

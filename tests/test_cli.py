@@ -1162,3 +1162,86 @@ def test_push_without_target_uses_default_remote(tmp_path):
     r = _run("push", "a", env=env)
     assert r.returncode == 0, r.stderr
     assert list(export.rglob("a.csv"))
+
+
+# ----- export (a self-describing bundle; spec-v5 §3.4) ------------------------
+
+def test_export_bundle_is_pool_and_standalone_project(tmp_path):
+    # A project with one downloaded dataset and one user-managed one (which a
+    # fresh clone cannot re-obtain — exactly what is worth bundling).
+    src = tmp_path / "origin"
+    src.mkdir()
+    (src / "a.csv").write_bytes(b"col\n1\n")
+    mine = tmp_path / "mine" / "c.csv"
+    mine.parent.mkdir()
+    mine.write_bytes(b"c\n")
+    toml = tmp_path / "datamanifest.toml"
+    toml.write_text(
+        '[_META]\nschema = 1\n\n'
+        f'[a]\nuri = "file://{src}/a.csv"\n\n'
+        f'[c]\nuri = "https://example.com/c.csv"\nstorage_path = "{mine}"\n')
+    env = _env_with_toml(toml)
+    assert _run("download", "a", env=env).returncode == 0
+
+    dest = tmp_path / "bundle"
+    r = _run("export", str(dest), env=env)
+    assert r.returncode == 0, r.stderr
+    assert "Exported 2 datasets" in r.stdout
+
+    # Keyed layout: both datasets at DEST/<key>; source bytes untouched.
+    assert list(dest.rglob("a.csv")) and list(dest.rglob("c.csv"))
+    assert mine.exists()
+    # The manifest copy pins datasets_dir = "." and drops the per-dataset
+    # location override (the bytes are in the bundle).
+    bundle_manifest = _load_toml(dest / "datamanifest.toml")
+    assert bundle_manifest["_STORAGE"]["datasets_dir"] == "."
+    assert "storage_path" not in bundle_manifest["c"]
+
+    # Standalone project: path/list/verify work inside the bundle.
+    bundle_env = _env_with_toml(dest / "datamanifest.toml")
+    p = _run("path", "a", env=bundle_env)
+    assert p.returncode == 0 and p.stdout.strip().startswith(str(dest))
+    out = _run("list", "--fields", "key", "present", "--datasets",
+               env=bundle_env)
+    assert sorted(line.split("\t") for line in out.stdout.strip().splitlines()) \
+        == [["a", "true"], ["c", "true"]]
+    v = _run("verify", env=bundle_env)
+    assert v.returncode == 0, v.stderr
+
+    # Read pool: a fresh clone (the same manifest entry, no data) pointed at
+    # the bundle resolves from it instead of downloading.
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    import tomli_w
+    with open(clone / "datamanifest.toml", "wb") as f:
+        tomli_w.dump({"_META": {"schema": 1}, "a": _load_toml(toml)["a"]}, f)
+    clone_env = _env_with_toml(clone / "datamanifest.toml")
+    clone_env["DATAMANIFEST_DATASETS_POOLS"] = str(dest)
+    p = _run("path", "a", env=clone_env)
+    assert p.returncode == 0, p.stderr
+
+
+def test_export_filters_and_dry_run(tmp_path):
+    src = tmp_path / "origin"
+    src.mkdir()
+    (src / "a.csv").write_bytes(b"a\n")
+    (src / "b.csv").write_bytes(b"b\n")
+    toml = tmp_path / "datamanifest.toml"
+    toml.write_text(
+        '[_META]\nschema = 1\n\n'
+        f'[a]\nuri = "file://{src}/a.csv"\n\n'
+        f'[b]\nuri = "file://{src}/b.csv"\n')
+    env = _env_with_toml(toml)
+    assert _run("download", "--all", env=env).returncode == 0
+
+    dest = tmp_path / "bundle"
+    r = _run("export", str(dest), "a.csv", "--dry-run", env=env)
+    assert r.returncode == 0, r.stderr
+    assert "Would export: a" in r.stdout and "b" not in [
+        line.split()[-1] for line in r.stdout.splitlines() if "Would export" in line][1:]
+    assert not dest.exists()                       # dry run copied nothing
+
+    r = _run("export", str(dest), "a.csv", env=env)
+    assert r.returncode == 0, r.stderr
+    assert list(dest.rglob("a.csv")) and not list(dest.rglob("b.csv"))
+    assert "b" not in _load_toml(dest / "datamanifest.toml")

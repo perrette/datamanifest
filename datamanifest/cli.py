@@ -1188,6 +1188,111 @@ def _normalize(objects, db, *, dry_run=False, copy=False):
               + " (dry run; re-run without --dry-run to apply)")
 
 
+def _cmd_export(args):
+    """Export the selected datasets as a self-describing bundle: a keyed-layout
+    folder that is simultaneously a **read pool** (add it to `datasets_pools`)
+    and a **standalone datamanifest project** (its manifest copy pins
+    `datasets_dir = "."`)."""
+    db = _get_db()
+    objects = _filter_objects(_enumerate_objects(db, heavy=frozenset()), args, db)
+    rc = _export(db, objects, args.dest, dry_run=args.dry_run)
+    if rc:
+        sys.exit(rc)
+
+
+def _export(db, objects, dest, *, dry_run=False):
+    """Copy each selected, present dataset to ``<dest>/<key>`` (the extracted
+    dir for an ``extract`` dataset — the natural read level, which is also what
+    its checksum hashes and what a pool probe matches), verifying declared
+    checksums during the copy, and write a manifest copy into *dest* with
+    ``datasets_dir = "."``.
+
+    Read-only on the source — which is why user-managed and ``skip_download``
+    datasets are **included**: the manually-obtained data a fresh clone cannot
+    re-download is exactly what is worth bundling. ``lazy_access`` entries have
+    no local bytes and are skipped. Returns a nonzero exit code when any
+    checksum verification failed."""
+    import tomli_w
+
+    from .config import get_extract_path, hash_path
+    from .database import _sort_recursive, to_dict
+    from .sync import copy_object_bytes
+
+    do_it = not dry_run
+    dest = os.path.abspath(os.path.expanduser(dest))
+    exported = {}
+    failures = 0
+
+    for obj in objects:
+        if obj.kind != "datasets":
+            continue
+        entry = db.datasets.get(obj.key)
+        if entry is None:
+            continue
+        if entry.lazy_access:
+            print(f"Skipped (lazy_access, no local bytes): {obj.key}")
+            continue
+        if not obj.present or not obj.location:
+            print(f"Skipped (not present): {obj.key}")
+            continue
+        rel = get_extract_path(entry.key) if entry.extract else entry.key
+        out = os.path.join(dest, rel)
+        verb = "Exported" if do_it else "Would export"
+        print(f"{verb}: {obj.key}  {obj.location} -> {out}")
+        if not do_it:
+            exported[obj.key] = entry
+            continue
+        copy_object_bytes(obj.location, out)
+        declared = bool(entry.checksum) and not (db.skip_checksum
+                                                 or entry.skip_checksum)
+        if declared:
+            actual = hash_path(out, entry.hash_algo or "sha256")
+            if actual != entry.hash_value:
+                print(f"Error: checksum mismatch for {obj.key} during export "
+                      f"(expected {entry.checksum}, got {actual[:12]}…); "
+                      "removed from the bundle.", file=sys.stderr)
+                _remove_path_and_markers(out)
+                failures += 1
+                continue
+        exported[obj.key] = entry
+
+    if not exported:
+        print("Nothing to export.")
+        return 1 if failures else 0
+
+    # The bundle's manifest: the exported entries, resolving at ./<key> —
+    # per-dataset location overrides are dropped so the pinned
+    # `datasets_dir = "."` covers every entry (the bytes are *in* the bundle).
+    data = {"_META": {"schema": db.schema_version or 1},
+            "_STORAGE": {"datasets_dir": "."}}
+    for name, entry in exported.items():
+        d = to_dict(entry)
+        d.pop("storage_path", None)
+        d.pop("skip_download", None)
+        data[name] = d
+    manifest = os.path.join(dest, "datamanifest.toml")
+    if do_it:
+        ordered = {
+            k: _sort_recursive(v)
+            for k, v in sorted(
+                data.items(), key=lambda kv: (not kv[0].startswith("_"), kv[0])
+            )
+        }
+        with open(manifest, "wb") as f:
+            tomli_w.dump(ordered, f)
+
+    n = len(exported)
+    noun = "dataset" if n == 1 else "datasets"
+    if do_it:
+        print(f"Exported {n} {noun} to {dest} (manifest: {manifest}).")
+        print("Use it as a read pool (`datamanifest config set datasets_pools "
+              f"{dest}`) or as a standalone project (cd + verify/list/path).")
+    else:
+        print(f"Would export {n} {noun} to {dest} "
+              "(dry run; re-run without --dry-run to apply)")
+    return 1 if failures else 0
+
+
 def _fmt_size(n: int) -> str:
     """Human-readable byte size for the sync dry-run report."""
     size = float(n)
@@ -2519,6 +2624,46 @@ def main():
     p_norm.set_defaults(func=_cmd_normalize, orphan=False, all=False,
                         dirty=False, outside=False, present=False,
                         missing=False, out_of_place=False)
+
+    # export — a self-describing bundle of the selected datasets.
+    p_export = subparsers.add_parser(
+        "export",
+        help="Copy selected datasets to DEST as a self-describing bundle "
+             "(a read pool + a standalone project)",
+        description=(
+            "Copy the selected datasets to DEST/<key> (keyed layout), "
+            "verifying declared checksums during the copy, and write a "
+            "manifest copy into DEST with datasets_dir = \".\". The result is "
+            "simultaneously a read pool (consumers add it to datasets_pools) "
+            "and a standalone datamanifest project (cd + verify/list/path "
+            "work). Read-only on the source — user-managed and skip_download "
+            "datasets are included (the manually-obtained data a fresh clone "
+            "cannot re-download is exactly what is worth bundling)."
+        ),
+    )
+    p_export.add_argument("dest", metavar="DEST",
+                          help="Bundle folder (created as needed)")
+    p_export.add_argument(
+        "search", nargs="*", metavar="TERM",
+        help="Free-text filter term(s), as in `list` (default: all present "
+             "datasets)",
+    )
+    exp_filters = p_export.add_argument_group("filters")
+    exp_filters.add_argument("--any", action="store_true",
+                             help="Match objects where ANY term matches")
+    exp_filters.add_argument("--invert", action="store_true",
+                             help="Invert the term match")
+    exp_filters.add_argument("--format", metavar="FMT",
+                             help="Only datasets in this serialization format")
+    exp_filters.add_argument("--older-than", dest="older_than", metavar="AGE",
+                             help="Only datasets last accessed more than AGE ago")
+    exp_opts = p_export.add_argument_group("options")
+    exp_opts.add_argument("--dry-run", action="store_true",
+                          help="Preview without copying anything")
+    p_export.set_defaults(func=_cmd_export, datasets=True, cached=False,
+                          hash=None, orphan=False, all=False, dirty=False,
+                          outside=False, present=False, missing=False,
+                          out_of_place=False)
 
     # config — scoped storage configuration (git-config style).
     def _add_scope_flags(p, *, deprecated_alias=False):
