@@ -192,10 +192,25 @@ The `TARGET` operand follows rsync's colon rule (a colon means remote):
 |---|---|
 | `HOST:` | the remote machine's **store** (its folders resolved remotely) |
 | `HOST:PATH` | an explicit folder on an ssh host |
+| `NAME:` | a **git remote**'s checkout — that project's own store (see below) |
 | `PATH` (no colon) | a local folder, keyed layout — `push` = raw export, `pull` = adopt-by-copy |
 
-The historical bare-host form (`push ID host`, no colon) still works with a
-deprecation warning — write `host:`.
+A git-remote name takes precedence over an ssh host on collision; the reserved
+`git:NAME` / `ssh:HOST[:PATH]` prefixes disambiguate explicitly. The
+historical bare-host form (`push ID host`, no colon) still works with a
+deprecation warning — write `host:`. Omitting `TARGET` entirely uses the
+configured `default_remote` (a config field on any scope, holding any operand
+form — including a git remote name).
+
+**Git remotes as targets.** A git remote whose URL is ssh-like and points at a
+*checked-out* repo (no bare repos, no https) is a pure project reference: its
+value is the peer **checkout path**. `pull` reads the peer's
+`.datamanifest/state.toml` — recorded resolved locations, nothing to resolve;
+`push` resolves the directive ladder **in the remote context** (preferably by
+running `datamanifest where` there over ssh; else by reading the peer's config
+files over ssh and evaluating locally, fed the remote env). An https remote
+(the typical GitHub `origin`) is rejected as a data target with a clear error.
+No new registry: git's remote table is the registry.
 
 - An SSH target (`user@host:`) is both the transport and the host identity —
   no remote registry.

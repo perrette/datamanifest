@@ -1139,3 +1139,26 @@ def test_normalize_skips_user_managed(tmp_path):
     assert r.returncode == 0, r.stderr
     # In place by definition (its directive IS the exact path) → nothing to do.
     assert "Normalized: 0 objects" in r.stdout
+
+
+def test_push_without_target_uses_default_remote(tmp_path):
+    env = _env_with_toml(_storage_project(tmp_path))
+    src = tmp_path / "origin"
+    src.mkdir()
+    (src / "a.csv").write_bytes(b"x\n")
+    (tmp_path / "datamanifest.toml").write_text(
+        '[_META]\nschema = 1\n\n'
+        f'[a]\nuri = "file://{src}/a.csv"\n')
+    assert _run("download", "a", env=env).returncode == 0
+
+    # No target and no default_remote → a clear error.
+    r = _run("push", "a", env=env)
+    assert r.returncode != 0 and "default_remote" in r.stderr
+
+    # default_remote may hold any operand form — here a local folder.
+    export = tmp_path / "export"
+    assert _run("config", "set", "default_remote", str(export),
+                env=env).returncode == 0
+    r = _run("push", "a", env=env)
+    assert r.returncode == 0, r.stderr
+    assert list(export.rglob("a.csv"))

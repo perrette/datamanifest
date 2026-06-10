@@ -89,6 +89,7 @@ __all__ = [
     "ScopedConfig",
     "load_scoped_config",
     "override_fields",
+    "config_value",
     "read_config_file",
     "local_config_path",
     "user_config_path",
@@ -260,6 +261,18 @@ def ensure_ignored_dir(dirpath):
     if not os.path.exists(gi):
         with open(gi, "w") as f:
             f.write("*\n")
+
+
+def config_value(name, *, storage_config=None, env=os.environ, host=None):
+    """The raw (un-interpolated) ladder value of config field *name* — env var,
+    then per layer ``_HOST`` glob / base — or ``""`` when nowhere defined.
+
+    For non-path fields like ``default_remote`` (a push/pull target operand),
+    where interpolation / anchoring would be wrong."""
+    if host is None:
+        host = socket.gethostname()
+    raw = _symbol_raw(name, storage_config or {}, env, host)
+    return raw if isinstance(raw, str) else ""
 
 
 def override_fields(storage_config, **fields):

@@ -120,7 +120,12 @@ def _idless_action_parser(action):
     p = argparse.ArgumentParser(prog=f"datamanifest list --{action}",
                                 add_help=False)
     for dest, metavar in spec["positionals"]:
-        p.add_argument(dest, metavar=metavar)
+        if dest == "target":
+            # TARGET is optional: bare --push/--pull falls back to the
+            # configured default_remote.
+            p.add_argument(dest, metavar=metavar, nargs="?", default=None)
+        else:
+            p.add_argument(dest, metavar=metavar)
     spec["adder"](p, with_batch=False)
     # Accept (and ignore) --batch in the piped form for parity with the
     # standalone command; the explicit selection makes it a no-op.
@@ -1276,7 +1281,7 @@ def _list_sync(objects, operand, direction, dry_run, db):
     store-resolved target) and transfers the set via :func:`_do_transfer`."""
     from . import sync
 
-    target = sync.parse_target(operand)
+    target = _target_or_default(db, operand)
     allow_local = target.kind != "store"
     sync_objects = []
     for obj in objects:
@@ -1295,11 +1300,33 @@ def _list_sync(objects, operand, direction, dry_run, db):
                  argparse.Namespace(dry_run=dry_run))
 
 
+def _target_or_default(db, operand):
+    """Parse the TARGET *operand* — or, when omitted, the configured
+    ``default_remote`` (any scope; it holds any operand form, including a git
+    remote name). Exits with a clear error when neither is given."""
+    from . import storage as storage_mod
+    from . import sync
+
+    if not operand:
+        operand = storage_mod.config_value(
+            "default_remote", storage_config=db.storage_config)
+        if not operand:
+            print("Error: no TARGET given and no default_remote configured "
+                  "(set one with `datamanifest config set default_remote "
+                  "<target>`).", file=sys.stderr)
+            sys.exit(1)
+    try:
+        return sync.parse_target(operand, project_root=db.get_project_root())
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
 def _cmd_push(args):
     db = _get_db()
     from . import sync
 
-    target = sync.parse_target(args.target)
+    target = _target_or_default(db, args.target)
     objects = sync.resolve_objects(db, args.id, batch=args.batch,
                                    allow_local=target.kind != "store")
     _do_transfer(db, objects, target, "push", args)
@@ -1309,7 +1336,7 @@ def _cmd_pull(args):
     db = _get_db()
     from . import sync
 
-    target = sync.parse_target(args.target)
+    target = _target_or_default(db, args.target)
     objects = sync.resolve_objects(db, args.id, batch=args.batch,
                                    allow_local=target.kind != "store")
     _do_transfer(db, objects, target, "pull", args)
@@ -2625,8 +2652,11 @@ def main():
             ),
         )
         p_sync.add_argument("id", metavar="ID", help="Object identifier")
-        p_sync.add_argument("target", metavar="TARGET",
-                            help="HOST: (remote store), HOST:PATH, or a local PATH")
+        p_sync.add_argument(
+            "target", metavar="TARGET", nargs="?", default=None,
+            help="HOST: (remote store), HOST:PATH, NAME: (a git remote's "
+                 "checkout), or a local PATH; default: the configured "
+                 "default_remote")
         sync_opts = p_sync.add_argument_group("options")
         _add_sync_opts(sync_opts)
         p_sync.set_defaults(func=func)

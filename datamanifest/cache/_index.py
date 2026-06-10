@@ -201,6 +201,20 @@ class CachedIndex:
         target = cls.locate(path)
         with open(target, "rb") as f:
             data = tomllib.load(f)
+        idx = cls.from_dict(data)
+        idx.path = target
+        return idx
+
+    @classmethod
+    def loads(cls, text: str) -> "CachedIndex":
+        """Parse a state file from a TOML *text* (e.g. one read over ssh from a
+        peer checkout). The returned inventory is unbound (``path == ""``)."""
+        return cls.from_dict(tomllib.loads(text))
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "CachedIndex":
+        """Build an inventory from parsed state-file *data* (schema 5 namespaced,
+        or any older shape, migrated forward)."""
         schema = data.get("_META", {}).get("schema", 1)
         recipes: dict = {}
         datasets: dict = {}
@@ -265,7 +279,7 @@ class CachedIndex:
                     "format": e.get("format", ""),
                     "instances": {h: ""},
                 }
-        return cls(recipes=recipes, datasets=datasets, path=target)
+        return cls(recipes=recipes, datasets=datasets)
 
     @classmethod
     def _read_datacache_namespace(cls, table, recipes: dict) -> None:

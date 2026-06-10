@@ -128,31 +128,104 @@ class SyncTarget:
       resolved in the remote context.
     - ``"remote-path"`` — an explicit folder on an ssh host (``HOST:PATH``).
     - ``"local-path"``  — a local folder, keyed layout (``PATH``).
+    - ``"git-remote"``  — a git remote naming a peer **checkout** (``NAME:``);
+      ``host`` / ``path`` are the peer's ssh host and checkout path, ``name``
+      the remote's name.
     """
 
-    __slots__ = ("kind", "host", "path", "raw")
+    __slots__ = ("kind", "host", "path", "raw", "name")
 
-    def __init__(self, *, kind, host="", path="", raw=""):
+    def __init__(self, *, kind, host="", path="", raw="", name=""):
         self.kind = kind
         self.host = host
         self.path = path
         self.raw = raw
+        self.name = name
 
     def __repr__(self):
         return f"<SyncTarget {self.kind} host={self.host!r} path={self.path!r}>"
 
 
-def parse_target(operand) -> "SyncTarget":
-    """Parse a push/pull *operand* per the colon rule: a colon means remote
-    (``HOST:`` = the remote store, ``HOST:PATH`` = an explicit remote folder);
-    no colon means a local folder.
+def _parse_ssh_url(url):
+    """``(host, path)`` for an ssh-like git URL (``ssh://[user@]host/path`` or
+    the scp-like ``[user@]host:path``), or ``None`` for any other scheme."""
+    if url.startswith("ssh://"):
+        rest = url[len("ssh://"):]
+        hostport, _, path = rest.partition("/")
+        host = hostport.partition(":")[0]       # drop an explicit port
+        return (host, "/" + path) if host and path else None
+    if "://" not in url and ":" in url and not url.startswith("/"):
+        host, _, path = url.partition(":")
+        return (host, path) if host and path else None
+    return None
 
-    The historical bare-host form (``push ID host``, no colon) is still
-    recognized — an operand with no path separator that does not exist locally
-    (or any ``user@host``) — and warned as deprecated: write ``host:`` instead.
+
+def _git_remote_url(name, project_root, runner=None):
+    """The URL of git remote *name* in the *project_root* checkout, or ``""``."""
+    run = runner or _runner
+    try:
+        proc = run(["git", "-C", project_root or ".", "remote", "get-url", name],
+                   capture_output=True, text=True, check=False)
+    except Exception:  # noqa: BLE001 - no git / no repo means no git remotes
+        return ""
+    if getattr(proc, "returncode", 1) != 0:
+        return ""
+    return (getattr(proc, "stdout", "") or "").strip()
+
+
+def _git_remote_target(name, url, raw):
+    """Build the ``git-remote`` target for remote *name* at *url*, validating
+    that it is usable as a data target (ssh-like, non-bare)."""
+    parsed = _parse_ssh_url(url)
+    if parsed is None:
+        raise ValueError(
+            f"git remote {name!r} ({url}) is not usable as a data target: only "
+            "an ssh-like remote pointing at a checked-out repo carries a peer "
+            "checkout path. An https remote has no filesystem access — push "
+            "data to an ssh host (HOST: / HOST:PATH) instead."
+        )
+    host, path = parsed
+    if path.rstrip("/").endswith(".git"):
+        raise ValueError(
+            f"git remote {name!r} ({url}) looks like a bare repository — a "
+            "data target must be a checked-out working tree (its "
+            ".datamanifest/ and config live there)."
+        )
+    return SyncTarget(kind="git-remote", host=host, path=path.rstrip("/"),
+                      raw=raw, name=name)
+
+
+def parse_target(operand, *, project_root="", runner=None) -> "SyncTarget":
+    """Parse a push/pull *operand* per the colon rule: a colon means remote
+    (``NAME:`` = a git remote's checkout when NAME names one, else ``HOST:`` =
+    the remote store; ``HOST:PATH`` = an explicit remote folder); no colon
+    means a local folder.
+
+    A ``NAME:`` operand matching a **git remote** in the *project_root*
+    checkout resolves to that remote's checkout (git-remote names take
+    precedence over ssh hosts on collision); the reserved ``git:NAME`` /
+    ``ssh:HOST[:PATH]`` prefixes disambiguate explicitly. The historical
+    bare-host form (``push ID host``, no colon) is still recognized and warned
+    as deprecated: write ``host:`` instead.
     """
     if isinstance(operand, SyncTarget):
         return operand
+    # Explicit disambiguators (reserved prefixes).
+    if operand.startswith("git:"):
+        name = operand[len("git:"):].rstrip(":")
+        url = _git_remote_url(name, project_root, runner)
+        if not url:
+            raise ValueError(f"no git remote named {name!r} in this repository")
+        return _git_remote_target(name, url, operand)
+    if operand.startswith("ssh:") and not operand.startswith("ssh://"):
+        rest = operand[len("ssh:"):]
+        host, _, path = rest.partition(":")
+        if not host:
+            raise ValueError(f"invalid target {operand!r}: empty host")
+        if path:
+            return SyncTarget(kind="remote-path", host=host, path=path,
+                              raw=operand)
+        return SyncTarget(kind="store", host=host, raw=operand)
     if ":" in operand:
         host, _, path = operand.partition(":")
         if not host:
@@ -160,6 +233,10 @@ def parse_target(operand) -> "SyncTarget":
         if path:
             return SyncTarget(kind="remote-path", host=host, path=path,
                               raw=operand)
+        # The bare NAME: form: a git remote of that name wins over an ssh host.
+        url = _git_remote_url(host, project_root, runner)
+        if url:
+            return _git_remote_target(host, url, operand)
         return SyncTarget(kind="store", host=host, raw=operand)
     # No colon: a local folder — except the deprecated bare-host form (an
     # ssh-looking word with no path separator that names nothing on disk).
@@ -527,7 +604,11 @@ def remote_env(host, *, runner=None):
             continue
         name, _, value = line.partition("=")
         name = name.strip()
-        if name.startswith("DATAMANIFEST_"):
+        # DATAMANIFEST_* drive the env rung; HOME / XDG_* make the remote's
+        # platform defaults ($user_data_dir & co) resolve to *its* folders when
+        # the ladder is evaluated locally on the remote's behalf.
+        if name.startswith("DATAMANIFEST_") or name in (
+                "HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_CONFIG_HOME"):
             env[name] = value
     return env
 
@@ -554,6 +635,138 @@ def remote_root(obj, host, *, db, project_root, runner=None):
         project_root=project_root,
         storage_config=db.storage_config, env=env, host=match_host,
     )
+
+
+# ---------------------------------------------------------------------------
+# git remotes as transfer targets (a peer checkout)
+# ---------------------------------------------------------------------------
+
+def _ssh_read(host, path, runner=None):
+    """The text content of *path* on *host* over ssh, or ``""`` (best-effort —
+    an absent file / failed ssh reads as empty). A ``~``-prefixed path expands
+    in the remote shell."""
+    run = runner or _runner
+    try:
+        proc = run(["ssh", host, "cat", path], capture_output=True, text=True,
+                   check=False)
+    except Exception:  # noqa: BLE001
+        return ""
+    if getattr(proc, "returncode", 1) != 0:
+        return ""
+    return getattr(proc, "stdout", "") or ""
+
+
+def _ssh_read_toml(host, path, runner=None):
+    """Parse a remote TOML file over ssh (``{}`` when absent/unreadable)."""
+    try:
+        import tomllib
+    except ModuleNotFoundError:  # Python 3.10
+        import tomli as tomllib
+    text = _ssh_read(host, path, runner)
+    if not text:
+        return {}
+    try:
+        return tomllib.loads(text)
+    except Exception:  # noqa: BLE001 - a malformed remote file contributes nothing
+        return {}
+
+
+# Manifest filenames probed in a peer checkout (canonical + legacy aliases).
+_MANIFEST_NAMES = ("datamanifest.toml", "datasets.toml", "Datasets.toml")
+# State-file paths probed in a peer checkout (canonical + legacy siblings).
+_STATE_SUBPATHS = (".datamanifest/state.toml", ".datamanifest-state.toml",
+                   "cached.toml")
+
+
+def git_remote_recorded(obj, target, *, runner=None):
+    """The recorded absolute location of *obj* in the peer checkout's state
+    file — the **pull** side of a git-remote target: the peer's
+    ``.datamanifest/state.toml`` holds resolved locations, so nothing needs
+    resolving at all. Raises when the peer does not record the object."""
+    from .cache import CachedIndex
+
+    text = ""
+    for sub in _STATE_SUBPATHS:
+        text = _ssh_read(target.host, f"{target.path}/{sub}", runner)
+        if text:
+            break
+    if not text:
+        raise ValueError(
+            f"remote {target.name!r} ({target.host}:{target.path}) has no "
+            "state file — nothing recorded to pull from. The peer checkout "
+            "must have materialized data (or run `datamanifest refresh`)."
+        )
+    idx = CachedIndex.loads(text)
+    if obj.kind == "datasets":
+        sp = idx.dataset_path_of(obj.rel)
+    else:
+        parts = [p for p in obj.rel.split("/") if p]
+        if len(parts) == 3:
+            ct, ver, h = parts
+        elif len(parts) == 2:
+            (ct, h), ver = parts, ""
+        else:
+            ct = ver = h = ""
+        sp = idx.instance_path_of(cachetype=ct, version=ver, hash=h) \
+            if ct and h else ""
+    if not sp:
+        raise ValueError(
+            f"remote {target.name!r} does not record {obj.id!r} in its state "
+            "file — it has no copy to pull."
+        )
+    # Relative records anchor to the peer checkout (the state-file convention).
+    if not sp.startswith("/"):
+        sp = f"{target.path}/{sp}"
+    return sp
+
+
+def git_remote_root(obj, target, *, runner=None):
+    """The peer checkout's ``datasets_dir`` / ``datacache_dir`` — the **push**
+    side of a git-remote target: the directive ladder resolved **in the remote
+    context**, never guessed from local config.
+
+    Preferred mechanism: run ``datamanifest where --<field>`` in the peer
+    checkout over ssh (the scriptable form — the remote evaluates its own
+    ladder). Fallback: read the peer's config files over ssh (its
+    ``.datamanifest/config.toml``, manifest ``[_STORAGE]`` and user-global
+    config) and evaluate the ladder locally, fed the remote env probe (so the
+    remote's ``HOME`` / ``XDG_*`` / ``DATAMANIFEST_*`` apply)."""
+    run = runner or _runner
+    field = "datacache_dir" if obj.kind == "cached" else "datasets_dir"
+    flag = "--" + field.replace("_", "-")
+    try:
+        proc = run(
+            ["ssh", target.host,
+             f"cd {target.path} && datamanifest where {flag}"],
+            capture_output=True, text=True, check=False,
+        )
+        out = (getattr(proc, "stdout", "") or "").strip()
+        if getattr(proc, "returncode", 1) == 0 and out:
+            return out.splitlines()[-1].strip()
+    except Exception:  # noqa: BLE001 - fall through to the file-based fallback
+        pass
+
+    local_cfg = _ssh_read_toml(
+        target.host, f"{target.path}/.datamanifest/config.toml", runner)
+    manifest = {}
+    for name in _MANIFEST_NAMES:
+        manifest = _ssh_read_toml(target.host, f"{target.path}/{name}", runner)
+        if manifest:
+            break
+    user_cfg = _ssh_read_toml(
+        target.host, "~/.config/datamanifest/config.toml", runner)
+    env = remote_env(target.host, runner=runner)
+    cfg = store.locations.ScopedConfig(
+        local=local_cfg,
+        manifest=manifest.get("_STORAGE", {}),
+        user=user_cfg,
+    )
+    resolver = (store.datacache_dir if obj.kind == "cached"
+                else store.datasets_dir)
+    match_host = target.host.split("@", 1)[1] if "@" in target.host \
+        else target.host
+    return resolver(project_root=target.path, storage_config=cfg, env=env,
+                    host=match_host)
 
 
 def remote_abs(obj, target, *, db, project_root, runner=None):
@@ -701,9 +914,17 @@ def transfer(db, obj, target, *, direction, project_root=None, dry_run=False,
     host = target.host
     run = runner or _runner
 
-    rpath = remote_abs(
-        obj, target, db=db, project_root=project_root, runner=runner,
-    )
+    if target.kind == "git-remote":
+        # The peer checkout: pull reads its state file (recorded resolved
+        # locations); push resolves the directive ladder in the remote context.
+        if direction == "pull":
+            rpath = git_remote_recorded(obj, target, runner=runner)
+        else:
+            rpath = f"{git_remote_root(obj, target, runner=runner)}/{obj.rel}"
+    else:
+        rpath = remote_abs(
+            obj, target, db=db, project_root=project_root, runner=runner,
+        )
     remote_parent = os.path.dirname(rpath)
 
     plan = {

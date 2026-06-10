@@ -429,3 +429,162 @@ def test_store_target_with_colon_matches_bare_host_behavior(db):
     plan = sync.transfer(db, obj, "remotebox:", direction="push", runner=runner)
     # _HOST."remote*" override applies: the store root resolves remotely.
     assert plan["remote"] == os.path.join("/host/data", obj.rel)
+
+
+# ----- git remotes as transfer targets (spec-v5 §3.2) -------------------------
+
+class ScriptedRunner(Runner):
+    """A Runner whose replies are scripted per-command: *replies* maps a
+    substring of the joined argv to ``(returncode, stdout)``; first match wins,
+    anything else succeeds with empty output."""
+
+    def __init__(self, replies=()):
+        super().__init__()
+        self.replies = list(replies)
+
+    def __call__(self, argv, **kwargs):
+        self.calls.append(list(argv))
+        joined = " ".join(argv)
+        for needle, (rc, out) in self.replies:
+            if needle in joined:
+                return FakeProc(rc, out)
+        return FakeProc(0, "")
+
+
+def test_parse_target_git_remote_takes_precedence(tmp_path):
+    runner = ScriptedRunner([
+        ("remote get-url origin", (0, "user@peer:work/proj\n")),
+    ])
+    t = sync.parse_target("origin:", project_root=str(tmp_path), runner=runner)
+    assert t.kind == "git-remote"
+    assert t.host == "user@peer" and t.path == "work/proj" and t.name == "origin"
+    # An unknown name falls back to the ssh-host store form.
+    runner2 = ScriptedRunner([("remote get-url", (2, ""))])
+    t = sync.parse_target("hpc:", project_root=str(tmp_path), runner=runner2)
+    assert t.kind == "store" and t.host == "hpc"
+
+
+def test_parse_target_git_remote_rejects_https_and_bare(tmp_path):
+    runner = ScriptedRunner([
+        ("remote get-url origin", (0, "https://github.com/me/proj.git\n")),
+    ])
+    with pytest.raises(ValueError, match="https"):
+        sync.parse_target("origin:", project_root=str(tmp_path), runner=runner)
+    runner = ScriptedRunner([
+        ("remote get-url origin", (0, "git@github.com:me/proj.git\n")),
+    ])
+    with pytest.raises(ValueError, match="bare"):
+        sync.parse_target("origin:", project_root=str(tmp_path), runner=runner)
+
+
+def test_parse_target_explicit_disambiguators(tmp_path):
+    # ssh: forces the host interpretation even when a git remote collides.
+    runner = ScriptedRunner([
+        ("remote get-url origin", (0, "user@peer:work/proj\n")),
+    ])
+    t = sync.parse_target("ssh:origin:", project_root=str(tmp_path),
+                          runner=runner)
+    assert t.kind == "store" and t.host == "origin"
+    t = sync.parse_target("ssh:hpc:/data", project_root=str(tmp_path),
+                          runner=runner)
+    assert t.kind == "remote-path" and t.host == "hpc" and t.path == "/data"
+    # git: forces the remote interpretation and errors on an unknown name.
+    t = sync.parse_target("git:origin", project_root=str(tmp_path),
+                          runner=runner)
+    assert t.kind == "git-remote" and t.name == "origin"
+    with pytest.raises(ValueError, match="no git remote"):
+        sync.parse_target("git:nope", project_root=str(tmp_path),
+                          runner=ScriptedRunner([("remote get-url", (2, ""))]))
+
+
+def test_git_remote_explicit_path_form_is_not_special(tmp_path):
+    # origin:path is HOST:PATH's job — never a git-remote lookup.
+    runner = ScriptedRunner([
+        ("remote get-url origin", (0, "user@peer:work/proj\n")),
+    ])
+    t = sync.parse_target("origin:/data", project_root=str(tmp_path),
+                          runner=runner)
+    assert t.kind == "remote-path" and t.host == "origin"
+
+
+def test_git_remote_pull_reads_peer_state_file(db):
+    # The peer checkout's state file records the resolved location; pull rsyncs
+    # exactly that path — nothing is resolved.
+    state = (
+        '[_META]\nschema = 5\n'
+        '[datasets."example.com/data/foo.csv"]\n'
+        'storage_path = "/peer/store/example.com/data/foo.csv"\n'
+    )
+    runner = ScriptedRunner([
+        ("cat work/proj/.datamanifest/state.toml", (0, state)),
+    ])
+    target = sync.SyncTarget(kind="git-remote", host="user@peer",
+                             path="work/proj", name="origin")
+    obj = sync.resolve_object(db, "foo")
+    plan = sync.transfer(db, obj, target, direction="pull", runner=runner)
+    assert plan["remote"] == "/peer/store/example.com/data/foo.csv"
+    srcs = [c for c in runner.rsync_calls()]
+    assert srcs and srcs[0][-2].startswith("user@peer:/peer/store/")
+
+
+def test_git_remote_pull_relative_record_anchors_to_checkout(db):
+    state = (
+        '[_META]\nschema = 5\n'
+        '[datasets."example.com/data/foo.csv"]\n'
+        'storage_path = "datasets/example.com/data/foo.csv"\n'
+    )
+    runner = ScriptedRunner([
+        ("cat work/proj/.datamanifest/state.toml", (0, state)),
+    ])
+    target = sync.SyncTarget(kind="git-remote", host="peer", path="work/proj",
+                             name="origin")
+    obj = sync.resolve_object(db, "foo")
+    plan = sync.transfer(db, obj, target, direction="pull", runner=runner)
+    assert plan["remote"] == "work/proj/datasets/example.com/data/foo.csv"
+
+
+def test_git_remote_pull_unrecorded_object_errors(db):
+    runner = ScriptedRunner([
+        ("cat work/proj/.datamanifest/state.toml", (0, "[_META]\nschema = 5\n")),
+    ])
+    target = sync.SyncTarget(kind="git-remote", host="peer", path="work/proj",
+                             name="origin")
+    obj = sync.resolve_object(db, "foo")
+    with pytest.raises(ValueError, match="does not record"):
+        sync.transfer(db, obj, target, direction="pull", runner=runner)
+
+
+def test_git_remote_push_prefers_remote_where(db):
+    # The remote evaluates its own ladder via the scriptable `where` form.
+    runner = ScriptedRunner([
+        ("datamanifest where --datasets-dir", (0, "/peer/resolved/data\n")),
+    ])
+    target = sync.SyncTarget(kind="git-remote", host="peer", path="work/proj",
+                             name="origin")
+    obj = sync.resolve_object(db, "foo")
+    plan = sync.transfer(db, obj, target, direction="push", runner=runner)
+    assert plan["remote"] == "/peer/resolved/data/" + obj.rel
+
+
+def test_git_remote_push_falls_back_to_remote_config_files(db):
+    # No datamanifest on the remote: its checkout config + manifest are read
+    # over ssh and the ladder evaluated locally in the remote context (the
+    # checkout's local config wins over its manifest).
+    runner = ScriptedRunner([
+        ("datamanifest where", (127, "")),
+        ("cat work/proj/.datamanifest/config.toml",
+         (0, 'datasets_dir = "/peer/local-cfg/data"\n')),
+        ("cat work/proj/datamanifest.toml",
+         (0, '[_STORAGE]\ndatasets_dir = "/peer/manifest/data"\n')),
+    ])
+    target = sync.SyncTarget(kind="git-remote", host="peer", path="work/proj",
+                             name="origin")
+    obj = sync.resolve_object(db, "foo")
+    plan = sync.transfer(db, obj, target, direction="push", runner=runner)
+    assert plan["remote"] == "/peer/local-cfg/data/" + obj.rel
+
+
+def test_remote_env_probe_captures_home_and_xdg(db):
+    runner = Runner(env_output="HOME=/peer/home\nDATAMANIFEST_X=1\nPATH=/bin\n")
+    env = sync.remote_env("peer", runner=runner)
+    assert env == {"HOME": "/peer/home", "DATAMANIFEST_X": "1"}
