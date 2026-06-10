@@ -78,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#adding-datasets-from-external-sources-draft-for-review" class="md-skip">
+        <a href="#adding-datasets-from-external-sources" class="md-skip">
           Skip to content
         </a>
       
@@ -614,10 +614,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#a-direct-url-today" class="md-nav__link">
+  <a href="#a-direct-url" class="md-nav__link">
     <span class="md-ellipsis">
       
-        A direct URL (today)
+        A direct URL
       
     </span>
   </a>
@@ -647,10 +647,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#a-git-lfs-pointer" class="md-nav__link">
+  <a href="#a-git-lfs-pointer-planned-not-yet-implemented" class="md-nav__link">
     <span class="md-ellipsis">
       
-        A Git LFS pointer
+        A Git LFS pointer (planned — not yet implemented)
       
     </span>
   </a>
@@ -1103,10 +1103,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#a-direct-url-today" class="md-nav__link">
+  <a href="#a-direct-url" class="md-nav__link">
     <span class="md-ellipsis">
       
-        A direct URL (today)
+        A direct URL
       
     </span>
   </a>
@@ -1136,10 +1136,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#a-git-lfs-pointer" class="md-nav__link">
+  <a href="#a-git-lfs-pointer-planned-not-yet-implemented" class="md-nav__link">
     <span class="md-ellipsis">
       
-        A Git LFS pointer
+        A Git LFS pointer (planned — not yet implemented)
       
     </span>
   </a>
@@ -1248,17 +1248,15 @@
   
 
 
-<h1 id="adding-datasets-from-external-sources-draft-for-review">Adding datasets from external sources (DRAFT — for review)<a class="headerlink" href="#adding-datasets-from-external-sources-draft-for-review" title="Permanent link">&para;</a></h1>
+<h1 id="adding-datasets-from-external-sources">Adding datasets from external sources<a class="headerlink" href="#adding-datasets-from-external-sources" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p>Status: <strong>proposal</strong>. This documents a command surface for onboarding datasets
-from common tools and data repositories. Nothing here is implemented yet — it is
-written for review. Once the shape is agreed, the relevant parts fold into the
-README's <em>CLI usage</em> section and each source is built + tested.</p>
-<p>Layering note: this page is the <strong>user-facing command surface</strong>. Most of these
-sources are pure <em>import</em> (declaration parsing) over already-supported download
-schemes. Only <strong>Git LFS</strong> needs a new <em>download protocol</em> (spec-normative,
-implemented in every language); that work is sequenced first and tracked
-separately in <a href="https://github.com/perrette/datamanifest/blob/main/design/design-remote-protocols.md"><code>design-remote-protocols.md</code></a>.</p>
+<p>This page is the <strong>user-facing command surface</strong> for onboarding datasets. Most
+sources here are implemented: direct URLs, Zenodo/figshare/OSF/Dryad DOIs,
+PANGAEA DOIs, and the <code>import</code> catalogs (pooch, intake, DVC, CSV/URL lists). Each
+is pure <em>import</em> (declaration parsing) over an already-supported download scheme.
+<strong>Git LFS is the one exception — not yet implemented</strong>: it needs a new <em>download
+protocol</em> (spec-normative, implemented in every language), tracked in
+<a href="https://github.com/perrette/datamanifest/blob/main/design/design-remote-protocols.md"><code>design-remote-protocols.md</code></a>.</p>
 </blockquote>
 <p>datamanifest distinguishes two verbs by <strong>what you hand the command</strong>:</p>
 <table>
@@ -1275,7 +1273,7 @@ separately in <a href="https://github.com/perrette/datamanifest/blob/main/design
 <td><code>add</code></td>
 <td>a <strong>reference to data</strong> (URL, DOI, LFS pointer)</td>
 <td>one dataset, or all files of a record</td>
-<td>direct URL, Zenodo/figshare DOI, PANGAEA DOI, Git LFS pointer</td>
+<td>direct URL, Zenodo/figshare DOI, PANGAEA DOI, Git LFS pointer <em>(planned)</em></td>
 </tr>
 <tr>
 <td><code>import</code></td>
@@ -1298,7 +1296,7 @@ the md5 is verified on first download (or against an adopted local file) and the
 pointer already carries the sha256, so no download is needed to set it.</p>
 <hr />
 <h2 id="add-add-datasets-from-a-reference"><code>add</code> — add dataset(s) from a reference<a class="headerlink" href="#add-add-datasets-from-a-reference" title="Permanent link">&para;</a></h2>
-<h3 id="a-direct-url-today">A direct URL (today)<a class="headerlink" href="#a-direct-url-today" title="Permanent link">&para;</a></h3>
+<h3 id="a-direct-url">A direct URL<a class="headerlink" href="#a-direct-url" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>datamanifest<span class="w"> </span>add<span class="w"> </span>https://www.ncei.noaa.gov/woa/temperature.nc
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>datamanifest<span class="w"> </span>add<span class="w"> </span><span class="s2">&quot;https://zenodo.org/records/1234567/files/grid.zip&quot;</span><span class="w"> </span>--extract
 </code></pre></div>
@@ -1355,7 +1353,12 @@ metadata:</p>
 <p>A reference that already pins a representation — e.g.
 <code>https://doi.pangaea.de/10.1594/PANGAEA.930512?format=zip</code> — is treated as a plain
 URL (you chose that file), not re-resolved.</p>
-<h3 id="a-git-lfs-pointer">A Git LFS pointer<a class="headerlink" href="#a-git-lfs-pointer" title="Permanent link">&para;</a></h3>
+<h3 id="a-git-lfs-pointer-planned-not-yet-implemented">A Git LFS pointer (planned — not yet implemented)<a class="headerlink" href="#a-git-lfs-pointer-planned-not-yet-implemented" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p>Not built yet: <code>add</code> has no <code>--lfs-url</code> flag and no LFS pointer handling. The
+sketch below is the intended shape; it needs the LFS download protocol first
+(see <a href="https://github.com/perrette/datamanifest/blob/main/design/design-remote-protocols.md"><code>design-remote-protocols.md</code></a>).</p>
+</blockquote>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>datamanifest<span class="w"> </span>add<span class="w"> </span>path/to/pointer-file<span class="w"> </span>--name<span class="w"> </span>bathymetry
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>datamanifest<span class="w"> </span>add<span class="w"> </span>other-repo/data.bin.pointer<span class="w"> </span>--lfs-url<span class="w"> </span>https://github.com/org/repo.git
 </code></pre></div>
@@ -1440,7 +1443,7 @@ left for DVC/you to resolve, and reported as such.</p>
 <td>—</td>
 </tr>
 <tr>
-<td>Git LFS pointer</td>
+<td>Git LFS pointer <em>(planned)</em></td>
 <td><code>add</code></td>
 <td>LFS endpoint</td>
 <td><strong>sha256 from pointer</strong></td>
