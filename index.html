@@ -1097,7 +1097,10 @@
 <li><strong>A powerful CLI for data download, local management and synchronization across
   machines.</strong> Add and download datasets, inspect and repair what's on disk, move
   or centralize where data is stored, and push/pull datasets and cached results
-  between machines over rsync+ssh — all without touching your analysis code.</li>
+  between machines over rsync+ssh — all without touching your analysis code. A
+  git-ignored <code>.datamanifest-state.toml</code> records where each object actually landed
+  on this machine, keeping local location tracking separate from the portable,
+  shareable manifest.</li>
 </ul>
 <h2 id="get-started">Get started<a class="headerlink" href="#get-started" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span>datamanifestpy
