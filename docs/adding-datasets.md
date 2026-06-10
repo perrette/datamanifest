@@ -15,7 +15,7 @@ datamanifest distinguishes two verbs by **what you hand the command**:
 
 | Verb | You give it… | Yields | Examples |
 |---|---|---|---|
-| `add` | a **reference to data** (URL, DOI, LFS pointer) | one dataset, or all files of a record | direct URL, Zenodo/figshare DOI, Git LFS pointer |
+| `add` | a **reference to data** (URL, DOI, LFS pointer) | one dataset, or all files of a record | direct URL, Zenodo/figshare DOI, PANGAEA DOI, Git LFS pointer |
 | `import` | **another tool's catalog/registry file** | many datasets | pooch, intake, DVC |
 
 The test: is the argument *another tool's manifest* → `import`; is it *a pointer to
@@ -26,7 +26,7 @@ Both verbs end at the same place: standard `datamanifest.toml` entries (`uri`,
 already exists — an in-place adoption recorded in the state file so nothing is
 re-downloaded.
 
-A note on checksums: several sources publish **md5** (Zenodo, DVC), not sha256.
+A note on checksums: several sources publish **md5** (Zenodo, PANGAEA, DVC), not sha256.
 datamanifest verifies sha256, so for those an entry is declared without `sha256`;
 the md5 is verified on first download (or against an adopted local file) and the
 **sha256 is computed and recorded** at that point. Git LFS is the exception — its
@@ -70,6 +70,40 @@ Options:
 Why this beats today: instead of pasting every file URL by hand and losing the DOI
 link, you hand over the record once and get all its files with checksums and
 provenance.
+
+### A PANGAEA DOI
+
+```bash
+datamanifest add 10.1594/PANGAEA.930590              # by DOI
+datamanifest add https://doi.pangaea.de/10.1594/PANGAEA.930590   # or by URL
+```
+
+Resolves the dataset through PANGAEA's web services and classifies it from its
+metadata:
+
+- a **tabular dataset** → one entry whose `uri` is the `?format=textfile`
+  (tab-delimited) data;
+- a **single uploaded file** → one entry pointing straight at the file on
+  `download.pangaea.de`;
+- a **file collection** (a dataset whose rows *are* files — NetCDF/GeoTIFF/zip
+  members) → its files, **bundled into one `uris=` dataset** by default. Each file
+  carries its MD5 from PANGAEA's data matrix;
+- a **publication series** (a parent DOI over many child datasets) → **one entry
+  per child dataset**, each keeping its own DOI, enumerated through PANGAEA's
+  search service. When no children are enumerable the series zip is kept as a
+  single dataset.
+
+Options (file collections / series):
+
+- `--split` — one dataset per file instead of the default `uris=` bundle; a split
+  file keeps its MD5 as the verification checksum.
+- `--pick GLOB` (repeatable) — for a collection, add only the files matching a glob
+  (e.g. `--pick '*.nc'`).
+- `--name` — names the single/tabular entry, or the bundle.
+
+A reference that already pins a representation — e.g.
+`https://doi.pangaea.de/10.1594/PANGAEA.930512?format=zip` — is treated as a plain
+URL (you chose that file), not re-resolved.
 
 ### A Git LFS pointer
 
@@ -150,6 +184,7 @@ For exporting from anything. Reuses the whole pooch pipeline, including
 |---|---|---|---|---|
 | direct URL | `add` | given | computed on download | — |
 | Zenodo/figshare/OSF DOI | `add` | API | md5 → sha256 on download | — |
+| PANGAEA DOI | `add` | web services | md5 (collections) → sha256 on download | — |
 | Git LFS pointer | `add` | LFS endpoint | **sha256 from pointer** | `.git/lfs/objects` (by sha256) |
 | pooch registry | `import` | base_url + filename / 3rd col | sha256 (or md5) | `os_cache` (✓ implemented) |
 | intake catalog | `import` | urlpath | none | — |

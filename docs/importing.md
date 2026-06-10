@@ -13,7 +13,7 @@ datamanifest import dvc path-or-dir                   # *.dvc / dvc.lock (+ .dvc
 ```
 
 Per-source detail, and the `add`-side sources (direct URLs, Zenodo/figshare/OSF
-DOIs, Git LFS pointers), are on the [adding datasets](adding-datasets.md) page.
+and PANGAEA DOIs, Git LFS pointers), are on the [adding datasets](adding-datasets.md) page.
 
 ## Migrating from Pooch
 

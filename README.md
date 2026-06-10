@@ -23,8 +23,8 @@ them, and caches your own computed results with the same machinery.
   can read at a glance and version with git. The format is
   [language-agnostic](https://perrette.github.io/datamanifest.toml) (today Python
   and Julia) and can be edited by hand, from code, or through the CLI.
-- **Fetch from a wide range of sources.** Direct URLs, Zenodo/figshare DOIs, git
-  repos, object stores (`s3://`, `gs://`, …), and bulk imports from pooch, intake
+- **Fetch from a wide range of sources.** Direct URLs, Zenodo/figshare and PANGAEA
+  DOIs, git repos, object stores (`s3://`, `gs://`, …), and bulk imports from pooch, intake
   or DVC — all checksum-verified, extracted, and adopted in place when already on
   disk.
 - **Cache your own computed data too.** The same tooling backs a robust `@cached`
