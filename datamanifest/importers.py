@@ -17,7 +17,9 @@ None of this changes the on-the-wire download protocol: every entry uses an
 already-supported scheme (HTTP, git, ssh, file). A source's published digest is
 carried verbatim as ``checksum = "<algo>:<hex>"`` (so a Zenodo/PANGAEA/DVC md5 is
 preserved, not dropped); a source with no digest gets one computed (as sha256) on
-adoption / first download.
+adoption / first download. Exception: an ``extract = true`` entry's checksum
+hashes the extracted directory, so an archive-level published digest is dropped
+for those (computed from the extracted tree on first download instead).
 """
 
 import csv as _csv
@@ -66,6 +68,13 @@ def _declare_specs(db, specs, *, dry_run=False, overwrite=False):
     source's published digest — becomes ``checksum = "<algo>:<hex>"`` and verifies
     ``cache_file``) or an explicit ``checksum``/``sha256``; ``cache_file`` (a local
     copy to adopt, or ``""``); optional ``doi`` / ``description`` / ``extract``.
+
+    An ``extract`` entry's ``checksum`` hashes the *extracted directory* (the
+    dataset's natural level), while a published digest and a cached copy are
+    archive-level — so for extract entries both are dropped: no checksum is
+    declared (it is computed from the extracted tree on first download) and the
+    cached archive is not adopted as the dataset's location (a copy already at
+    the entry's download path is still reused by ``download``, not re-fetched).
     """
     rows, declared, adopted, skipped = [], 0, 0, 0
     for s in specs:
@@ -95,9 +104,15 @@ def _declare_specs(db, specs, *, dry_run=False, overwrite=False):
                                     overwrite=overwrite, **kwargs)
             continue
 
+        extract = bool(s.get("extract"))
+        if extract:
+            # Archive-level digest for a dataset whose checksum convention is
+            # the extracted tree — dropped (see docstring).
+            chk = ""
+
         have = bool(cache_file) and os.path.exists(cache_file)
         verified = None                      # None: no checksum to check against
-        if have:
+        if have and not extract:
             try:
                 actual_sha = sha256_path(cache_file)
                 if expected:
@@ -111,6 +126,8 @@ def _declare_specs(db, specs, *, dry_run=False, overwrite=False):
 
         if have and verified is False:
             tag, skipped = " [cache checksum mismatch — not adopted]", skipped + 1
+        elif have and extract:
+            tag = " [archive in cache — not adopted (extract entry)]"
         elif have:
             tag = " [adopt cache]"
         elif cache_file:
@@ -126,11 +143,11 @@ def _declare_specs(db, specs, *, dry_run=False, overwrite=False):
         for f in ("doi", "description"):
             if s.get(f):
                 kwargs[f] = s[f]
-        if s.get("extract"):
+        if extract:
             kwargs["extract"] = True
         _, entry = db.register_dataset(uri, name=name, persist=False,
                                        overwrite=overwrite, **kwargs)
-        if have and verified is not False:
+        if have and verified is not False and not extract:
             record_dataset_state(db, entry, cache_file)
             adopted += 1
 

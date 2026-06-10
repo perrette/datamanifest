@@ -1103,10 +1103,17 @@ def _normalize(objects, db, *, dry_run=False, copy=False):
     ``lazy_access`` → skipped, reported. A declared dataset checksum is
     verified on the staged copy before any record changes; the copy/move lands
     (staging sibling + atomic rename) before the record is repointed — nothing
-    is deleted first."""
+    is deleted first.
+
+    An ``extract`` dataset whose record points at the *archive* (e.g. an
+    imported cache file) is handled at its natural level — the extracted
+    directory: the record is repointed when that directory already sits at the
+    derived path, the archive is extracted there otherwise. The archive bytes
+    are never copied onto the directory path and the archive itself is kept."""
     from . import storage as storage_mod
     from .cache import CachedIndex
     from .config import hash_path
+    from .pipelines import extract_file
     from .sync import copy_object_bytes
 
     do_it = not dry_run
@@ -1135,6 +1142,47 @@ def _normalize(objects, db, *, dry_run=False, copy=False):
         elif obj.kind != "cached":
             continue
         src, dst = obj.location, obj.derived
+        if obj.kind == "datasets" and entry.extract and os.path.isfile(src):
+            # The record points at the archive, but an extract dataset's
+            # natural level — what `checksum` hashes and loaders read — is the
+            # extracted directory. Only the record moves when that directory is
+            # already at the directive; otherwise the archive is extracted
+            # there. Either way the archive stays where it is.
+            in_place = os.path.isdir(dst)
+            action = "repoint" if in_place else "extract"
+            note = (" (extracted dir already at directive)" if in_place
+                    else " (archive kept)")
+            verb = ("Would " + action) if dry_run else action.capitalize()
+            print(f"{verb}{note}: {obj.key}  {src} -> {dst}")
+            if not do_it:
+                changed += 1
+                continue
+            if not in_place:
+                try:
+                    extract_file(src, dst, entry.format)
+                except Exception as exc:  # noqa: BLE001 - reported per object
+                    print(f"Error: could not extract {obj.key} ({exc}); "
+                          "record unchanged.", file=sys.stderr)
+                    _remove_path_and_markers(dst)
+                    skipped += 1
+                    continue
+            declared = (bool(entry.checksum)
+                        and not (db.skip_checksum or entry.skip_checksum))
+            if declared:
+                actual = hash_path(dst, entry.hash_algo or "sha256")
+                if actual != entry.hash_value:
+                    print(f"Error: checksum mismatch for {obj.key} at {dst} "
+                          f"(expected {entry.checksum}, got {actual[:12]}…); "
+                          "record unchanged.", file=sys.stderr)
+                    if not in_place:   # remove only what this run created
+                        _remove_path_and_markers(dst)
+                    skipped += 1
+                    continue
+            index.register_dataset(
+                key=entry.key, storage_path=_record_portable(dst, project_root))
+            index_dirty = True
+            changed += 1
+            continue
         pools = dc_pools if obj.kind == "cached" else ds_pools
         in_pool = any(_under(os.path.abspath(src), r) for r in pools)
         action = "copy" if (copy or in_pool) else "move"

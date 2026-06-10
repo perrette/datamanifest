@@ -160,6 +160,31 @@ def test_import_pooch_cache_mismatch_not_adopted(tmp_path):
     assert not (tmp_path / ".datamanifest" / "state.toml").exists()
 
 
+def test_declare_specs_extract_drops_archive_digest_and_record(tmp_path):
+    # An extract entry's checksum hashes the extracted directory, so the
+    # source's archive-level digest is dropped and the cached archive is NOT
+    # adopted as the dataset's location (it would record the wrong level).
+    from datamanifest.importers import _declare_specs
+
+    db, toml = _project(tmp_path)
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    blob = b"fake zip bytes"
+    cf = cache / "bundle.zip"
+    cf.write_bytes(blob)
+    specs = [{"name": "b", "uri": "https://h/bundle.zip",
+              "hash_algo": "md5", "hash_value": hashlib.md5(blob).hexdigest(),
+              "cache_file": str(cf), "extract": True}]
+
+    rows, declared, adopted, skipped = _declare_specs(db, specs)
+    assert (declared, adopted, skipped) == (1, 0, 0)
+    assert "archive in cache" in rows[0]            # reported, not adopted
+    entry = _manifest(toml)["b"]
+    assert entry.get("extract") is True
+    assert not entry.get("checksum")                # archive digest dropped
+    assert not (tmp_path / ".datamanifest" / "state.toml").exists()
+
+
 def test_import_pooch_dry_run_writes_nothing(tmp_path):
     db, toml = _project(tmp_path)
     cache, reg, _ = _cache_registry(tmp_path)

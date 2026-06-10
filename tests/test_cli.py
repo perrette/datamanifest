@@ -1127,6 +1127,78 @@ def test_normalize_copies_from_pool_and_keeps_source(tmp_path):
     assert os.path.isfile(loc)                     # copy landed at the directive
 
 
+def _extract_project(tmp_path):
+    """A project with one ``extract = true`` zip dataset downloaded into its
+    store. Returns ``(env, extracted_dir, archive_path)``."""
+    import zipfile
+
+    src = tmp_path / "origin"
+    src.mkdir()
+    zpath = src / "bundle.zip"
+    with zipfile.ZipFile(zpath, "w") as zf:
+        zf.writestr("data/a.csv", "col\n1\n")
+    toml = tmp_path / "datamanifest.toml"
+    toml.write_text('[_META]\nschema = 1\n\n'
+                    f'[a]\nuri = "file://{zpath}"\nextract = true\n')
+    env = _env_with_toml(toml)
+    r = _run("download", "a", env=env)
+    assert r.returncode == 0, r.stderr
+    loc = _run("list", "--fields", "location", "--datasets", env=env).stdout.strip()
+    assert os.path.isdir(loc)                       # the extracted directory
+    assert os.path.isfile(loc + ".zip")             # the archive, kept alongside
+    return env, loc, loc + ".zip"
+
+
+def _repoint_state_to_archive(tmp_path):
+    """Rewrite the dataset's state record from the extracted dir to the archive
+    (simulating an archive-level record, e.g. from an old ``import``)."""
+    state = tmp_path / ".datamanifest" / "state.toml"
+    rec = state.read_text().split('storage_path = "')[1].split('"')[0]
+    state.write_text(state.read_text().replace(rec, rec + ".zip"))
+
+
+def test_normalize_repoints_archive_level_record(tmp_path):
+    # Record points at the archive while the extracted dir already sits at the
+    # directive: only the record moves — no bytes copied, nothing deleted.
+    env, extracted, archive = _extract_project(tmp_path)
+    _repoint_state_to_archive(tmp_path)
+
+    r = _run("normalize", "--dry-run", env=env)
+    assert "Would repoint" in r.stdout and "Would copy" not in r.stdout
+
+    r = _run("normalize", env=env)
+    assert r.returncode == 0, r.stderr
+    assert "Repoint" in r.stdout and "Normalized: 1 object" in r.stdout
+    assert os.path.isdir(extracted)                 # extracted dir untouched
+    assert os.path.isfile(archive)                  # archive kept
+    state = (tmp_path / ".datamanifest" / "state.toml").read_text()
+    rec = state.split('storage_path = "')[1].split('"')[0]
+    assert not rec.endswith(".zip")                 # record back at the dir level
+    # Idempotent: a second run is a no-op.
+    assert "Normalized: 0 objects" in _run("normalize", env=env).stdout
+
+
+def test_normalize_extracts_archive_only_record(tmp_path):
+    # Record points at the archive and the extracted dir is gone: normalize
+    # re-extracts at the directive (local work, no download), keeps the archive.
+    import shutil
+
+    env, extracted, archive = _extract_project(tmp_path)
+    shutil.rmtree(extracted)
+    _repoint_state_to_archive(tmp_path)
+
+    r = _run("normalize", "--dry-run", env=env)
+    assert "Would extract" in r.stdout
+    assert not os.path.isdir(extracted)             # dry run touched nothing
+
+    r = _run("normalize", env=env)
+    assert r.returncode == 0, r.stderr
+    assert "Extract" in r.stdout and "Normalized: 1 object" in r.stdout
+    assert os.path.isfile(os.path.join(extracted, "data", "a.csv"))
+    assert os.path.isfile(archive)                  # archive kept
+    assert "Normalized: 0 objects" in _run("normalize", env=env).stdout
+
+
 def test_normalize_skips_user_managed(tmp_path):
     data = tmp_path / "mine" / "c.csv"
     data.parent.mkdir()
