@@ -1,21 +1,18 @@
-# Adding datasets from external sources (DRAFT — for review)
+# Adding datasets from external sources
 
-> Status: **proposal**. This documents a command surface for onboarding datasets
-> from common tools and data repositories. Nothing here is implemented yet — it is
-> written for review. Once the shape is agreed, the relevant parts fold into the
-> README's *CLI usage* section and each source is built + tested.
-
-> Layering note: this page is the **user-facing command surface**. Most of these
-> sources are pure *import* (declaration parsing) over already-supported download
-> schemes. Only **Git LFS** needs a new *download protocol* (spec-normative,
-> implemented in every language); that work is sequenced first and tracked
-> separately in [`design-remote-protocols.md`](https://github.com/perrette/datamanifest/blob/main/design/design-remote-protocols.md).
+> This page is the **user-facing command surface** for onboarding datasets. Most
+> sources here are implemented: direct URLs, Zenodo/figshare/OSF/Dryad DOIs,
+> PANGAEA DOIs, and the `import` catalogs (pooch, intake, DVC, CSV/URL lists). Each
+> is pure *import* (declaration parsing) over an already-supported download scheme.
+> **Git LFS is the one exception — not yet implemented**: it needs a new *download
+> protocol* (spec-normative, implemented in every language), tracked in
+> [`design-remote-protocols.md`](https://github.com/perrette/datamanifest/blob/main/design/design-remote-protocols.md).
 
 datamanifest distinguishes two verbs by **what you hand the command**:
 
 | Verb | You give it… | Yields | Examples |
 |---|---|---|---|
-| `add` | a **reference to data** (URL, DOI, LFS pointer) | one dataset, or all files of a record | direct URL, Zenodo/figshare DOI, PANGAEA DOI, Git LFS pointer |
+| `add` | a **reference to data** (URL, DOI, LFS pointer) | one dataset, or all files of a record | direct URL, Zenodo/figshare DOI, PANGAEA DOI, Git LFS pointer *(planned)* |
 | `import` | **another tool's catalog/registry file** | many datasets | pooch, intake, DVC |
 
 The test: is the argument *another tool's manifest* → `import`; is it *a pointer to
@@ -36,7 +33,7 @@ pointer already carries the sha256, so no download is needed to set it.
 
 ## `add` — add dataset(s) from a reference
 
-### A direct URL (today)
+### A direct URL
 
 ```bash
 datamanifest add https://www.ncei.noaa.gov/woa/temperature.nc
@@ -105,7 +102,11 @@ A reference that already pins a representation — e.g.
 `https://doi.pangaea.de/10.1594/PANGAEA.930512?format=zip` — is treated as a plain
 URL (you chose that file), not re-resolved.
 
-### A Git LFS pointer
+### A Git LFS pointer (planned — not yet implemented)
+
+> Not built yet: `add` has no `--lfs-url` flag and no LFS pointer handling. The
+> sketch below is the intended shape; it needs the LFS download protocol first
+> (see [`design-remote-protocols.md`](https://github.com/perrette/datamanifest/blob/main/design/design-remote-protocols.md)).
 
 ```bash
 datamanifest add path/to/pointer-file --name bathymetry
@@ -185,7 +186,7 @@ For exporting from anything. Reuses the whole pooch pipeline, including
 | direct URL | `add` | given | computed on download | — |
 | Zenodo/figshare/OSF DOI | `add` | API | md5 → sha256 on download | — |
 | PANGAEA DOI | `add` | web services | md5 (collections) → sha256 on download | — |
-| Git LFS pointer | `add` | LFS endpoint | **sha256 from pointer** | `.git/lfs/objects` (by sha256) |
+| Git LFS pointer *(planned)* | `add` | LFS endpoint | **sha256 from pointer** | `.git/lfs/objects` (by sha256) |
 | pooch registry | `import` | base_url + filename / 3rd col | sha256 (or md5) | `os_cache` (✓ implemented) |
 | intake catalog | `import` | urlpath | none | — |
 | DVC | `import` | remote config (partial) | md5/hash | `.dvc/cache` (by hash) |
