@@ -34,7 +34,10 @@ them, and caches your own computed results with the same machinery.
 - **A powerful CLI for data download, local management and synchronization across
   machines.** Add and download datasets, inspect and repair what's on disk, move
   or centralize where data is stored, and push/pull datasets and cached results
-  between machines over rsync+ssh — all without touching your analysis code.
+  between machines over rsync+ssh — all without touching your analysis code. A
+  git-ignored `.datamanifest-state.toml` records where each object actually landed
+  on this machine, keeping local location tracking separate from the portable,
+  shareable manifest.
 <!-- intro-end -->
 
 ## Installation
