@@ -19,15 +19,16 @@ The test: is the argument *another tool's manifest* → `import`; is it *a point
 data* → `add`.
 
 Both verbs end at the same place: standard `datamanifest.toml` entries (`uri`,
-`sha256`, optional `doi`/`description`/`extract`), plus — where a local copy
+`checksum`, optional `doi`/`description`/`extract`), plus — where a local copy
 already exists — an in-place adoption recorded in the state file so nothing is
 re-downloaded.
 
-A note on checksums: several sources publish **md5** (Zenodo, PANGAEA, DVC), not sha256.
-datamanifest verifies sha256, so for those an entry is declared without `sha256`;
-the md5 is verified on first download (or against an adopted local file) and the
-**sha256 is computed and recorded** at that point. Git LFS is the exception — its
-pointer already carries the sha256, so no download is needed to set it.
+A note on checksums: the `checksum` field carries its algorithm as `<algo>:<hex>`.
+Sources that publish **md5** (Zenodo, PANGAEA, DVC) are recorded as
+`checksum = "md5:…"` and verified in md5 on first download (or against an adopted
+local file) — not re-hashed to sha256. A source with **no** published digest gets
+one computed (as `sha256:…`) at that point. Git LFS would carry its `sha256:`
+straight from the pointer (no download needed to set it).
 
 ---
 
@@ -40,7 +41,7 @@ datamanifest add https://www.ncei.noaa.gov/woa/temperature.nc
 datamanifest add "https://zenodo.org/records/1234567/files/grid.zip" --extract
 ```
 
-One dataset; downloads and records its sha256 by default (`--no-download` to defer).
+One dataset; downloads and records its `checksum` (as `sha256:…`) by default (`--no-download` to defer).
 
 ### A DOI or data-repository record — Zenodo / figshare / OSF / Dryad
 
@@ -55,8 +56,8 @@ in it. Each entry gets:
 - `uri` — the file's direct download link,
 - `doi` — the record DOI (so the provenance is first-class, not just a label),
 - `description` — the record title,
-- `sha256` — filled on first download (Zenodo/figshare publish md5, which is
-  verified during the download).
+- `checksum` — the published md5 recorded as `md5:…` and verified on download
+  (a digest-less source is computed as `sha256:…` instead).
 
 Options:
 
@@ -148,8 +149,8 @@ datamanifest import intake catalog.yml [--driver csv,netcdf,...]
 
 An intake catalog lists several named *sources*, each with a `driver` and
 `args.urlpath`. Each source with a concrete file `urlpath` becomes a dataset
-(`uri = urlpath`). intake catalogs carry **no checksums**, so `sha256` is filled on
-first download. Sources whose driver/urlpath isn't a fetchable file (templated
+(`uri = urlpath`). intake catalogs carry **no checksums**, so `checksum` is computed
+(as `sha256:…`) on first download. Sources whose driver/urlpath isn't a fetchable file (templated
 parameters, server protocols) are reported and skipped; `--driver` narrows to
 selected drivers.
 
@@ -184,8 +185,8 @@ For exporting from anything. Reuses the whole pooch pipeline, including
 | Source | Verb | URL | Checksum | Adopt local cache |
 |---|---|---|---|---|
 | direct URL | `add` | given | computed on download | — |
-| Zenodo/figshare/OSF DOI | `add` | API | md5 → sha256 on download | — |
-| PANGAEA DOI | `add` | web services | md5 (collections) → sha256 on download | — |
+| Zenodo/figshare/OSF DOI | `add` | API | md5 carried as `checksum` | — |
+| PANGAEA DOI | `add` | web services | md5 (collections) carried as `checksum` | — |
 | Git LFS pointer *(planned)* | `add` | LFS endpoint | **sha256 from pointer** | `.git/lfs/objects` (by sha256) |
 | pooch registry | `import` | base_url + filename / 3rd col | sha256 (or md5) | `os_cache` (✓ implemented) |
 | intake catalog | `import` | urlpath | none | — |

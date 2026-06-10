@@ -14,8 +14,10 @@ Two CLI verbs sit on top (see ``datamanifest/cli.py``):
   **csv** / **urls** list, **intake** catalog, or **DVC** files. :data:`IMPORTERS`.
 
 None of this changes the on-the-wire download protocol: every entry uses an
-already-supported scheme (HTTP, git, ssh, file). Sources that publish md5 (Zenodo,
-DVC) declare no ``sha256``; it is computed from the file on adoption / first download.
+already-supported scheme (HTTP, git, ssh, file). A source's published digest is
+carried verbatim as ``checksum = "<algo>:<hex>"`` (so a Zenodo/PANGAEA/DVC md5 is
+preserved, not dropped); a source with no digest gets one computed (as sha256) on
+adoption / first download.
 """
 
 import csv as _csv
@@ -60,18 +62,29 @@ def _declare_specs(db, specs, *, dry_run=False, overwrite=False):
     """Declare each *spec* (a dict) as a manifest entry; adopt a present, verified
     cached copy in place. Returns ``(rows, declared, adopted, skipped)``.
 
-    Spec keys: ``name``, ``uri`` (required); ``sha256`` (declared, may be ``""``);
-    ``cache_file`` (a local copy to adopt, or ``""``); ``hash_algo``/``hash_value``
-    (to verify ``cache_file``); optional ``doi`` / ``description`` / ``extract``.
+    Spec keys: ``name``, ``uri`` (required); ``hash_algo``/``hash_value`` (the
+    source's published digest — becomes ``checksum = "<algo>:<hex>"`` and verifies
+    ``cache_file``) or an explicit ``checksum``/``sha256``; ``cache_file`` (a local
+    copy to adopt, or ``""``); optional ``doi`` / ``description`` / ``extract``.
     """
     rows, declared, adopted, skipped = [], 0, 0, 0
     for s in specs:
         name, uri = s["name"], s.get("uri", "")
         bundle = s.get("uris")                 # a multi-file (uris=) dataset
-        sha = s.get("sha256", "") or ""
         cache_file = s.get("cache_file", "") or ""
         algo = s.get("hash_algo", "sha256") or "sha256"
         expected = s.get("hash_value", "") or ""
+        # The declared checksum, as `<algo>:<hex>`: from the source's hash (any
+        # algorithm — a published md5 is now carried, not dropped), else an
+        # explicit `checksum`/`sha256` spec key.
+        if expected:
+            chk = f"{algo}:{expected}"
+        elif s.get("checksum"):
+            chk = s["checksum"]
+        elif s.get("sha256"):
+            chk = f"sha256:{s['sha256']}"
+        else:
+            chk = ""
 
         if bundle:
             rows.append(f"  {name}  ->  [{len(bundle)} files]")
@@ -91,8 +104,8 @@ def _declare_specs(db, specs, *, dry_run=False, overwrite=False):
                     actual = actual_sha if algo == "sha256" \
                         else _file_hash(cache_file, algo)
                     verified = (actual == expected)
-                if verified is not False and not sha:
-                    sha = actual_sha          # fill sha256 from the local file
+                if verified is not False and not chk:
+                    chk = f"sha256:{actual_sha}"   # fill sha256 from the local file
             except (OSError, ValueError):
                 verified = False
 
@@ -109,7 +122,7 @@ def _declare_specs(db, specs, *, dry_run=False, overwrite=False):
 
         if dry_run:
             continue
-        kwargs = {"sha256": sha}
+        kwargs = {"checksum": chk}
         for f in ("doi", "description"):
             if s.get(f):
                 kwargs[f] = s[f]

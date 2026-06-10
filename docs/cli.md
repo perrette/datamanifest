@@ -134,8 +134,8 @@ forces it on); see [language-bindings.md](language-bindings.md#cross-language-fe
 
 ### `verify [NAME ...]`
 
-Re-check sha256 checksums (default: all present datasets); exits nonzero on any
-mismatch.
+Re-check checksums in each dataset's declared algorithm (default: all present
+datasets); exits nonzero on any mismatch.
 
 ### `update-checksums [NAME ...] [--dry-run]`
 

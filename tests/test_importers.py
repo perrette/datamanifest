@@ -79,11 +79,13 @@ def test_import_pooch_declares_entries(tmp_path):
 
     # base_url + filename (subdir preserved in the URL).
     assert data["density"]["uri"] == "https://data.example.org/v1/data/density.csv"
-    # A sha256 hash is carried over verbatim.
-    assert data["density"]["sha256"].startswith("aa1122")
+    # A sha256 hash is carried over verbatim, as checksum = "sha256:<hex>".
+    assert data["density"]["checksum"].startswith("sha256:aa1122")
     # The third-column URL overrides base_url.
     assert data["special"]["uri"] == "https://mirror.example.org/special.bin"
-    # An md5 entry has no cached file → no sha256 invented.
+    # An md5 entry has no cached file, but its md5 is now carried as the checksum
+    # (not dropped); no sha256 is invented without a file to hash.
+    assert data["santiago"]["checksum"].startswith("md5:")
     assert "sha256" not in data["santiago"]
 
 
@@ -134,9 +136,12 @@ def test_import_pooch_adopts_cache(tmp_path):
     assert os.path.abspath(os.path.join(tmp_path, rec)) == str(cache / "g.nc")
     assert idx.dataset_path_of("data.example.org/sub/d.csv")
 
-    # The md5 entry's sha256 is computed from the cached file (manifest + state).
-    assert _manifest(toml)["m"]["sha256"] == sha["m"]
-    assert idx.datasets["data.example.org/m.bin"]["sha256"] == sha["m"]
+    # The md5 entry keeps its md5 as the checksum (preserved, not replaced by a
+    # computed sha256); the cached file is still adopted in place. The state file
+    # records sha256 only for sha256 datasets, so the md5 entry carries none there.
+    assert _manifest(toml)["m"]["checksum"] == f"md5:{hashlib.md5(b'mass\n').hexdigest()}"
+    assert idx.dataset_path_of("data.example.org/m.bin")
+    assert not idx.datasets["data.example.org/m.bin"].get("sha256")
 
 
 def test_import_pooch_cache_mismatch_not_adopted(tmp_path):
@@ -180,7 +185,7 @@ def test_import_csv_declares_and_joins_base_url(tmp_path):
     assert "Imported 2 dataset(s)" in summary
     data = _manifest(toml)
     assert data["temp"]["uri"] == "https://h/abs/temp.nc"
-    assert data["temp"]["sha256"] == "deadbeef"
+    assert data["temp"]["checksum"] == "sha256:deadbeef"
     # The relative url is joined onto base_url; the explicit name is honored.
     assert data["rel/grid.csv"]["uri"] == "https://data.example.org/v1/grid.csv"
 

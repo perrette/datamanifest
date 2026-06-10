@@ -36,6 +36,7 @@ from .config import (
     HIDE_STRUCT_FIELDS,
     get_default_toml,
     get_extract_path,
+    hash_path,
     logger,
     project_root_from_paths,
     sha256_path,
@@ -61,7 +62,13 @@ class DatasetEntry:
     # an exact path without ``$key`` ⇒ user-managed, used verbatim, never touched
     # by maintenance. Subsumes the former ``store`` + ``local_path``.
     storage_path: str = ""
-    sha256: str = ""
+    # Expected content digest as ``<algo>:<hex>`` (e.g. ``sha256:…``, ``md5:…``);
+    # a bare hex value is read as sha256 (see ``init_dataset_entry``). Used for both
+    # fetch-time verification and change detection, in the algorithm it names; empty
+    # ⇒ computed (as ``sha256:``) on first download. Supersedes the legacy ``sha256``
+    # key (still read, normalized to ``checksum`` on read; emitted as ``checksum`` on
+    # write — see the spec's Checksums section). Excluded from ``__eq__`` (identity).
+    checksum: str = ""
     skip_checksum: bool = False
     skip_download: bool = False
     # Lazy / on-the-fly access (spec): the dataset is NOT downloaded — its `uri`
@@ -113,15 +120,43 @@ class DatasetEntry:
 
     def __eq__(self, other):
         # Mirror Julia's Base.:(==) for DatasetEntry: compare every field
-        # except :sha256 and :skip_checksum (Databases.jl:35-48).
+        # except :checksum and :skip_checksum (Databases.jl:35-48).
         if not isinstance(other, DatasetEntry):
             return NotImplemented
         for f in fields(self):
-            if f.name in ("sha256", "skip_checksum"):
+            if f.name in ("checksum", "skip_checksum"):
                 continue
             if getattr(self, f.name) != getattr(other, f.name):
                 return False
         return True
+
+    # ----- checksum accessors (the stored field is `checksum = "<algo>:<hex>"`) --
+    @property
+    def hash_algo(self) -> str:
+        """The checksum's algorithm (``sha256`` for a bare/empty-prefixed value),
+        or ``""`` when no checksum is set."""
+        if not self.checksum:
+            return ""
+        algo, sep, _ = self.checksum.partition(":")
+        return algo if sep else "sha256"
+
+    @property
+    def hash_value(self) -> str:
+        """The checksum's hex digest (without the ``algo:`` prefix), or ``""``."""
+        if not self.checksum:
+            return ""
+        _, sep, hexv = self.checksum.partition(":")
+        return hexv if sep else self.checksum
+
+    @property
+    def sha256(self) -> str:
+        """Back-compat view: the hex digest when the checksum algorithm is sha256,
+        else ``""``. Setting it stores ``checksum = "sha256:<hex>"`` (or clears it)."""
+        return self.hash_value if self.hash_algo in ("", "sha256") else ""
+
+    @sha256.setter
+    def sha256(self, value: str) -> None:
+        self.checksum = f"sha256:{value}" if value else ""
 
     def __str__(self):
         d = to_dict(self)
@@ -451,6 +486,18 @@ def init_dataset_entry(uri=None, uris=None, ref: str = "", downloads=None, **kwa
                 elif binding and ref_field not in kwargs:
                     kwargs[ref_field] = str(binding)
         lang_foreign = {k: v for k, v in lang_data.items() if k != "python"}
+
+    # Checksum: accept the legacy `sha256 = "<hex>"` key and a bare-hex `checksum`,
+    # normalizing both to the canonical `checksum = "sha256:<hex>"`. An explicit
+    # `checksum` wins over a legacy `sha256`. This is the read half of the in-place
+    # migration: the entry is re-emitted as `checksum` on the next write.
+    legacy_sha = kwargs.pop("sha256", None)
+    chk = kwargs.get("checksum")
+    if chk:
+        if ":" not in chk:
+            kwargs["checksum"] = f"sha256:{chk}"
+    elif legacy_sha:
+        kwargs["checksum"] = f"sha256:{legacy_sha}"
 
     # Fields this port does not model — another tool's / language's extension
     # keys (e.g. Julia's `julia` / `julia_modules`) — are preserved verbatim in
@@ -972,7 +1019,7 @@ def resolve_from_pools(db: "Database", entry: "DatasetEntry", extract=None,
     # The probed location matches what the dataset is read from / checksummed:
     # the extracted dir for an extract dataset, the file otherwise.
     probe_key = get_extract_path(entry.key) if eff_extract else entry.key
-    declared = bool(entry.sha256) and not (db.skip_checksum or entry.skip_checksum)
+    declared = bool(entry.checksum) and not (db.skip_checksum or entry.skip_checksum)
     if pools is None:                       # default: the configured / built-in pools
         pools = storage.datasets_pools(
             project_root=db.get_project_root(), storage_config=db.storage_config,
@@ -983,17 +1030,17 @@ def resolve_from_pools(db: "Database", entry: "DatasetEntry", extract=None,
             continue
         if declared:
             try:
-                actual = sha256_path(cand)
-            except OSError:
+                actual = hash_path(cand, entry.hash_algo or "sha256")
+            except (OSError, ValueError):
                 continue
-            if actual != entry.sha256:
+            if actual != entry.hash_value:
                 # Present in the pool but its checksum disagrees — surface it
-                # (the manifest sha256 may be stale) rather than silently skip.
+                # (the manifest checksum may be stale) rather than silently skip.
                 logger.warning(
-                    "Found %s in read pool at %s but its sha256 does not match "
+                    "Found %s in read pool at %s but its checksum does not match "
                     "(manifest %s…, on disk %s…); not adopted. Update/clear the "
                     "manifest checksum or set skip_checksum if it is stale.",
-                    entry.key, cand, (entry.sha256 or "")[:12], actual[:12],
+                    entry.key, cand, (entry.checksum or "")[:18], actual[:12],
                 )
                 continue
         return cand
@@ -1035,7 +1082,8 @@ def verify_checksum(
     extract=None,
     skip_if_complete: bool = False,
 ):
-    """Verify or auto-fill the sha256 checksum for *dataset* (Databases.jl:472-502)."""
+    """Verify or auto-fill the ``checksum`` for *dataset*, in its declared
+    algorithm (sha256 when none is declared) (Databases.jl:472-502)."""
     if extract is not None and extract != dataset.extract:
         logger.warning(
             "dataset.extract=%s but required extract=%s. Skip verifying checksum.",
@@ -1055,20 +1103,22 @@ def verify_checksum(
         return True
     if os.path.isdir(local_path) and db.skip_checksum_folders:
         return True
-    if skip_if_complete and dataset.sha256 != "" and os.path.exists(storage.marker_path(local_path)):
+    if skip_if_complete and dataset.checksum != "" and os.path.exists(storage.marker_path(local_path)):
         return True
-    checksum = sha256_path(local_path)
-    if dataset.sha256 == "":
-        dataset.sha256 = checksum
+    # An empty checksum is computed (and stored) as sha256; a declared checksum is
+    # verified in its own algorithm and never silently rewritten to sha256.
+    if dataset.checksum == "":
+        dataset.checksum = f"sha256:{hash_path(local_path, 'sha256')}"
         _maybe_persist_database(db, persist)
         return True
-    if dataset.sha256 != checksum:
+    actual = hash_path(local_path, dataset.hash_algo)
+    if dataset.hash_value != actual:
         raise ValueError(
             f"Checksum mismatch for dataset at {local_path}. "
-            f"Expected: {dataset.sha256}, got: {checksum}. "
+            f"Expected: {dataset.checksum}, got: {dataset.hash_algo}:{actual}. "
             "Possible resolutions:"
             "\n- remove the file"
-            "\n- reset the `sha256` field"
+            "\n- reset the `checksum` field"
             "\n- use a different `key`"
             "\n- remove Entry checksum checks (`dataset.skip_checksum = true`)"
             "\n- remove Database checksum checks (`db.skip_checksum = true`)"
@@ -1083,11 +1133,12 @@ def update_checksum(
     extract=None,
     dry_run: bool = False,
 ) -> str:
-    """Recompute the sha256 from the on-disk file and overwrite the stored value.
+    """Recompute the checksum from the on-disk file and overwrite the stored value.
 
     Unlike :func:`verify_checksum`, which raises on mismatch and only auto-fills
     an *empty* checksum, this unconditionally re-hashes whatever is on disk and
-    replaces ``dataset.sha256``. It is the engine behind ``datamanifest
+    replaces ``dataset.checksum`` (in its declared algorithm). It is the engine
+    behind ``datamanifest
     update-checksums``.
 
     The file is located with :func:`resolve_existing_path`, so a dataset present
@@ -1110,12 +1161,15 @@ def update_checksum(
         return "missing"
     if os.path.isdir(local_path) and db.skip_checksum_folders:
         return "skipped"
-    checksum = sha256_path(local_path)
-    old = dataset.sha256
+    # Re-hash in the dataset's declared algorithm (sha256 when none is declared),
+    # preserving a non-sha256 algorithm rather than switching it to sha256.
+    algo = dataset.hash_algo or "sha256"
+    checksum = hash_path(local_path, algo)
+    old = dataset.hash_value
     if old == checksum:
         return "unchanged"
     if not dry_run:
-        dataset.sha256 = checksum
+        dataset.checksum = f"{algo}:{checksum}"
         _maybe_persist_database(db, persist)
     return "filled" if old == "" else "updated"
 
@@ -1175,8 +1229,8 @@ def update_entry(
         if os.path.isfile(new_datapath) or os.path.isdir(new_datapath):
             message += (
                 "\n\nBoth old and new datasets exist on disk at:"
-                f"\n    {existing_datapath} SHA-256: {oldentry.sha256}"
-                f"\n    {new_datapath} SHA-256: {newentry.sha256}"
+                f"\n    {existing_datapath} checksum: {oldentry.checksum}"
+                f"\n    {new_datapath} checksum: {newentry.checksum}"
             )
         else:
             message += f"\nExisting dataset found at\n    {existing_datapath}\n."

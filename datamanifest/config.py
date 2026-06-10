@@ -11,8 +11,8 @@ COMPRESSED_FORMATS = ["zip", "tar.gz", "tar"]
 HIDE_STRUCT_FIELDS = {"host", "path", "scheme"}
 
 
-def sha256_file(file_path: str) -> str:
-    ctx = hashlib.sha256()
+def hash_file(file_path: str, algo: str = "sha256") -> str:
+    ctx = hashlib.new(algo)
     with open(file_path, "rb") as f:
         while True:
             buf = f.read(65536)
@@ -22,8 +22,8 @@ def sha256_file(file_path: str) -> str:
     return ctx.hexdigest()
 
 
-def sha256_folder(folder_path: str) -> str:
-    ctx = hashlib.sha256()
+def hash_folder(folder_path: str, algo: str = "sha256") -> str:
+    ctx = hashlib.new(algo)
     for root, dirs, files in os.walk(folder_path):
         dirs.sort()
         for fname in sorted(files):
@@ -36,13 +36,27 @@ def sha256_folder(folder_path: str) -> str:
     return ctx.hexdigest()
 
 
-def sha256_path(path: str) -> str:
+def hash_path(path: str, algo: str = "sha256") -> str:
     if os.path.isfile(path):
-        return sha256_file(path)
+        return hash_file(path, algo)
     elif os.path.isdir(path):
-        return sha256_folder(path)
+        return hash_folder(path, algo)
     else:
         raise FileNotFoundError(f"Path does not exist: {path}")
+
+
+# Back-compat wrappers (sha256 is the default checksum algorithm; the state file
+# and any sha256-specific caller keep using these).
+def sha256_file(file_path: str) -> str:
+    return hash_file(file_path, "sha256")
+
+
+def sha256_folder(folder_path: str) -> str:
+    return hash_folder(folder_path, "sha256")
+
+
+def sha256_path(path: str) -> str:
+    return hash_path(path, "sha256")
 
 
 def get_extract_path(path: str) -> str:

@@ -1975,7 +1975,7 @@ def main():
 
     # verify
     p_verify = subparsers.add_parser(
-        "verify", help="Re-check sha256 checksums; exits nonzero on mismatch"
+        "verify", help="Re-check checksums (declared algorithm); exits nonzero on mismatch"
     )
     p_verify.add_argument(
         "name",
@@ -1988,7 +1988,7 @@ def main():
     # update-checksums
     p_update = subparsers.add_parser(
         "update-checksums",
-        help="Recompute stored sha256 checksums from the files on disk",
+        help="Recompute stored checksums (declared algorithm) from the files on disk",
     )
     p_update.add_argument(
         "name",

@@ -100,6 +100,47 @@ def test_entry_equality_ignores_sha256():
     assert a == b
 
 
+def test_legacy_sha256_migrates_to_checksum(tmp_path):
+    """A legacy `sha256 =` is read as `checksum = "sha256:<hex>"` and rewritten in
+    that form the next time the manifest is written."""
+    try:
+        import tomllib
+    except ModuleNotFoundError:  # Python < 3.11
+        import tomli as tomllib
+    from datamanifest.database import Database
+
+    toml = tmp_path / "datamanifest.toml"
+    toml.write_text('[_META]\nschema = 1\n\n'
+                    '[foo]\nuri = "https://h/foo.csv"\nsha256 = "a1b2c3"\n')
+    db = Database(datasets_toml=str(toml), persist=False, skip_checksum=True)
+    entry = db.datasets["foo"]
+    assert entry.checksum == "sha256:a1b2c3"
+    assert entry.sha256 == "a1b2c3"                       # back-compat view
+    assert entry.hash_algo == "sha256" and entry.hash_value == "a1b2c3"
+
+    db.write(str(toml))                                   # rewrite migrates the file
+    with open(toml, "rb") as f:
+        written = tomllib.load(f)
+    assert written["foo"]["checksum"] == "sha256:a1b2c3"
+    assert "sha256" not in written["foo"]
+
+
+def test_md5_checksum_verified_and_preserved(tmp_path):
+    """A declared non-sha256 checksum verifies in its own algorithm and is never
+    silently rewritten to sha256."""
+    from datamanifest.database import verify_checksum
+    db, entry, _ = _make_db_with_file(tmp_path)
+    md5 = hashlib.md5(b"test content").hexdigest()
+    entry.checksum = f"md5:{md5}"
+    assert verify_checksum(db, entry, persist=False) is True
+    assert entry.checksum == f"md5:{md5}"                 # preserved, not → sha256
+    assert entry.sha256 == ""                             # sha256 view empty for md5
+
+    entry.checksum = "md5:deadbeef"                       # wrong md5 → mismatch
+    with pytest.raises(ValueError, match="Possible resolutions"):
+        verify_checksum(db, entry, persist=False)
+
+
 def test_to_dict_round_trip():
     from datamanifest.database import init_dataset_entry, to_dict
 
