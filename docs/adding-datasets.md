@@ -4,15 +4,12 @@
 > sources here are implemented: direct URLs, Zenodo/figshare/OSF/Dryad DOIs,
 > PANGAEA DOIs, and the `import` catalogs (pooch, intake, DVC, CSV/URL lists). Each
 > is pure *import* (declaration parsing) over an already-supported download scheme.
-> **Git LFS is the one exception — not yet implemented**: it needs a new *download
-> protocol* (spec-normative, implemented in every language), tracked in
-> [`design-remote-protocols.md`](https://github.com/perrette/datamanifest/blob/main/design/design-remote-protocols.md).
 
 datamanifest distinguishes two verbs by **what you hand the command**:
 
 | Verb | You give it… | Yields | Examples |
 |---|---|---|---|
-| `add` | a **reference to data** (URL, DOI, LFS pointer) | one dataset, or all files of a record | direct URL, Zenodo/figshare DOI, PANGAEA DOI, Git LFS pointer *(planned)* |
+| `add` | a **reference to data** (URL, DOI) | one dataset, or all files of a record | direct URL, Zenodo/figshare DOI, PANGAEA DOI |
 | `import` | **another tool's catalog/registry file** | many datasets | pooch, intake, DVC |
 
 The test: is the argument *another tool's manifest* → `import`; is it *a pointer to
@@ -27,8 +24,7 @@ A note on checksums: the `checksum` field carries its algorithm as `<algo>:<hex>
 Sources that publish **md5** (Zenodo, PANGAEA, DVC) are recorded as
 `checksum = "md5:…"` and verified in md5 on first download (or against an adopted
 local file) — not re-hashed to sha256. A source with **no** published digest gets
-one computed (as `sha256:…`) at that point. Git LFS would carry its `sha256:`
-straight from the pointer (no download needed to set it).
+one computed (as `sha256:…`) at that point.
 
 ---
 
@@ -103,30 +99,6 @@ A reference that already pins a representation — e.g.
 `https://doi.pangaea.de/10.1594/PANGAEA.930512?format=zip` — is treated as a plain
 URL (you chose that file), not re-resolved.
 
-### A Git LFS pointer (planned — not yet implemented)
-
-> Not built yet: `add` has no `--lfs-url` flag and no LFS pointer handling. The
-> sketch below is the intended shape; it needs the LFS download protocol first
-> (see [`design-remote-protocols.md`](https://github.com/perrette/datamanifest/blob/main/design/design-remote-protocols.md)).
-
-```bash
-datamanifest add path/to/pointer-file --name bathymetry
-datamanifest add other-repo/data.bin.pointer --lfs-url https://github.com/org/repo.git
-```
-
-Reads the pointer (`oid sha256:<hex>`, `size`) and adds **one dataset** whose
-`sha256` is taken straight from the pointer (no download needed to set it). The
-download `uri` is the LFS object, resolved from:
-
-- the **current** repo's LFS endpoint when run inside a git repo with LFS, or
-- `--lfs-url <repo>` for a pointer that belongs to **another** repository.
-
-Caveats (LFS is the lowest-value source):
-
-- For files tracked in *your own* repo, git already has them — importing is
-  redundant; the useful case is depending on **another** project's LFS object.
-- The pointer carries no human metadata, so set `--name` yourself.
-
 ---
 
 ## `import` — bulk-import another tool's catalog
@@ -187,7 +159,6 @@ For exporting from anything. Reuses the whole pooch pipeline, including
 | direct URL | `add` | given | computed on download | — |
 | Zenodo/figshare/OSF DOI | `add` | API | md5 carried as `checksum` | — |
 | PANGAEA DOI | `add` | web services | md5 (collections) carried as `checksum` | — |
-| Git LFS pointer *(planned)* | `add` | LFS endpoint | **sha256 from pointer** | `.git/lfs/objects` (by sha256) |
 | pooch registry | `import` | base_url + filename / 3rd col | sha256 (or md5) | `os_cache` (✓ implemented) |
 | intake catalog | `import` | urlpath | none | — |
 | DVC | `import` | remote config (partial) | md5/hash | `.dvc/cache` (by hash) |
