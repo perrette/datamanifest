@@ -636,6 +636,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#a-pangaea-doi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A PANGAEA DOI
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#a-git-lfs-pointer" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1114,6 +1125,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#a-pangaea-doi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A PANGAEA DOI
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#a-git-lfs-pointer" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1253,7 +1275,7 @@ separately in <a href="https://github.com/perrette/datamanifest/blob/main/design
 <td><code>add</code></td>
 <td>a <strong>reference to data</strong> (URL, DOI, LFS pointer)</td>
 <td>one dataset, or all files of a record</td>
-<td>direct URL, Zenodo/figshare DOI, Git LFS pointer</td>
+<td>direct URL, Zenodo/figshare DOI, PANGAEA DOI, Git LFS pointer</td>
 </tr>
 <tr>
 <td><code>import</code></td>
@@ -1269,7 +1291,7 @@ data</em> → <code>add</code>.</p>
 <code>sha256</code>, optional <code>doi</code>/<code>description</code>/<code>extract</code>), plus — where a local copy
 already exists — an in-place adoption recorded in the state file so nothing is
 re-downloaded.</p>
-<p>A note on checksums: several sources publish <strong>md5</strong> (Zenodo, DVC), not sha256.
+<p>A note on checksums: several sources publish <strong>md5</strong> (Zenodo, PANGAEA, DVC), not sha256.
 datamanifest verifies sha256, so for those an entry is declared without <code>sha256</code>;
 the md5 is verified on first download (or against an adopted local file) and the
 <strong>sha256 is computed and recorded</strong> at that point. Git LFS is the exception — its
@@ -1303,9 +1325,39 @@ in it. Each entry gets:</p>
 <p>Why this beats today: instead of pasting every file URL by hand and losing the DOI
 link, you hand over the record once and get all its files with checksums and
 provenance.</p>
+<h3 id="a-pangaea-doi">A PANGAEA DOI<a class="headerlink" href="#a-pangaea-doi" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>datamanifest<span class="w"> </span>add<span class="w"> </span><span class="m">10</span>.1594/PANGAEA.930590<span class="w">              </span><span class="c1"># by DOI</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>datamanifest<span class="w"> </span>add<span class="w"> </span>https://doi.pangaea.de/10.1594/PANGAEA.930590<span class="w">   </span><span class="c1"># or by URL</span>
+</code></pre></div>
+<p>Resolves the dataset through PANGAEA's web services and classifies it from its
+metadata:</p>
+<ul>
+<li>a <strong>tabular dataset</strong> → one entry whose <code>uri</code> is the <code>?format=textfile</code>
+  (tab-delimited) data;</li>
+<li>a <strong>single uploaded file</strong> → one entry pointing straight at the file on
+  <code>download.pangaea.de</code>;</li>
+<li>a <strong>file collection</strong> (a dataset whose rows <em>are</em> files — NetCDF/GeoTIFF/zip
+  members) → its files, <strong>bundled into one <code>uris=</code> dataset</strong> by default. Each file
+  carries its MD5 from PANGAEA's data matrix;</li>
+<li>a <strong>publication series</strong> (a parent DOI over many child datasets) → <strong>one entry
+  per child dataset</strong>, each keeping its own DOI, enumerated through PANGAEA's
+  search service. When no children are enumerable the series zip is kept as a
+  single dataset.</li>
+</ul>
+<p>Options (file collections / series):</p>
+<ul>
+<li><code>--split</code> — one dataset per file instead of the default <code>uris=</code> bundle; a split
+  file keeps its MD5 as the verification checksum.</li>
+<li><code>--pick GLOB</code> (repeatable) — for a collection, add only the files matching a glob
+  (e.g. <code>--pick '*.nc'</code>).</li>
+<li><code>--name</code> — names the single/tabular entry, or the bundle.</li>
+</ul>
+<p>A reference that already pins a representation — e.g.
+<code>https://doi.pangaea.de/10.1594/PANGAEA.930512?format=zip</code> — is treated as a plain
+URL (you chose that file), not re-resolved.</p>
 <h3 id="a-git-lfs-pointer">A Git LFS pointer<a class="headerlink" href="#a-git-lfs-pointer" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>datamanifest<span class="w"> </span>add<span class="w"> </span>path/to/pointer-file<span class="w"> </span>--name<span class="w"> </span>bathymetry
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>datamanifest<span class="w"> </span>add<span class="w"> </span>other-repo/data.bin.pointer<span class="w"> </span>--lfs-url<span class="w"> </span>https://github.com/org/repo.git
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>datamanifest<span class="w"> </span>add<span class="w"> </span>path/to/pointer-file<span class="w"> </span>--name<span class="w"> </span>bathymetry
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>datamanifest<span class="w"> </span>add<span class="w"> </span>other-repo/data.bin.pointer<span class="w"> </span>--lfs-url<span class="w"> </span>https://github.com/org/repo.git
 </code></pre></div>
 <p>Reads the pointer (<code>oid sha256:&lt;hex&gt;</code>, <code>size</code>) and adds <strong>one dataset</strong> whose
 <code>sha256</code> is taken straight from the pointer (no download needed to set it). The
@@ -1323,13 +1375,13 @@ download <code>uri</code> is the LFS object, resolved from:</p>
 <hr />
 <h2 id="import-bulk-import-another-tools-catalog"><code>import</code> — bulk-import another tool's catalog<a class="headerlink" href="#import-bulk-import-another-tools-catalog" title="Permanent link">&para;</a></h2>
 <h3 id="pooch-implemented">pooch (implemented)<a class="headerlink" href="#pooch-implemented" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>pooch<span class="w"> </span>registry.txt<span class="w"> </span>--base-url<span class="w"> </span>URL<span class="w"> </span><span class="o">[</span>--cache-dir<span class="w"> </span>DIR<span class="o">]</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>pooch<span class="w"> </span>registry.txt<span class="w"> </span>--base-url<span class="w"> </span>URL<span class="w"> </span><span class="o">[</span>--cache-dir<span class="w"> </span>DIR<span class="o">]</span>
 </code></pre></div>
 <p>Each <code>filename [algo:]hash [url]</code> line becomes a dataset. <code>--cache-dir</code>
 (e.g. <code>pooch.os_cache('pkg')</code>) adopts already-downloaded files in place,
 checksum-verified — no re-download. See the README for full detail.</p>
 <h3 id="intake-catalogs">intake catalogs<a class="headerlink" href="#intake-catalogs" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>intake<span class="w"> </span>catalog.yml<span class="w"> </span><span class="o">[</span>--driver<span class="w"> </span>csv,netcdf,...<span class="o">]</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>intake<span class="w"> </span>catalog.yml<span class="w"> </span><span class="o">[</span>--driver<span class="w"> </span>csv,netcdf,...<span class="o">]</span>
 </code></pre></div>
 <p>An intake catalog lists several named <em>sources</em>, each with a <code>driver</code> and
 <code>args.urlpath</code>. Each source with a concrete file <code>urlpath</code> becomes a dataset
@@ -1338,7 +1390,7 @@ first download. Sources whose driver/urlpath isn't a fetchable file (templated
 parameters, server protocols) are reported and skipped; <code>--driver</code> narrows to
 selected drivers.</p>
 <h3 id="dvc">DVC<a class="headerlink" href="#dvc" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>dvc<span class="w"> </span>&lt;path-or-dir&gt;<span class="w"> </span><span class="o">[</span>--cache-dir<span class="w"> </span>.dvc/cache<span class="o">]</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>dvc<span class="w"> </span>&lt;path-or-dir&gt;<span class="w"> </span><span class="o">[</span>--cache-dir<span class="w"> </span>.dvc/cache<span class="o">]</span>
 </code></pre></div>
 <p>Parses <code>*.dvc</code> / <code>dvc.lock</code>. Each tracked <em>out</em> (with its <code>md5</code>/hash) becomes a
 dataset. Because DVC stores content addressed by hash under <code>.dvc/cache</code>, the
@@ -1348,8 +1400,8 @@ possible (HTTP remotes, or <code>import-url</code> stages that record an explici
 outs backed by a non-URL remote (S3, gdrive, ssh) are declared with the hash but
 left for DVC/you to resolve, and reported as such.</p>
 <h3 id="generic-csv-url-list-universal-escape-hatch">Generic CSV / URL list (universal escape hatch)<a class="headerlink" href="#generic-csv-url-list-universal-escape-hatch" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>csv<span class="w"> </span>files.csv<span class="w">            </span><span class="c1"># columns: name,url,sha256 (sha256 optional)</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>urls<span class="w"> </span>list.txt<span class="w"> </span>--base-url<span class="w"> </span>URL<span class="w">   </span><span class="c1"># one path/URL per line</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>csv<span class="w"> </span>files.csv<span class="w">            </span><span class="c1"># columns: name,url,sha256 (sha256 optional)</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>urls<span class="w"> </span>list.txt<span class="w"> </span>--base-url<span class="w"> </span>URL<span class="w">   </span><span class="c1"># one path/URL per line</span>
 </code></pre></div>
 <p>For exporting from anything. Reuses the whole pooch pipeline, including
 <code>--cache-dir</code> adoption.</p>
@@ -1378,6 +1430,13 @@ left for DVC/you to resolve, and reported as such.</p>
 <td><code>add</code></td>
 <td>API</td>
 <td>md5 → sha256 on download</td>
+<td>—</td>
+</tr>
+<tr>
+<td>PANGAEA DOI</td>
+<td><code>add</code></td>
+<td>web services</td>
+<td>md5 (collections) → sha256 on download</td>
 <td>—</td>
 </tr>
 <tr>
