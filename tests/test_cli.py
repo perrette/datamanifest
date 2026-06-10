@@ -1028,3 +1028,114 @@ def test_download_then_verify(tmp_path):
     assert dl.returncode == 0, dl.stderr
     v = _run("verify", "foo", env=env)
     assert v.returncode == 0, v.stderr
+
+
+# ----- normalize / --out-of-place / generalized push-pull targets (spec-v5) ---
+
+def _normalize_project(tmp_path):
+    """A project with one file:// dataset downloaded into its store."""
+    src = tmp_path / "origin"
+    src.mkdir()
+    (src / "a.csv").write_bytes(b"col\n1\n")
+    toml = tmp_path / "datamanifest.toml"
+    toml.write_text('[_META]\nschema = 1\n\n'
+                    f'[a]\nuri = "file://{src}/a.csv"\n')
+    env = _env_with_toml(toml)
+    r = _run("download", "a", env=env)
+    assert r.returncode == 0, r.stderr
+    return env
+
+
+def test_push_pull_local_path_roundtrip_and_record(tmp_path):
+    env = _env_with_toml(_storage_project(tmp_path))  # fresh manifest
+    src = tmp_path / "origin"
+    src.mkdir()
+    (src / "a.csv").write_bytes(b"col\n1\n")
+    (tmp_path / "datamanifest.toml").write_text(
+        '[_META]\nschema = 1\n\n'
+        f'[a]\nuri = "file://{src}/a.csv"\n')
+    assert _run("download", "a", env=env).returncode == 0
+    export = tmp_path / "export"
+
+    r = _run("push", "a", str(export), env=env)
+    assert r.returncode == 0, r.stderr
+    key = _run("list", "--fields", "key", "--datasets", env=env).stdout.strip()
+    exported = list(export.rglob("a.csv"))
+    assert len(exported) == 1                       # keyed layout under PATH
+
+    # Drop the local bytes, pull back from the export, and check the state
+    # file records the received object (adopt-by-copy).
+    assert _run("delete", "a", env=env).returncode == 0
+    r = _run("pull", "a", str(export), env=env)
+    assert r.returncode == 0, r.stderr
+    state = (tmp_path / ".datamanifest" / "state.toml").read_text()
+    assert "a.csv" in state
+    out = _run("list", "--fields", "key", "present", "--datasets", env=env)
+    assert out.stdout.strip() == "a\ttrue"
+
+
+def test_normalize_moves_recorded_stray_to_directive(tmp_path):
+    env = _normalize_project(tmp_path)
+    # Find where it landed, move the bytes to an ad-hoc folder, and record the
+    # stray location (an out-of-place record).
+    loc = _run("list", "--fields", "location", "--datasets", env=env).stdout.strip()
+    stray = tmp_path / "stray" / "a.csv"
+    stray.parent.mkdir(parents=True)
+    os.replace(loc, stray)
+    state = tmp_path / ".datamanifest" / "state.toml"
+    text = state.read_text().replace(
+        state.read_text().split('storage_path = "')[1].split('"')[0], str(stray))
+    state.write_text(text)
+
+    out = _run("list", "--out-of-place", "--fields", "key", "location", env=env)
+    assert out.stdout.strip().startswith("a\t")
+    assert str(stray) in out.stdout
+
+    r = _run("normalize", "--dry-run", env=env)
+    assert "Would move" in r.stdout and str(stray) in r.stdout
+    assert stray.exists()                          # dry run touched nothing
+
+    r = _run("normalize", env=env)
+    assert r.returncode == 0, r.stderr
+    assert "Move" in r.stdout and "Normalized: 1 object" in r.stdout
+    assert not stray.exists()                      # moved (not a pool → drained)
+    assert os.path.isfile(loc)                     # bytes back at the directive
+    assert str(stray) not in state.read_text()     # record repointed
+    # Idempotent: a second run is a no-op.
+    assert "Normalized: 0 objects" in _run("normalize", env=env).stdout
+
+
+def test_normalize_copies_from_pool_and_keeps_source(tmp_path):
+    env = _normalize_project(tmp_path)
+    loc = _run("list", "--fields", "location", "--datasets", env=env).stdout.strip()
+    # Re-home the bytes into a configured read pool (keyed layout, from the
+    # state record) and record that pooled location.
+    pool = tmp_path / "pool"
+    state = tmp_path / ".datamanifest" / "state.toml"
+    rec = state.read_text().split('storage_path = "')[1].split('"')[0]
+    key = rec.split("datasets" + os.sep, 1)[-1] if "datasets" + os.sep in rec else os.path.basename(rec)
+    pooled = pool / key
+    pooled.parent.mkdir(parents=True, exist_ok=True)
+    os.replace(loc, pooled)
+    state.write_text(state.read_text().replace(rec, str(pooled)))
+    assert _run("config", "set", "datasets_pools", str(pool), env=env).returncode == 0
+
+    r = _run("normalize", env=env)
+    assert r.returncode == 0, r.stderr
+    assert "read pool" in r.stdout and "Copy" in r.stdout
+    assert pooled.exists()                         # pools are never drained
+    assert os.path.isfile(loc)                     # copy landed at the directive
+
+
+def test_normalize_skips_user_managed(tmp_path):
+    data = tmp_path / "mine" / "c.csv"
+    data.parent.mkdir()
+    data.write_bytes(b"c\n")
+    toml = tmp_path / "datamanifest.toml"
+    toml.write_text('[_META]\nschema = 1\n\n'
+                    f'[c]\nstorage_path = "{data}"\nformat = "csv"\n')
+    env = _env_with_toml(toml)
+    r = _run("normalize", env=env)
+    assert r.returncode == 0, r.stderr
+    # In place by definition (its directive IS the exact path) → nothing to do.
+    assert "Normalized: 0 objects" in r.stdout

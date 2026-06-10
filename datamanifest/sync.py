@@ -50,24 +50,40 @@ field ladder, fed two inputs in this order of authority:
 
 We never re-implement the ladder; we only choose its ``env`` / ``host`` inputs.
 
+Targets (the generalized operand grammar)
+-----------------------------------------
+Every datamanifest transfer is **store ↔ location**: one end is always the
+project store (it supplies the selection, the machine-independent ``rel`` and
+the checksums); the other end — the operand — names a location:
+
+- ``HOST:``      — the remote machine's *store* (folders resolved remotely);
+- ``HOST:PATH``  — an explicit folder on an ssh host;
+- ``PATH``       — a local folder, keyed layout (``push`` = raw export,
+  ``pull`` = adopt-by-copy).
+
+rsync's colon rule: a colon means remote. The historical bare-host form
+(``push ID host``, no colon) is still accepted with a deprecation warning.
+
 Contract
 --------
-- **Target = an SSH address** (``user@host`` or ``host``): transport (rsync over
-  ssh) + host identity. No remote registry.
-- **Local (``$repo``-relative) objects are out of scope.** A dataset or cache
-  whose folder resolves under the project root is refused — only machine-global
-  locations (``$user_data_dir`` / ``$user_cache_dir`` / user-defined) sync.
-- **Writes no manifest** (bytes only). A received object lands as an orphan,
+- **Writes no manifest** (bytes only). A ``pull`` records the received object
+  in the state file; a pushed object lands in the receiving store as an orphan,
   usable via read-resolution.
-- **Integrity is rsync's**; **idempotent** (a no-op when the target already holds
-  the object complete — its ``.complete`` marker is present).
+- **Local (``$repo``-relative) objects are out of scope for the store-resolved
+  ``HOST:`` form** — re-attaching ``rel`` under a remote store needs a
+  machine-global location. The refusal **lifts for explicit-path targets**
+  (``PATH`` / ``HOST:PATH``), where the destination is given outright.
+- **Integrity is rsync's** (a byte copy locally); **idempotent** (a no-op when
+  the target already holds the object complete).
 - **Symmetric** push/pull; only the transfer direction differs.
 """
 
 import os
+import shutil
 import subprocess
 
 from . import store
+from .config import logger
 from .database import (
     list_alternative_keys,
     search_datasets,
@@ -75,6 +91,8 @@ from .database import (
 
 __all__ = [
     "SyncObject",
+    "SyncTarget",
+    "parse_target",
     "resolve_object",
     "resolve_objects",
     "sync_object_from_location",
@@ -99,6 +117,63 @@ class RemoteRepoError(ValueError):
 class AmbiguousIdError(ValueError):
     """Raised when an ``<id>`` resolves to more than one object without
     ``--batch``."""
+
+
+class SyncTarget:
+    """A parsed push/pull operand — the non-store end of a transfer.
+
+    ``kind`` is one of:
+
+    - ``"store"``       — the remote machine's store (``HOST:``); folders are
+      resolved in the remote context.
+    - ``"remote-path"`` — an explicit folder on an ssh host (``HOST:PATH``).
+    - ``"local-path"``  — a local folder, keyed layout (``PATH``).
+    """
+
+    __slots__ = ("kind", "host", "path", "raw")
+
+    def __init__(self, *, kind, host="", path="", raw=""):
+        self.kind = kind
+        self.host = host
+        self.path = path
+        self.raw = raw
+
+    def __repr__(self):
+        return f"<SyncTarget {self.kind} host={self.host!r} path={self.path!r}>"
+
+
+def parse_target(operand) -> "SyncTarget":
+    """Parse a push/pull *operand* per the colon rule: a colon means remote
+    (``HOST:`` = the remote store, ``HOST:PATH`` = an explicit remote folder);
+    no colon means a local folder.
+
+    The historical bare-host form (``push ID host``, no colon) is still
+    recognized — an operand with no path separator that does not exist locally
+    (or any ``user@host``) — and warned as deprecated: write ``host:`` instead.
+    """
+    if isinstance(operand, SyncTarget):
+        return operand
+    if ":" in operand:
+        host, _, path = operand.partition(":")
+        if not host:
+            raise ValueError(f"invalid target {operand!r}: empty host")
+        if path:
+            return SyncTarget(kind="remote-path", host=host, path=path,
+                              raw=operand)
+        return SyncTarget(kind="store", host=host, raw=operand)
+    # No colon: a local folder — except the deprecated bare-host form (an
+    # ssh-looking word with no path separator that names nothing on disk).
+    looks_like_path = (os.sep in operand or operand in (".", "..")
+                       or operand.startswith(("~", ".")) or os.path.exists(operand))
+    if "@" in operand or not looks_like_path:
+        logger.warning(
+            "bare host target %r is deprecated (a colon now distinguishes a "
+            "remote from a local folder): write %r.", operand, operand + ":",
+        )
+        return SyncTarget(kind="store", host=operand, raw=operand)
+    return SyncTarget(kind="local-path",
+                      path=os.path.abspath(os.path.expanduser(operand)),
+                      raw=operand)
 
 
 class SyncObject:
@@ -171,14 +246,15 @@ def _object_size(path):
 # address resolution
 # ---------------------------------------------------------------------------
 
-def _resolve_fetched(db, entry, ident, project_root):
+def _resolve_fetched(db, entry, ident, project_root, *, allow_local=False):
     """Build a :class:`SyncObject` for a fetched dataset *entry*.
 
-    Refuses a **local** (``$repo``-relative) dataset — only machine-global
-    locations sync. The machine-independent address is the dataset's ``key``,
+    Refuses a **local** (``$repo``-relative) dataset unless *allow_local* (an
+    explicit-path target supplies the destination outright, so the refusal
+    lifts). The machine-independent address is the dataset's ``key``,
     re-attached under the receiver's ``datasets_dir``."""
     expr = entry.storage_path or "$datasets_dir/$key"
-    if store.is_local_path(
+    if not allow_local and store.is_local_path(
         expr, key=entry.key, project_root=project_root,
         storage_config=db.storage_config,
     ):
@@ -294,14 +370,15 @@ def _all_produced_for_id(ident, cache_root):
     return out
 
 
-def _resolve_produced(db, ident, project_root, *, full_key, artifact_dir):
+def _resolve_produced(db, ident, project_root, *, full_key, artifact_dir,
+                      allow_local=False):
     """Build a :class:`SyncObject` for a produced artifact addressed by
     *full_key* (``cachetype/[version/]hash``) living at *artifact_dir*.
 
-    Refuses a **local** (repo-relative) ``datacache_dir`` — only a machine-global
-    cache syncs. The machine-independent address is *full_key*, re-attached under
-    the receiver's ``datacache_dir``."""
-    if store.is_local_path(
+    Refuses a **local** (repo-relative) ``datacache_dir`` unless *allow_local*
+    (explicit-path target). The machine-independent address is *full_key*,
+    re-attached under the receiver's ``datacache_dir``."""
+    if not allow_local and store.is_local_path(
         "$datacache_dir", project_root=project_root,
         storage_config=db.storage_config,
     ):
@@ -318,7 +395,7 @@ def _resolve_produced(db, ident, project_root, *, full_key, artifact_dir):
     )
 
 
-def resolve_object(db, ident, *, project_root=None):
+def resolve_object(db, ident, *, project_root=None, allow_local=False):
     """Resolve a single *ident* to exactly one :class:`SyncObject`.
 
     Tries the fetched-dataset addressing first (``name`` / ``alias`` / ``doi``);
@@ -326,7 +403,8 @@ def resolve_object(db, ident, *, project_root=None):
     (``cachetype[/version]/hash`` or an unambiguous hash prefix) against the
     on-disk ``$cache`` store. Raises :class:`AmbiguousIdError` when the id
     resolves to more than one object (use :func:`resolve_objects` with
-    ``batch=True`` to transfer all matches).
+    ``batch=True`` to transfer all matches). *allow_local* lifts the
+    repo-local refusal (explicit-path targets).
     """
     if project_root is None:
         project_root = db.get_project_root()
@@ -342,7 +420,8 @@ def resolve_object(db, ident, *, project_root=None):
         )
     if len(matches) == 1:
         _name, entry = matches[0]
-        return _resolve_fetched(db, entry, ident, project_root)
+        return _resolve_fetched(db, entry, ident, project_root,
+                                allow_local=allow_local)
 
     # No dataset — try a produced artifact.
     cache_root = store.datacache_dir(
@@ -351,10 +430,12 @@ def resolve_object(db, ident, *, project_root=None):
     full_key, artifact_dir = _produced_key_from_id(ident, cache_root)
     return _resolve_produced(
         db, ident, project_root, full_key=full_key, artifact_dir=artifact_dir,
+        allow_local=allow_local,
     )
 
 
-def resolve_objects(db, ident, *, project_root=None, batch=False):
+def resolve_objects(db, ident, *, project_root=None, batch=False,
+                    allow_local=False):
     """Resolve *ident* to a list of :class:`SyncObject` (the bulk / ``--batch``
     form). Without *batch*, an ambiguous id raises; with it, all matches are
     returned (datasets *or* produced artifacts)."""
@@ -362,12 +443,14 @@ def resolve_objects(db, ident, *, project_root=None, batch=False):
         project_root = db.get_project_root()
 
     if not batch:
-        return [resolve_object(db, ident, project_root=project_root)]
+        return [resolve_object(db, ident, project_root=project_root,
+                               allow_local=allow_local)]
 
     objects = []
     for _name, entry in search_datasets(db, ident):
         try:
-            objects.append(_resolve_fetched(db, entry, ident, project_root))
+            objects.append(_resolve_fetched(db, entry, ident, project_root,
+                                            allow_local=allow_local))
         except RemoteRepoError:
             raise
     cache_root = store.datacache_dir(
@@ -376,25 +459,26 @@ def resolve_objects(db, ident, *, project_root=None, batch=False):
     for full_key, artifact_dir in _all_produced_for_id(ident, cache_root):
         objects.append(_resolve_produced(
             db, ident, project_root, full_key=full_key,
-            artifact_dir=artifact_dir,
+            artifact_dir=artifact_dir, allow_local=allow_local,
         ))
     if not objects:
         raise ValueError(f"no object found for id {ident!r}")
     return objects
 
 
-def sync_object_from_location(db, *, kind, ident, location, project_root=None):
+def sync_object_from_location(db, *, kind, ident, location, project_root=None,
+                              allow_local=False):
     """Build a :class:`SyncObject` from an already-resolved on-disk *location*.
 
     Used by the bulk ``list --push/--pull`` path, where the maintenance
     enumeration has already produced the object's kind / absolute location: the
     machine-independent ``rel`` is the location stripped of the local root
     (``datasets_dir`` for fetched, ``datacache_dir`` for produced). Refuses a
-    **local** (repo-relative) root."""
+    **local** (repo-relative) root unless *allow_local* (explicit-path target)."""
     if project_root is None:
         project_root = db.get_project_root()
     field = "$datacache_dir" if kind == "cached" else "$datasets_dir"
-    if store.is_local_path(
+    if not allow_local and store.is_local_path(
         field, project_root=project_root, storage_config=db.storage_config,
     ):
         raise RemoteRepoError(
@@ -472,10 +556,18 @@ def remote_root(obj, host, *, db, project_root, runner=None):
     )
 
 
-def remote_abs(obj, host, *, db, project_root, runner=None):
-    """The object's absolute path on *host*: ``<remote-root>/<rel>``."""
+def remote_abs(obj, target, *, db, project_root, runner=None):
+    """The object's path at the non-store end of the transfer.
+
+    For a store target (``HOST:``) this is ``<remote-root>/<rel>`` with the
+    root resolved in the remote context; for an explicit path target
+    (``HOST:PATH`` / ``PATH``) the given folder replaces the root outright —
+    nothing is resolved."""
+    target = parse_target(target)
+    if target.kind in ("remote-path", "local-path"):
+        return os.path.join(target.path, obj.rel)
     root = remote_root(
-        obj, host, db=db, project_root=project_root, runner=runner,
+        obj, target.host, db=db, project_root=project_root, runner=runner,
     )
     return os.path.join(root, obj.rel)
 
@@ -483,6 +575,62 @@ def remote_abs(obj, host, *, db, project_root, runner=None):
 # ---------------------------------------------------------------------------
 # transfer
 # ---------------------------------------------------------------------------
+
+def copy_object_bytes(src, dst):
+    """Copy an object's bytes (a file or a directory tree) from *src* to *dst*
+    via a staging sibling + atomic rename — *dst* never appears half-written.
+    A pre-existing *dst* is replaced. Returns *dst*."""
+    os.makedirs(os.path.dirname(dst) or ".", exist_ok=True)
+    tmp = store.tmp_path(dst)
+    if os.path.isdir(tmp) and not os.path.islink(tmp):
+        shutil.rmtree(tmp)
+    elif os.path.exists(tmp):
+        os.remove(tmp)
+    if os.path.isdir(src) and not os.path.islink(src):
+        shutil.copytree(src, tmp, symlinks=True)
+    else:
+        shutil.copy2(src, tmp)
+    if os.path.isdir(dst) and not os.path.islink(dst):
+        shutil.rmtree(dst)
+    elif os.path.exists(dst):
+        os.remove(dst)
+    os.rename(tmp, dst)
+    return dst
+
+
+def _transfer_local(obj, root, *, direction, dry_run=False):
+    """The ``PATH`` target: a plain local byte copy under the keyed layout.
+
+    ``push`` exports the object to ``<root>/<rel>`` (a raw export — the result
+    is itself a read pool); ``pull`` adopts ``<root>/<rel>`` by copy into the
+    local store (the caller records it in the state file). A file object's
+    sibling ``.complete`` marker travels along; a directory's inner marker
+    travels with the tree."""
+    other = os.path.join(root, obj.rel)
+    plan = {
+        "id": obj.id,
+        "kind": obj.kind,
+        "direction": direction,
+        "local": obj.local_abs,
+        "remote": other,
+        "host": "",
+        "size": obj.size,
+        "argv": [],
+    }
+    if dry_run:
+        return plan
+
+    src, dst = ((obj.local_abs, other) if direction == "push"
+                else (other, obj.local_abs))
+    if not os.path.exists(src):
+        raise ValueError(
+            f"{obj.id!r}: nothing found at {src} to {direction}"
+        )
+    copy_object_bytes(src, dst)
+    if os.path.isfile(dst) and os.path.isfile(src + ".complete"):
+        shutil.copy2(src + ".complete", dst + ".complete")
+    return plan
+
 
 def _operands(obj, host, remote_path, *, direction):
     """Build the rsync source/destination operands for *obj*.
@@ -514,16 +662,22 @@ def _operands(obj, host, remote_path, *, direction):
     return pairs
 
 
-def transfer(db, obj, host, *, direction, project_root=None, dry_run=False,
+def transfer(db, obj, target, *, direction, project_root=None, dry_run=False,
              runner=None):
-    """Transfer *obj* to/from *host* (``direction`` is ``"push"`` / ``"pull"``).
+    """Transfer *obj* to/from *target* (``direction`` is ``"push"`` / ``"pull"``).
 
-    - resolves the remote root (best-effort remote-env probe → ``_HOST`` →
-      default), composes ``remote_abs = <remote-root>/<rel>``;
+    *target* is a :class:`SyncTarget` or an operand string (see
+    :func:`parse_target`): ``HOST:`` (the remote store), ``HOST:PATH`` (an
+    explicit remote folder), or a local ``PATH`` (a plain byte copy).
+
+    - resolves the other end's path: the remote root (best-effort remote-env
+      probe → ``_HOST`` → default) for a store target, the explicit folder
+      otherwise, composing ``<root>/<rel>``;
     - **push:** ``ssh <host> mkdir -p <remote-parent>`` then
       ``rsync -a -e ssh <local_abs> <host>:<remote_abs>``;
     - **pull:** ``os.makedirs(<local-parent>)`` then
       ``rsync -a -e ssh <host>:<remote_abs> <local_abs>``;
+    - a local ``PATH`` target copies bytes directly (staging + atomic rename);
     - a **file** object also transfers its sibling ``<file>.complete`` marker; a
       **directory** carries its inner marker via the recursive copy;
     - **idempotent:** a real run is a near-no-op when the target is already
@@ -532,17 +686,23 @@ def transfer(db, obj, host, *, direction, project_root=None, dry_run=False,
       for any transfer.
 
     Returns a dict describing the resolved plan (``id`` / ``kind`` / ``local`` /
-    ``remote`` / ``size`` / ``argv`` — the list of rsync argv that ran, empty on
-    dry run).
+    ``remote`` (the other end's path) / ``host`` (``""`` for a local target) /
+    ``size`` / ``argv`` — the list of rsync argv that ran, empty on dry run or
+    for a local copy).
     """
     if direction not in ("push", "pull"):
         raise ValueError(f"direction must be 'push' or 'pull', got {direction!r}")
     if project_root is None:
         project_root = db.get_project_root()
+    target = parse_target(target)
+    if target.kind == "local-path":
+        return _transfer_local(obj, target.path, direction=direction,
+                               dry_run=dry_run)
+    host = target.host
     run = runner or _runner
 
     rpath = remote_abs(
-        obj, host, db=db, project_root=project_root, runner=runner,
+        obj, target, db=db, project_root=project_root, runner=runner,
     )
     remote_parent = os.path.dirname(rpath)
 
@@ -552,6 +712,7 @@ def transfer(db, obj, host, *, direction, project_root=None, dry_run=False,
         "direction": direction,
         "local": obj.local_abs,
         "remote": rpath,
+        "host": host,
         "size": obj.size,
         "argv": [],
     }

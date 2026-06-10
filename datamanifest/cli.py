@@ -88,7 +88,7 @@ def _add_move_opts(parser, *, with_batch=True):
 
 def _add_sync_opts(parser, *, with_batch=True):
     """Add `push`/`pull`'s options (``--dry-run``, plus ``--batch`` for the
-    standalone id form). The ``SSH_HOST`` positional is added by the caller."""
+    standalone id form). The ``TARGET`` positional is added by the caller."""
     parser.add_argument(
         "--dry-run", action="store_true",
         help="Report the selection (id, kind, paths, size) and transfer nothing",
@@ -106,8 +106,8 @@ def _add_sync_opts(parser, *, with_batch=True):
 _LIST_ACTION_SPECS = {
     "delete": {"adder": _add_delete_opts, "positionals": ()},
     "move": {"adder": _add_move_opts, "positionals": (("dest", "DEST"),)},
-    "push": {"adder": _add_sync_opts, "positionals": (("host", "SSH_HOST"),)},
-    "pull": {"adder": _add_sync_opts, "positionals": (("host", "SSH_HOST"),)},
+    "push": {"adder": _add_sync_opts, "positionals": (("target", "TARGET"),)},
+    "pull": {"adder": _add_sync_opts, "positionals": (("target", "TARGET"),)},
 }
 
 
@@ -292,6 +292,9 @@ def _enumerate_objects(db, heavy=frozenset({"size"})):
     # (referenced=False) — its own concept, surfaced by --orphan; it is not
     # tagged "untracked" (untracked is a dataset-only adoption state).
     for obj in found.values():
+        obj.derived = os.path.abspath(os.path.join(
+            cache_root, obj.cachetype,
+            *((obj.version,) if obj.version else ()), obj.hash))
         objects.append(obj)
 
     # --- fetched datasets -----------------------------------------------------
@@ -321,6 +324,7 @@ def _enumerate_objects(db, heavy=frozenset({"size"})):
             referenced=True,
             storage_path=getattr(entry, "storage_path", "") or "",
             dirty=dirty,
+            derived=derived_abs,
         ))
     return objects
 
@@ -416,6 +420,8 @@ def _filter_objects(objects, args, db=None):
     if outside and db is not None:
         ds_roots, dc_roots = _conform_roots(db)
         out = [o for o in out if _is_outside(o, ds_roots, dc_roots)]
+    if getattr(args, "out_of_place", False):
+        out = [o for o in out if _is_out_of_place(o)]
     if args.orphan:
         out = [o for o in out if o.referenced is False]
     elif (not getattr(args, "all", False) and not explicit_selector
@@ -634,7 +640,7 @@ def _cmd_list(args):
             )
             _maintain(objects, margs, db)
         else:
-            _list_sync(objects, sub.host, action, sub.dry_run, db)
+            _list_sync(objects, sub.target, action, sub.dry_run, db)
         return
 
     # ----- output style (explicit; independent of the filters) -----
@@ -1072,6 +1078,111 @@ def _refresh(objects, db, *, dry_run=False, pools=None):
               "(dry run; run without --dry-run to apply)")
 
 
+def _cmd_normalize(args):
+    """Re-home selected tracked objects whose bytes are not at the
+    directive-derived path, then repoint the state file: **the bytes follow the
+    directive** (the pairing of `refresh`, which makes the state file follow
+    the bytes). Never downloads (`download` is the verb for missing data)."""
+    db = _get_db()
+    objects = _filter_objects(_enumerate_objects(db, heavy=frozenset()), args, db)
+    _normalize(objects, db, dry_run=args.dry_run, copy=args.copy)
+
+
+def _normalize(objects, db, *, dry_run=False, copy=False):
+    """Move/copy each selected out-of-place object to its directive-derived path
+    and repoint its state-file record.
+
+    Per object: bytes already at the derived path → no-op; found in a **read
+    pool** → copy (pools are shared, never drained); anywhere else → move
+    (*copy* forces copy everywhere); user-managed / ``skip_download`` /
+    ``lazy_access`` → skipped, reported. A declared dataset checksum is
+    verified on the staged copy before any record changes; the copy/move lands
+    (staging sibling + atomic rename) before the record is repointed — nothing
+    is deleted first."""
+    from . import storage as storage_mod
+    from .cache import CachedIndex
+    from .config import hash_path
+    from .sync import copy_object_bytes
+
+    do_it = not dry_run
+    project_root = db.get_project_root()
+    base = os.path.dirname(db.datasets_toml) if db.datasets_toml else os.getcwd()
+    index = CachedIndex.read_or_empty(base or ".")
+    ds_pools, dc_pools = (
+        storage_mod.datasets_pools(project_root=project_root,
+                                   storage_config=db.storage_config),
+        storage_mod.datacache_pools(project_root=project_root,
+                                    storage_config=db.storage_config),
+    )
+    changed = skipped = 0
+    index_dirty = False
+
+    for obj in objects:
+        if not _is_out_of_place(obj):
+            continue
+        if obj.kind == "datasets":
+            protected, entry = _dataset_protected(db, obj)
+            if protected:
+                print(f"Skipped (protected: user-managed/skip_download/"
+                      f"lazy_access): {obj.key}")
+                skipped += 1
+                continue
+        elif obj.kind != "cached":
+            continue
+        src, dst = obj.location, obj.derived
+        pools = dc_pools if obj.kind == "cached" else ds_pools
+        in_pool = any(_under(os.path.abspath(src), r) for r in pools)
+        action = "copy" if (copy or in_pool) else "move"
+        why = " (read pool, never drained)" if (in_pool and not copy) else ""
+        verb = ("Would " + action) if dry_run else action.capitalize()
+        print(f"{verb}{why}: {obj.key}  {src} -> {dst}")
+        if not do_it:
+            changed += 1
+            continue
+
+        copy_object_bytes(src, dst)
+        # Verify a declared dataset checksum on the landed copy before any
+        # record changes (a mismatch aborts this object; nothing was deleted).
+        if obj.kind == "datasets":
+            entry = db.datasets.get(obj.key)
+            declared = (entry is not None and bool(entry.checksum)
+                        and not (db.skip_checksum or entry.skip_checksum))
+            if declared:
+                actual = hash_path(dst, entry.hash_algo or "sha256")
+                if actual != entry.hash_value:
+                    print(f"Error: checksum mismatch for {obj.key} after copy "
+                          f"(expected {entry.checksum}, got {actual[:12]}…); "
+                          "record unchanged, source kept.", file=sys.stderr)
+                    _remove_path_and_markers(dst)
+                    skipped += 1
+                    continue
+            if os.path.isfile(dst) and os.path.isfile(src + ".complete"):
+                import shutil as _sh
+                _sh.copy2(src + ".complete", dst + ".complete")
+            index.register_dataset(
+                key=entry.key, storage_path=_record_portable(dst, project_root))
+            index_dirty = True
+        else:
+            index_dirty |= index.set_instance_path(
+                cachetype=obj.cachetype, version=obj.version, hash=obj.hash,
+                storage_path=_record_portable(dst, project_root))
+        if action == "move":
+            _remove_path_and_markers(src)
+        changed += 1
+
+    if do_it and index_dirty:
+        index.write()
+
+    noun = "object" if changed == 1 else "objects"
+    if do_it:
+        print(f"Normalized: {changed} {noun}"
+              + (f" ({skipped} skipped)" if skipped else ""))
+    else:
+        print(f"Would normalize: {changed} {noun}"
+              + (f" ({skipped} skipped)" if skipped else "")
+              + " (dry run; re-run without --dry-run to apply)")
+
+
 def _fmt_size(n: int) -> str:
     """Human-readable byte size for the sync dry-run report."""
     size = float(n)
@@ -1082,41 +1193,91 @@ def _fmt_size(n: int) -> str:
     return f"{n} B"
 
 
-def _do_transfer(db, objects, host, direction, args):
-    """Push/pull each resolved :class:`SyncObject` to/from *host*.
+def _other_end(plan):
+    """Render the non-store end of a transfer plan (``host:path`` for a remote,
+    the bare path for a local folder)."""
+    host = plan.get("host", "")
+    return f"{host}:{plan['remote']}" if host else plan["remote"]
+
+
+def _record_pulled(db, objects):
+    """Record pulled objects in the state file (the adopt-by-copy contract: a
+    received object is tracked directly, not left as an orphan). Best-effort —
+    an unwritable state file never fails a completed transfer."""
+    from .cache import CachedIndex
+
+    base = os.path.dirname(db.datasets_toml) if db.datasets_toml else ""
+    if not base:
+        return
+    project_root = db.get_project_root()
+    try:
+        index = CachedIndex.read_or_empty(base)
+        touched = False
+        for obj in objects:
+            if not os.path.exists(obj.local_abs):
+                continue
+            sp = _record_portable(obj.local_abs, project_root)
+            if obj.kind == "datasets":
+                index.register_dataset(key=obj.rel, storage_path=sp)
+                touched = True
+            else:
+                parts = [p for p in obj.rel.split("/") if p]
+                if len(parts) == 2:
+                    ct, ver, h = parts[0], "", parts[1]
+                elif len(parts) == 3:
+                    ct, ver, h = parts
+                else:
+                    continue
+                index.register(cachetype=ct, version=ver, hash=h,
+                               storage_path=sp)
+                touched = True
+        if touched:
+            index.write()
+    except Exception:  # noqa: BLE001 - recording is best-effort inventory upkeep
+        logger.debug("could not record pulled objects", exc_info=True)
+
+
+def _do_transfer(db, objects, target, direction, args):
+    """Push/pull each resolved :class:`SyncObject` to/from *target* (a parsed
+    :class:`SyncTarget`).
 
     Shared by the ``push`` / ``pull`` subcommands and ``list --push/--pull``.
     With ``--dry-run`` it reports the selection (id, kind, local & remote paths,
-    size) and transfers nothing."""
+    size) and transfers nothing. A real ``pull`` records each received object
+    in the state file."""
     from . import sync
 
     project_root = db.get_project_root()
     verb = direction.capitalize()
     for obj in objects:
         plan = sync.transfer(
-            db, obj, host, direction=direction, project_root=project_root,
+            db, obj, target, direction=direction, project_root=project_root,
             dry_run=args.dry_run,
         )
+        other = _other_end(plan)
         if args.dry_run:
             print(
                 f"Would {direction}: {plan['kind']} {plan['id']}  "
                 f"{_fmt_size(plan['size'])}\n"
                 f"  local : {plan['local']}\n"
-                f"  remote: {host}:{plan['remote']}"
+                f"  remote: {other}"
             )
         else:
-            print(f"{verb}ed: {plan['kind']} {plan['id']}  -> {host}:{plan['remote']}"
-                  if direction == "push" else
-                  f"{verb}ed: {plan['kind']} {plan['id']}  <- {host}:{plan['remote']}")
+            arrow = "->" if direction == "push" else "<-"
+            print(f"{verb}ed: {plan['kind']} {plan['id']}  {arrow} {other}")
+    if direction == "pull" and not args.dry_run:
+        _record_pulled(db, objects)
 
 
-def _list_sync(objects, host, direction, dry_run, db):
-    """Push/pull the `list`-selected *objects* to/from *host* — the engine behind
-    ``list --push`` / ``list --pull``. Resolves each present object to a
-    :class:`SyncObject` (skipping repo-local, out-of-scope ones) and transfers
-    the set via :func:`_do_transfer`."""
+def _list_sync(objects, operand, direction, dry_run, db):
+    """Push/pull the `list`-selected *objects* to/from the *operand* target —
+    the engine behind ``list --push`` / ``list --pull``. Resolves each present
+    object to a :class:`SyncObject` (skipping repo-local ones for a
+    store-resolved target) and transfers the set via :func:`_do_transfer`."""
     from . import sync
 
+    target = sync.parse_target(operand)
+    allow_local = target.kind != "store"
     sync_objects = []
     for obj in objects:
         if not obj.present:  # nothing on disk to transfer
@@ -1124,12 +1285,13 @@ def _list_sync(objects, host, direction, dry_run, db):
         try:
             sync_objects.append(sync.sync_object_from_location(
                 db, kind=obj.kind, ident=obj.key, location=obj.location,
+                allow_local=allow_local,
             ))
         except sync.RemoteRepoError:
             print(f"Skipped (local, out of scope for sync): {obj.key}",
                   file=sys.stderr)
             continue
-    _do_transfer(db, sync_objects, host, direction,
+    _do_transfer(db, sync_objects, target, direction,
                  argparse.Namespace(dry_run=dry_run))
 
 
@@ -1137,16 +1299,20 @@ def _cmd_push(args):
     db = _get_db()
     from . import sync
 
-    objects = sync.resolve_objects(db, args.id, batch=args.batch)
-    _do_transfer(db, objects, args.host, "push", args)
+    target = sync.parse_target(args.target)
+    objects = sync.resolve_objects(db, args.id, batch=args.batch,
+                                   allow_local=target.kind != "store")
+    _do_transfer(db, objects, target, "push", args)
 
 
 def _cmd_pull(args):
     db = _get_db()
     from . import sync
 
-    objects = sync.resolve_objects(db, args.id, batch=args.batch)
-    _do_transfer(db, objects, args.host, "pull", args)
+    target = sync.parse_target(args.target)
+    objects = sync.resolve_objects(db, args.id, batch=args.batch,
+                                   allow_local=target.kind != "store")
+    _do_transfer(db, objects, target, "pull", args)
 
 
 def _apply_delegate_override(db, delegate):
@@ -1387,6 +1553,19 @@ def _conform_roots(db):
 
     return (_roots(storage_mod.datasets_dir, storage_mod.datasets_pools),
             _roots(storage_mod.datacache_dir, storage_mod.datacache_pools))
+
+
+def _is_out_of_place(obj):
+    """Whether a tracked, present object's bytes are not at the directive-derived
+    path (`normalize`'s selection). Deliberately distinct from ``--outside``:
+    a read-pool copy is conformant for --outside but *is* out-of-place, while
+    user-managed exact-path data is "outside" but in place (its location equals
+    its own directive)."""
+    loc = getattr(obj, "location", "")
+    der = getattr(obj, "derived", "")
+    if not loc or not der or not getattr(obj, "present", False):
+        return False
+    return os.path.abspath(loc) != os.path.abspath(der)
 
 
 def _is_outside(obj, ds_roots, dc_roots):
@@ -1958,6 +2137,12 @@ def main():
              "and the read pools (data fetched into or moved to an ad-hoc folder)",
     )
     filter_group.add_argument(
+        "--out-of-place", dest="out_of_place", action="store_true",
+        help="Only present objects whose bytes are not at the directive-derived "
+             "path (recorded ≠ derived) — the `normalize` selection; pool "
+             "copies count, user-managed exact paths do not",
+    )
+    filter_group.add_argument(
         "--older-than", dest="older_than", metavar="AGE",
         help="Only objects last accessed more than AGE ago (e.g. 7d, 36h, 3600)",
     )
@@ -2016,14 +2201,14 @@ def main():
              "(DEST then --dry-run); the manifest is not edited",
     )
     _act_excl.add_argument(
-        "--push", nargs=argparse.REMAINDER, default=None, metavar="SSH_HOST ...",
-        help="Push the selected objects to SSH_HOST (rsync over ssh), forwarding "
-             "push's options (SSH_HOST then --dry-run)",
+        "--push", nargs=argparse.REMAINDER, default=None, metavar="TARGET ...",
+        help="Push the selected objects to TARGET (HOST: store / HOST:PATH / "
+             "local PATH), forwarding push's options (TARGET then --dry-run)",
     )
     _act_excl.add_argument(
-        "--pull", nargs=argparse.REMAINDER, default=None, metavar="SSH_HOST ...",
-        help="Pull the selected objects from SSH_HOST (rsync over ssh), "
-             "forwarding pull's options (SSH_HOST then --dry-run)",
+        "--pull", nargs=argparse.REMAINDER, default=None, metavar="TARGET ...",
+        help="Pull the selected objects from TARGET (HOST: store / HOST:PATH / "
+             "local PATH), forwarding pull's options (TARGET then --dry-run)",
     )
     p_list.set_defaults(func=_cmd_list)
 
@@ -2261,6 +2446,53 @@ def main():
     _add_pool_override_flags(p_refresh)
     p_refresh.set_defaults(func=_cmd_refresh)
 
+    # normalize — bytes follow the directive (the pairing of refresh).
+    p_norm = subparsers.add_parser(
+        "normalize",
+        help="Re-home tracked objects to their directive-derived path "
+             "(bytes follow the directive; refresh is the inverse)",
+        description=(
+            "Move (or copy) every selected tracked object whose bytes are not "
+            "at the directive-derived path ($datasets_dir/$key, "
+            "$datacache_dir/<cachetype>[/<version>]/<hash>), then repoint the "
+            "state file. Bytes already in place are a no-op; a read-pool copy "
+            "is copied (pools are shared, never drained); anything else moves "
+            "(--copy forces copy). User-managed / skip_download / lazy_access "
+            "data is skipped and reported. Declared checksums are verified on "
+            "the way; the copy lands (staging + atomic rename) before any "
+            "record changes. Never downloads. Preview the selection with "
+            "`list --out-of-place`."
+        ),
+    )
+    p_norm.add_argument(
+        "search", nargs="*", metavar="TERM",
+        help="Free-text filter term(s), as in `list`",
+    )
+    norm_filters = p_norm.add_argument_group("filters")
+    norm_filters.add_argument("--any", action="store_true",
+                              help="Match objects where ANY term matches")
+    norm_filters.add_argument("--invert", action="store_true",
+                              help="Invert the term match")
+    norm_filters.add_argument("--cached", action="store_true",
+                              help="Only produced (cached) artifacts")
+    norm_filters.add_argument("--datasets", action="store_true",
+                              help="Only fetched datasets")
+    norm_filters.add_argument("--format", metavar="FMT",
+                              help="Only objects in this serialization format")
+    norm_filters.add_argument("--hash", nargs="+", metavar="PREFIX",
+                              help="Only artifacts whose hash starts with one "
+                                   "of these prefixes")
+    norm_filters.add_argument("--older-than", dest="older_than", metavar="AGE",
+                              help="Only objects last accessed more than AGE ago")
+    norm_opts = p_norm.add_argument_group("options")
+    norm_opts.add_argument("--dry-run", action="store_true",
+                           help="Preview without moving/copying anything")
+    norm_opts.add_argument("--copy", action="store_true",
+                           help="Copy everywhere instead of moving (sources kept)")
+    p_norm.set_defaults(func=_cmd_normalize, orphan=False, all=False,
+                        dirty=False, outside=False, present=False,
+                        missing=False, out_of_place=False)
+
     # config — scoped storage configuration (git-config style).
     def _add_scope_flags(p, *, deprecated_alias=False):
         excl = p.add_mutually_exclusive_group()
@@ -2371,22 +2603,30 @@ def main():
     )
     p_format.set_defaults(func=_cmd_format)
 
-    # push / pull — cross-machine sync of a single object (rsync over ssh).
+    # push / pull — transfer of a single object (rsync over ssh / local copy).
     for name, func, arrow in (("push", _cmd_push, "to"), ("pull", _cmd_pull, "from")):
         p_sync = subparsers.add_parser(
             name,
-            help=f"Transfer a stored object {arrow} an SSH host (rsync over ssh)",
+            help=f"Transfer a stored object {arrow} a target "
+                 "(HOST: store / HOST:PATH / local PATH)",
             description=(
-                f"{name.capitalize()} a single stored object {arrow} SSH_HOST. "
-                "The object is addressed by its machine-independent id: a fetched "
-                "dataset by name/alias/doi, or a produced artifact by "
+                f"{name.capitalize()} a single stored object {arrow} TARGET. "
+                "TARGET is the remote machine's store (HOST:), an explicit "
+                "folder on an ssh host (HOST:PATH), or a local folder in keyed "
+                f"layout (PATH — {name} = "
+                + ("a raw export" if name == "push" else "adopt-by-copy")
+                + "). The object is addressed by its machine-independent id: a "
+                "fetched dataset by name/alias/doi, or a produced artifact by "
                 "cachetype[/version]/hash (full or an unambiguous hash prefix). "
                 "An ambiguous id errors unless --batch. Writes no manifest; "
-                "idempotent. $repo-stored datasets are refused (out of scope)."
+                "idempotent; pull records the received object in the state "
+                "file. $repo-stored objects are refused for the HOST: store "
+                "form only (an explicit path lifts the refusal)."
             ),
         )
         p_sync.add_argument("id", metavar="ID", help="Object identifier")
-        p_sync.add_argument("host", metavar="SSH_HOST", help="user@host or host")
+        p_sync.add_argument("target", metavar="TARGET",
+                            help="HOST: (remote store), HOST:PATH, or a local PATH")
         sync_opts = p_sync.add_argument_group("options")
         _add_sync_opts(sync_opts)
         p_sync.set_defaults(func=func)

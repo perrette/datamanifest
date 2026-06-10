@@ -186,18 +186,56 @@ addressing as `delete`. `--dry-run` reports the selection (id, kind, paths,
 size) and transfers nothing. For bulk transfers, filter with `list` and use its
 `--push` / `--pull` actions.
 
-- The SSH target (`user@host`) is both the transport and the host identity —
+The `TARGET` operand follows rsync's colon rule (a colon means remote):
+
+| Operand | Meaning |
+|---|---|
+| `HOST:` | the remote machine's **store** (its folders resolved remotely) |
+| `HOST:PATH` | an explicit folder on an ssh host |
+| `PATH` (no colon) | a local folder, keyed layout — `push` = raw export, `pull` = adopt-by-copy |
+
+The historical bare-host form (`push ID host`, no colon) still works with a
+deprecation warning — write `host:`.
+
+- An SSH target (`user@host:`) is both the transport and the host identity —
   no remote registry.
-- The receiver's folders are resolved best-effort from the remote's own
-  environment (the tool probes `DATAMANIFEST_*` via
+- For the store form, the receiver's folders are resolved best-effort from the
+  remote's own environment (the tool probes `DATAMANIFEST_*` via
   `ssh <host> 'source ~/.bashrc; env'`), then the manifest's
-  `[_STORAGE._HOST]` rules for that host, then the default.
-- A **local / `$repo`-relative object is not syncable**. The default folders
-  are machine-global, so objects are syncable out of the box; only an
-  explicitly repo-local configuration opts out.
-- Sync **writes no manifest** — a transferred object lands in the destination
-  store as an orphan (present, unreferenced) and is immediately usable; it is
-  idempotent (a no-op when the target already holds the object complete).
+  `[_STORAGE._HOST]` rules for that host, then the default. An explicit
+  `HOST:PATH` / `PATH` folder is used outright.
+- A **local / `$repo`-relative object is not syncable to a store target**. The
+  default folders are machine-global, so objects are syncable out of the box;
+  an explicit-path target lifts the refusal even for repo-local objects.
+- Sync **writes no manifest**. A `pull` records the received object in the
+  state file; a pushed object lands in the receiving store as an orphan
+  (present, unreferenced) and is immediately usable. Transfers are idempotent
+  (a no-op when the target already holds the object complete).
+- A folder produced by `push ID PATH` is itself a **read pool** — consumers
+  can add it to `datasets_pools`.
+
+### `normalize [TERM...] [--dry-run] [--copy]`
+
+Make **the bytes follow the directive** (the pairing of `refresh`, which makes
+the state file follow the bytes): every selected tracked object whose bytes
+are not at the directive-derived path (`$datasets_dir/$key`,
+`$datacache_dir/<cachetype>[/<version>]/<hash>`) is re-homed there and its
+state-file record repointed.
+
+| Bytes found | Action |
+|---|---|
+| at the derived path | no-op |
+| in a read pool | **copy** (pools are shared — never drained) |
+| anywhere else | **move** |
+| user-managed / `skip_download` / `lazy_access` | skipped, reported |
+
+`--copy` forces copy everywhere. Declared checksums are verified on the way;
+the copy/move lands (staging sibling + atomic rename) before any record
+changes. `normalize` never downloads (`download` is the verb for missing
+data). Preview the selection with `list --out-of-place` (recorded ≠ derived) —
+deliberately distinct from `--outside`: a read-pool copy is conformant for
+`--outside` but *is* out-of-place, while user-managed exact-path data is
+"outside" but in place.
 
 ## Configure storage
 

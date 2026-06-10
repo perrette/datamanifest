@@ -335,3 +335,97 @@ def test_cache_package_does_not_import_fetch_layer():
         if "import" in text and ("pipelines" in text or "database" in text):
             bad.append(f)
     assert bad == [], f"cache/ must not import the fetch layer: {bad}"
+
+
+# ----- the generalized operand grammar (spec-v5 §3.1) -------------------------
+
+def test_parse_target_colon_rule(tmp_path):
+    t = sync.parse_target("hpc:")
+    assert t.kind == "store" and t.host == "hpc"
+    t = sync.parse_target("user@hpc:")
+    assert t.kind == "store" and t.host == "user@hpc"
+    t = sync.parse_target("hpc:/archive/data")
+    assert t.kind == "remote-path" and t.host == "hpc" and t.path == "/archive/data"
+    # No colon ⇒ a local folder (absolute or with a path separator).
+    t = sync.parse_target(str(tmp_path))
+    assert t.kind == "local-path" and t.path == str(tmp_path)
+    t = sync.parse_target("./export")
+    assert t.kind == "local-path"
+
+
+def test_parse_target_bare_host_is_deprecated(caplog):
+    import logging
+
+    with caplog.at_level(logging.WARNING, logger="datamanifest"):
+        t = sync.parse_target("user@hpc")
+    assert t.kind == "store" and t.host == "user@hpc"
+    assert any("deprecated" in r.message for r in caplog.records)
+    with caplog.at_level(logging.WARNING, logger="datamanifest"):
+        t = sync.parse_target("hpc")          # bare word, nothing on disk
+    assert t.kind == "store" and t.host == "hpc"
+
+
+def test_local_path_push_exports_keyed_layout(db, tmp_path):
+    cache_root = _cache_root(db)
+    h = "e" * 64
+    _make_artifact(cache_root, "greet", h)
+    obj = sync.resolve_object(db, f"greet/{h}")
+    dest = tmp_path / "export"
+    plan = sync.transfer(db, obj, str(dest), direction="push")
+    assert plan["host"] == ""
+    out = dest / "greet" / h
+    assert (out / "value.txt").read_text() == "x"
+    assert (out / ".complete").exists()        # the dir marker travels along
+    assert plan["argv"] == []                  # no subprocess for a local copy
+
+
+def test_local_path_pull_adopts_by_copy(db, tmp_path):
+    # A keyed export folder holds the dataset; pull copies it into the store.
+    src_root = tmp_path / "bundle"
+    key = os.path.join("example.com", "data", "foo.csv")
+    src = src_root / key
+    src.parent.mkdir(parents=True)
+    src.write_bytes(b"data")
+    obj = sync.resolve_object(db, "foo")
+    assert not os.path.exists(obj.local_abs)
+    sync.transfer(db, obj, str(src_root), direction="pull")
+    assert open(obj.local_abs).read() == "data"
+
+
+def test_local_path_pull_missing_source_raises(db, tmp_path):
+    obj = sync.resolve_object(db, "foo")
+    with pytest.raises(ValueError, match="nothing found"):
+        sync.transfer(db, obj, str(tmp_path / "empty"), direction="pull")
+
+
+def test_explicit_path_target_lifts_repo_local_refusal(db, proj, tmp_path):
+    # repo_ds is $repo-stored: refused for the store-resolved form, allowed for
+    # an explicit-path target.
+    with pytest.raises(sync.RemoteRepoError):
+        sync.resolve_object(db, "repo_ds")
+    obj = sync.resolve_object(db, "repo_ds", allow_local=True)
+    local = proj / "local" / "r.csv"
+    local.parent.mkdir(parents=True)
+    local.write_bytes(b"r")
+    plan = sync.transfer(db, obj, str(tmp_path / "out"), direction="push")
+    assert open(plan["remote"]).read() == "r"
+
+
+def test_remote_path_target_skips_probe_and_uses_explicit_root(db):
+    runner = Runner(env_output="DATAMANIFEST_DATASETS_DIR=/probe/data\n")
+    obj = sync.resolve_object(db, "foo")
+    plan = sync.transfer(db, obj, "remotebox:/archive/pool", direction="push",
+                         runner=runner)
+    # The explicit folder replaces the store root outright — the probed env
+    # must NOT redirect it.
+    assert plan["remote"] == os.path.join("/archive/pool", obj.rel)
+    # No env probe ran: every ssh call is the mkdir, none mention `env`.
+    assert all("env" not in c[2] for c in runner.ssh_calls() if len(c) > 2)
+
+
+def test_store_target_with_colon_matches_bare_host_behavior(db):
+    runner = Runner()
+    obj = sync.resolve_object(db, "foo")
+    plan = sync.transfer(db, obj, "remotebox:", direction="push", runner=runner)
+    # _HOST."remote*" override applies: the store root resolves remotely.
+    assert plan["remote"] == os.path.join("/host/data", obj.rel)
