@@ -1151,12 +1151,14 @@ previews):</p>
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>datamanifest<span class="w"> </span>list<span class="w"> </span>--older-than<span class="w"> </span>90d<span class="w"> </span>--move<span class="w"> </span>/archive<span class="w"> </span>--dry-run<span class="w"> </span><span class="c1"># DEST then options</span>
 </code></pre></div>
 <h2 id="put-data-where-you-want-it">Put data where you want it<a class="headerlink" href="#put-data-where-you-want-it" title="Permanent link">&para;</a></h2>
-<p>Storage is two folders set in <code>[_STORAGE]</code> — <code>datasets_dir</code> (fetched data) and
-<code>datacache_dir</code> (<code>@cached</code> results) — repo-local <code>./datasets/</code> and <code>./cached/</code>
-by default. <code>datamanifest storage</code> edits them, per host if you like:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>datamanifest<span class="w"> </span>storage<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datasets_dir<span class="w"> </span><span class="s2">&quot;/scratch/</span><span class="nv">$USER</span><span class="s2">/data&quot;</span><span class="w">                  </span><span class="c1"># this host only</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>datamanifest<span class="w"> </span>storage<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datacache_dir<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$user_cache_dir</span><span class="s2">/myproj&quot;</span><span class="w"> </span>--all-hosts<span class="w">  </span><span class="c1"># project default</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>datamanifest<span class="w"> </span>storage<span class="w">                                                         </span><span class="c1"># show resolved config</span>
+<p>Storage is two folders — <code>datasets_dir</code> (fetched data, default: a machine-wide
+shared store deduplicated by dataset key) and <code>datacache_dir</code> (<code>@cached</code>
+results, default: a per-project folder under your OS cache dir).
+<code>datamanifest config</code> edits them at the scope you want — this checkout (the
+default, git-ignored), this user, or the committed project:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datasets_dir<span class="w"> </span><span class="s2">&quot;/scratch/</span><span class="nv">$USER</span><span class="s2">/data&quot;</span><span class="w">                 </span><span class="c1"># this checkout</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datacache_dir<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$user_cache_dir</span><span class="s2">/myproj&quot;</span><span class="w"> </span>--project<span class="w">   </span><span class="c1"># committed default</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>datamanifest<span class="w"> </span>config<span class="w">                                                        </span><span class="c1"># show resolved config</span>
 </code></pre></div>
 <p>Pointing the folders at a machine directory (instead of the repo) shares data
 across clones and projects. Path expressions, per-host rules, per-dataset

@@ -1045,6 +1045,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#normalize-term-dry-run-copy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        normalize [TERM...] [--dry-run] [--copy]
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1063,10 +1074,21 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#storage-show-storage-set-field-value-host-glob-all-hosts-storage-unset-field" class="md-nav__link">
+  <a href="#config-show-config-set-field-value-local-global-project-host-glob-config-unset-field" class="md-nav__link">
     <span class="md-ellipsis">
       
-        storage [show] / storage set FIELD VALUE... [--host GLOB|--all-hosts] / storage unset FIELD [...]
+        config [show] / config set FIELD VALUE... [--local|--global|--project|--host GLOB] / config unset FIELD [...]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#export-dest-term-dry-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        export DEST [TERM...] [--dry-run]
       
     </span>
   </a>
@@ -1530,6 +1552,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#normalize-term-dry-run-copy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        normalize [TERM...] [--dry-run] [--copy]
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1548,10 +1581,21 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#storage-show-storage-set-field-value-host-glob-all-hosts-storage-unset-field" class="md-nav__link">
+  <a href="#config-show-config-set-field-value-local-global-project-host-glob-config-unset-field" class="md-nav__link">
     <span class="md-ellipsis">
       
-        storage [show] / storage set FIELD VALUE... [--host GLOB|--all-hosts] / storage unset FIELD [...]
+        config [show] / config set FIELD VALUE... [--local|--global|--project|--host GLOB] / config unset FIELD [...]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#export-dest-term-dry-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        export DEST [TERM...] [--dry-run]
       
     </span>
   </a>
@@ -1750,7 +1794,7 @@ datasets); exits nonzero on any mismatch.</p>
 <p>Recompute stored checksums from what's on disk (e.g. after regenerating data).</p>
 <h2 id="maintain">Maintain<a class="headerlink" href="#maintain" title="Permanent link">&para;</a></h2>
 <h3 id="refresh-scan-dry-run"><code>refresh [--scan] [--dry-run]</code><a class="headerlink" href="#refresh-scan-dry-run" title="Permanent link">&para;</a></h3>
-<p>Reconcile the git-ignored state file (<code>.datamanifest-state.toml</code>) with disk:
+<p>Reconcile the git-ignored state file (<code>.datamanifest/state.toml</code>) with disk:
 repoint records whose bytes moved, drop records whose bytes are gone, adopt
 present-but-untracked datasets. No downloads, no file moves, no bytes touched —
 so it applies by default; <code>--dry-run</code> previews, and <code>list --dirty</code> shows what
@@ -1780,34 +1824,139 @@ disk.</p>
 addressing as <code>delete</code>. <code>--dry-run</code> reports the selection (id, kind, paths,
 size) and transfers nothing. For bulk transfers, filter with <code>list</code> and use its
 <code>--push</code> / <code>--pull</code> actions.</p>
+<p>The <code>TARGET</code> operand follows rsync's colon rule (a colon means remote):</p>
+<table>
+<thead>
+<tr>
+<th>Operand</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>HOST:</code></td>
+<td>the remote machine's <strong>store</strong> (its folders resolved remotely)</td>
+</tr>
+<tr>
+<td><code>HOST:PATH</code></td>
+<td>an explicit folder on an ssh host</td>
+</tr>
+<tr>
+<td><code>NAME:</code></td>
+<td>a <strong>git remote</strong>'s checkout — that project's own store (see below)</td>
+</tr>
+<tr>
+<td><code>PATH</code> (no colon)</td>
+<td>a local folder, keyed layout — <code>push</code> = raw export, <code>pull</code> = adopt-by-copy</td>
+</tr>
+</tbody>
+</table>
+<p>A git-remote name takes precedence over an ssh host on collision; the reserved
+<code>git:NAME</code> / <code>ssh:HOST[:PATH]</code> prefixes disambiguate explicitly. The
+historical bare-host form (<code>push ID host</code>, no colon) still works with a
+deprecation warning — write <code>host:</code>. Omitting <code>TARGET</code> entirely uses the
+configured <code>default_remote</code> (a config field on any scope, holding any operand
+form — including a git remote name).</p>
+<p><strong>Git remotes as targets.</strong> A git remote whose URL is ssh-like and points at a
+<em>checked-out</em> repo (no bare repos, no https) is a pure project reference: its
+value is the peer <strong>checkout path</strong>. <code>pull</code> reads the peer's
+<code>.datamanifest/state.toml</code> — recorded resolved locations, nothing to resolve;
+<code>push</code> resolves the directive ladder <strong>in the remote context</strong> (preferably by
+running <code>datamanifest where</code> there over ssh; else by reading the peer's config
+files over ssh and evaluating locally, fed the remote env). An https remote
+(the typical GitHub <code>origin</code>) is rejected as a data target with a clear error.
+No new registry: git's remote table is the registry.</p>
 <ul>
-<li>The SSH target (<code>user@host</code>) is both the transport and the host identity —
+<li>An SSH target (<code>user@host:</code>) is both the transport and the host identity —
   no remote registry.</li>
-<li>The receiver's folders are resolved best-effort from the remote's own
-  environment (the tool probes <code>DATAMANIFEST_*</code> via
+<li>For the store form, the receiver's folders are resolved best-effort from the
+  remote's own environment (the tool probes <code>DATAMANIFEST_*</code> via
   <code>ssh &lt;host&gt; 'source ~/.bashrc; env'</code>), then the manifest's
-  <code>[_STORAGE._HOST]</code> rules for that host, then the default.</li>
-<li>A <strong>local / <code>$repo</code>-relative object is not syncable</strong> — point
-  <code>datasets_dir</code> / <code>datacache_dir</code> at a machine-global location (e.g.
-  <code>$user_data_dir/…</code>) for an object to be syncable.</li>
-<li>Sync <strong>writes no manifest</strong> — a transferred object lands in the destination
-  store as an orphan (present, unreferenced) and is immediately usable; it is
-  idempotent (a no-op when the target already holds the object complete).</li>
+  <code>[_STORAGE._HOST]</code> rules for that host, then the default. An explicit
+  <code>HOST:PATH</code> / <code>PATH</code> folder is used outright.</li>
+<li>A <strong>local / <code>$repo</code>-relative object is not syncable to a store target</strong>. The
+  default folders are machine-global, so objects are syncable out of the box;
+  an explicit-path target lifts the refusal even for repo-local objects.</li>
+<li>Sync <strong>writes no manifest</strong>. A <code>pull</code> records the received object in the
+  state file; a pushed object lands in the receiving store as an orphan
+  (present, unreferenced) and is immediately usable. Transfers are idempotent
+  (a no-op when the target already holds the object complete).</li>
+<li>A folder produced by <code>push ID PATH</code> is itself a <strong>read pool</strong> — consumers
+  can add it to <code>datasets_pools</code>.</li>
 </ul>
+<h3 id="normalize-term-dry-run-copy"><code>normalize [TERM...] [--dry-run] [--copy]</code><a class="headerlink" href="#normalize-term-dry-run-copy" title="Permanent link">&para;</a></h3>
+<p>Make <strong>the bytes follow the directive</strong> (the pairing of <code>refresh</code>, which makes
+the state file follow the bytes): every selected tracked object whose bytes
+are not at the directive-derived path (<code>$datasets_dir/$key</code>,
+<code>$datacache_dir/&lt;cachetype&gt;[/&lt;version&gt;]/&lt;hash&gt;</code>) is re-homed there and its
+state-file record repointed.</p>
+<table>
+<thead>
+<tr>
+<th>Bytes found</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>at the derived path</td>
+<td>no-op</td>
+</tr>
+<tr>
+<td>in a read pool</td>
+<td><strong>copy</strong> (pools are shared — never drained)</td>
+</tr>
+<tr>
+<td>anywhere else</td>
+<td><strong>move</strong></td>
+</tr>
+<tr>
+<td>user-managed / <code>skip_download</code> / <code>lazy_access</code></td>
+<td>skipped, reported</td>
+</tr>
+</tbody>
+</table>
+<p><code>--copy</code> forces copy everywhere. Declared checksums are verified on the way;
+the copy/move lands (staging sibling + atomic rename) before any record
+changes. <code>normalize</code> never downloads (<code>download</code> is the verb for missing
+data). Preview the selection with <code>list --out-of-place</code> (recorded ≠ derived) —
+deliberately distinct from <code>--outside</code>: a read-pool copy is conformant for
+<code>--outside</code> but <em>is</em> out-of-place, while user-managed exact-path data is
+"outside" but in place.</p>
 <h2 id="configure-storage">Configure storage<a class="headerlink" href="#configure-storage" title="Permanent link">&para;</a></h2>
-<h3 id="storage-show-storage-set-field-value-host-glob-all-hosts-storage-unset-field"><code>storage [show]</code> / <code>storage set FIELD VALUE... [--host GLOB|--all-hosts]</code> / <code>storage unset FIELD [...]</code><a class="headerlink" href="#storage-show-storage-set-field-value-host-glob-all-hosts-storage-unset-field" title="Permanent link">&para;</a></h3>
-<p>Show or edit <code>[_STORAGE]</code> without hand-writing the <code>_HOST</code> syntax. <code>set</code>/<code>unset</code>
-target <strong>this host</strong> by default (written under <code>[_STORAGE._HOST."&lt;hostname&gt;"]</code>);
-<code>--host GLOB</code> targets a host pattern (fnmatch), <code>--all-hosts</code> the project-wide
-base. <code>FIELD</code> is <code>datasets_dir</code>/<code>datacache_dir</code>, a user <code>$symbol</code>, or a
-<code>datasets_pools</code>/<code>datacache_pools</code> list (several values, or none for an explicit
-empty list). <code>show</code> (the default) prints the config resolved for this host plus
-the raw rules.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>datamanifest<span class="w"> </span>storage<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datacache_dir<span class="w"> </span><span class="s2">&quot;/scratch/</span><span class="nv">$USER</span><span class="s2">/cache&quot;</span><span class="w">                 </span><span class="c1"># this host only</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>datamanifest<span class="w"> </span>storage<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datacache_dir<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$user_cache_dir</span><span class="s2">/myproj&quot;</span><span class="w"> </span>--all-hosts<span class="w">   </span><span class="c1"># project default</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>datamanifest<span class="w"> </span>storage<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datasets_dir<span class="w"> </span>/fast/data<span class="w"> </span>--host<span class="w"> </span><span class="s2">&quot;login*.hpc.edu&quot;</span><span class="w">      </span><span class="c1"># a host glob</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>datamanifest<span class="w"> </span>storage<span class="w">                  </span><span class="c1"># show resolved config + raw rules</span>
+<h3 id="config-show-config-set-field-value-local-global-project-host-glob-config-unset-field"><code>config [show]</code> / <code>config set FIELD VALUE... [--local|--global|--project|--host GLOB]</code> / <code>config unset FIELD [...]</code><a class="headerlink" href="#config-show-config-set-field-value-local-global-project-host-glob-config-unset-field" title="Permanent link">&para;</a></h3>
+<p>Show or edit the scoped storage configuration. <code>set</code>/<code>unset</code> write to the
+checkout's git-ignored <code>.datamanifest/config.toml</code> by default (<code>--local</code>) —
+personal by default, shared deliberately: <code>--project</code> edits the committed
+manifest's <code>[_STORAGE]</code> base, <code>--host GLOB</code> its per-host table (with
+<code>--local</code>/<code>--global</code>, the <code>_HOST</code> section of that file instead), <code>--global</code> the
+user-wide <code>~/.config/datamanifest/config.toml</code>. <code>FIELD</code> is
+<code>datasets_dir</code>/<code>datacache_dir</code>, <code>project</code>, <code>default_remote</code>, a user <code>$symbol</code>,
+or a <code>datasets_pools</code>/<code>datacache_pools</code> list (several values, or none for an
+explicit empty list). <code>show</code> (the default) prints the config resolved for this
+host plus every scope's raw rules.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datacache_dir<span class="w"> </span><span class="s2">&quot;/scratch/</span><span class="nv">$USER</span><span class="s2">/cache&quot;</span><span class="w">               </span><span class="c1"># this checkout</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datasets_dir<span class="w"> </span>/pool<span class="w"> </span>--global<span class="w">                        </span><span class="c1"># this user</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datacache_dir<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$user_cache_dir</span><span class="s2">/myproj&quot;</span><span class="w"> </span>--project<span class="w">   </span><span class="c1"># committed default</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datasets_dir<span class="w"> </span>/fast/data<span class="w"> </span>--host<span class="w"> </span><span class="s2">&quot;login*.hpc.edu&quot;</span><span class="w">    </span><span class="c1"># committed, per-host</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>datamanifest<span class="w"> </span>config<span class="w">                   </span><span class="c1"># show resolved config + raw rules</span>
 </code></pre></div>
+<p><code>datamanifest storage</code> is a deprecated alias of <code>config</code> (<code>--all-hosts</code> maps to
+<code>--project</code>).</p>
+<h3 id="export-dest-term-dry-run"><code>export DEST [TERM...] [--dry-run]</code><a class="headerlink" href="#export-dest-term-dry-run" title="Permanent link">&para;</a></h3>
+<p>Copy the selected datasets to <code>DEST/&lt;key&gt;</code> (keyed layout), verify declared
+checksums during the copy, and write a manifest copy into <code>DEST</code> pinning
+<code>datasets_dir = "."</code>. The result is simultaneously:</p>
+<ul>
+<li>a <strong>read pool</strong> — consumers add it to <code>datasets_pools</code>;</li>
+<li>a <strong>standalone datamanifest project</strong> — <code>cd</code> into it and <code>verify</code> / <code>list</code> /
+  <code>path</code> work as-is.</li>
+</ul>
+<p>Export is read-only on the source, so it <em>includes</em> user-managed and
+<code>skip_download</code> datasets — the manually-obtained data a fresh clone cannot
+re-download is exactly what is worth bundling (<code>lazy_access</code> entries have no
+local bytes and are skipped). There is no byte-level <code>import</code> verb: consume a
+bundle via pools or as a project.</p>
 <h2 id="manifest-tools">Manifest tools<a class="headerlink" href="#manifest-tools" title="Permanent link">&para;</a></h2>
 <h3 id="format-file-i"><code>format [FILE] [-i]</code><a class="headerlink" href="#format-file-i" title="Permanent link">&para;</a></h3>
 <p>Rewrite a manifest in canonical form (stable key ordering, cross-tool
@@ -1815,15 +1964,16 @@ byte-identical output). Reads stdin by default; <code>-i</code> rewrites FILE in
 <h3 id="migrate-file-dry-run-no-input"><code>migrate FILE [--dry-run] [--no-input]</code><a class="headerlink" href="#migrate-file-dry-run-no-input" title="Permanent link">&para;</a></h3>
 <p>Upgrade an older manifest to the current format <strong>without moving any data</strong>:</p>
 <ul>
-<li>modernizes the storage settings (writes the two folder fields at their
-  repo-local defaults, drops retired keys, carries <code>local_path</code> →
-  <code>storage_path</code>) and any inline language bindings;</li>
+<li>modernizes the storage settings (drops retired keys, carries <code>local_path</code> →
+  <code>storage_path</code>; no folder defaults are written out — they would shadow your
+  machine-wide config) and any inline language bindings;</li>
 <li><strong>finds data you already have</strong> — it looks in the old default locations on
   disk (and the read pools) and records each file's real location in the state
-  file, so existing downloads keep working while new ones follow the clean
-  defaults. If one location holds most of your data, it offers to point
-  <code>datasets_dir</code> there for this machine; if a file turns up in two places, it
-  asks which to use (<code>--no-input</code> picks automatically).</li>
+  file, so existing downloads keep working while new ones follow the
+  configured directive. If one location holds most of your data, it offers to
+  point <code>datasets_dir</code> there (written to the git-ignored
+  <code>.datamanifest/config.toml</code>, never the committed manifest); if a file turns
+  up in two places, it asks which to use (<code>--no-input</code> picks automatically).</li>
 </ul>
 <p><code>migrate</code>, <code>refresh --scan</code> and <code>where --scan</code> also accept <code>--datasets-pools</code> /
 <code>--datacache-pools</code> to override the read pools for a single run (no values =

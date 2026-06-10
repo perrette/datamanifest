@@ -1288,7 +1288,8 @@ are the common single-language case; the
 the loaders map, and the fetch/load resolution ladders.</p>
 <h2 id="storage">Storage<a class="headerlink" href="#storage" title="Permanent link">&para;</a></h2>
 <p>Where data lives is configured in <code>[_STORAGE]</code> (two folder fields,
-<code>datasets_dir</code> and <code>datacache_dir</code>, both repo-local by default) and per dataset
+<code>datasets_dir</code> and <code>datacache_dir</code>, machine-global by default — a shared keyed
+dataset store and a per-project cache) and per dataset
 via <code>storage_path</code>. This is its own topic — see the
 <a href="../storage/">Storage model</a> page.</p>
 <h2 id="a-full-example">A full example<a class="headerlink" href="#a-full-example" title="Permanent link">&para;</a></h2>

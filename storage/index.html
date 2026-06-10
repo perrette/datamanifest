@@ -574,6 +574,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#scoped-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scoped configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#path-expressions" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -607,10 +618,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#centralizing-sharing" class="md-nav__link">
+  <a href="#keeping-data-inside-the-repository" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Centralizing / sharing
+        Keeping data inside the repository
       
     </span>
   </a>
@@ -1024,6 +1035,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#scoped-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scoped configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#path-expressions" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1057,10 +1079,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#centralizing-sharing" class="md-nav__link">
+  <a href="#keeping-data-inside-the-repository" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Centralizing / sharing
+        Keeping data inside the repository
       
     </span>
   </a>
@@ -1117,23 +1139,55 @@
 <h1 id="storage-model">Storage model<a class="headerlink" href="#storage-model" title="Permanent link">&para;</a></h1>
 <p>How <code>datamanifest</code> decides <strong>where data lives</strong> on disk. This is a property of the
 manifest format — the same model is consumed by the CLI, the Python API, and any
-peer-language implementation — not a CLI feature. The <code>datamanifest storage</code>
+peer-language implementation — not a CLI feature. The <code>datamanifest config</code>
 command edits it; everything else reads it.</p>
-<p>Storage is <strong>two folder fields</strong> set in <code>[_STORAGE]</code>:</p>
+<p>Storage is <strong>two folder fields</strong>:</p>
 <ul>
-<li><code>datasets_dir</code> (default <code>"datasets"</code>) — where fetched datasets go.</li>
-<li><code>datacache_dir</code> (default <code>"cached"</code>) — where the produced <code>@cached</code> cache goes.</li>
+<li><code>datasets_dir</code> — where fetched datasets go. Default:
+  <code>$user_data_dir/datamanifest/shared/datasets</code>, a machine-wide <strong>shared keyed
+  store</strong>. A dataset key (<code>host/path[#version]</code>) is globally unique, so one
+  shared store deduplicates downloads across all your projects, with no project
+  name in the path.</li>
+<li><code>datacache_dir</code> — where the produced <code>@cached</code> cache goes. Default:
+  <code>$user_cache_dir/datamanifest/projects/$project/cached</code>, a <strong>per-project</strong>
+  cache (<code>cachetype/hash</code> is not globally unique, so each project gets its own
+  segment — <code>$project</code> defaults to the checkout's folder name).</li>
 </ul>
-<p>Both default to <strong>relative</strong> paths, so they resolve against the project root
-(the manifest's directory, <code>$repo</code>) and you get a visible local <code>./datasets/</code>
-and <code>./cached/</code> with zero config. The layout is flat — the folder you set <strong>is</strong>
-the location:</p>
+<p>The repository itself holds only the manifest and the git-ignored
+<code>.datamanifest/</code> directory. The layout under each folder is flat — the folder
+you set <strong>is</strong> the location:</p>
 <ul>
 <li>fetched dataset → <code>&lt;datasets_dir&gt;/&lt;key&gt;</code></li>
 <li>produced artifact → <code>&lt;datacache_dir&gt;/&lt;cachetype&gt;/[&lt;version&gt;/]&lt;hash&gt;</code></li>
 </ul>
+<h2 id="scoped-configuration">Scoped configuration<a class="headerlink" href="#scoped-configuration" title="Permanent link">&para;</a></h2>
+<p>Folder directives are inherently <strong>per-machine</strong>, so they have per-machine homes
+besides the committed manifest — two <code>[_STORAGE]</code>-shaped TOML config files,
+git-config style:</p>
+<ul>
+<li><code>.datamanifest/config.toml</code> — per-checkout, git-ignored. Personal settings
+  for this clone (the <code>.datamanifest/</code> directory ignores itself via its own
+  <code>.gitignore</code>).</li>
+<li><code>~/.config/datamanifest/config.toml</code> (<code>$XDG_CONFIG_HOME</code>) — user-global
+  settings for every project on the machine.</li>
+</ul>
+<p>Both files take the same fields as the manifest's <code>[_STORAGE]</code> (folder fields,
+<code>$symbols</code>, <code>*_pools</code>, <code>project</code>, <code>default_remote</code>), including <code>[_HOST."&lt;glob&gt;"]</code>
+sections — home directories and checkouts often live on filesystems shared
+across cluster nodes, so even personal config can need per-host scoping.</p>
+<p>Edit any scope with <code>datamanifest config set</code> (see the resolution ladder below
+for what wins):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="gp">$ </span>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datasets_dir<span class="w"> </span>/data/store<span class="w">          </span><span class="c1"># this checkout (default)</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="gp">$ </span>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datasets_dir<span class="w"> </span>/data/store<span class="w"> </span>--global<span class="w"> </span><span class="c1"># this user, all projects</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="gp">$ </span>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datacache_dir<span class="w"> </span><span class="s1">&#39;$repo/cached&#39;</span><span class="w"> </span>--project<span class="w">  </span><span class="c1"># committed intent</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="gp">$ </span>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>scratch<span class="w"> </span>/scratch/<span class="nv">$USER</span><span class="w"> </span>--host<span class="w"> </span><span class="s1">&#39;login*&#39;</span><span class="w">  </span><span class="c1"># committed, per-host</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="gp">$ </span>datamanifest<span class="w"> </span>config<span class="w"> </span>show<span class="w">                                   </span><span class="c1"># resolved + raw rules</span>
+</code></pre></div>
+<p>The <code>--local</code> default is deliberate: configuration is <strong>personal by default,
+shared deliberately</strong> — a per-user absolute path never leaks into the committed
+manifest by accident.</p>
 <h2 id="path-expressions">Path expressions<a class="headerlink" href="#path-expressions" title="Permanent link">&para;</a></h2>
-<p>A path expression (a <code>[_STORAGE]</code> value or a dataset's <code>storage_path</code>) may
+<p>A path expression (a config value or a dataset's <code>storage_path</code>) may
 interpolate <code>$</code>-symbols and <code>~</code>. The available symbols:</p>
 <p><strong>Machine directories (predefined):</strong></p>
 <ul>
@@ -1141,17 +1195,21 @@ interpolate <code>$</code>-symbols and <code>~</code>. The available symbols:</p
   (no app name): <code>~/.local/share</code> on Linux, etc.</li>
 <li><code>$user_cache_dir</code> — the OS user <em>cache</em> dir, bare: <code>~/.cache</code> on Linux, etc.</li>
 <li><code>$repo</code> — the project root (the manifest's directory).</li>
+<li><code>$project</code> — the project name (default: the basename of the project root).
+  Override it like any field — a committed <code>project = "..."</code> in the manifest is
+  shared intent. Renames are safe: the state file keeps finding old artifacts
+  at their recorded locations; new writes go under the new name.</li>
 </ul>
 <p><strong>Storage fields &amp; your own symbols:</strong></p>
 <ul>
 <li><code>$datasets_dir</code>, <code>$datacache_dir</code> — the two resolved storage fields.</li>
-<li><code>$&lt;name&gt;</code> — any bare key you define under <code>[_STORAGE]</code> (e.g. <code>$scratch</code>).
-  Host-specific overrides go in <code>[_STORAGE._HOST."&lt;glob&gt;"]</code>.</li>
+<li><code>$&lt;name&gt;</code> — any bare key you define on any scope (e.g. <code>$scratch</code>).
+  Host-specific overrides go in <code>[_HOST."&lt;glob&gt;"]</code> sections.</li>
 </ul>
 <p><strong>Environment:</strong></p>
 <ul>
 <li><code>$NAME</code> — any name not defined above falls back to the <code>NAME</code> <strong>environment
-  variable</strong> (<code>$USER</code>, <code>$HOME</code>, …). A <code>[_STORAGE]</code> symbol of the same name takes
+  variable</strong> (<code>$USER</code>, <code>$HOME</code>, …). A configured symbol of the same name takes
   precedence over the environment variable.</li>
 <li><code>~</code> — expands to the home directory.</li>
 </ul>
@@ -1160,28 +1218,30 @@ interpolate <code>$</code>-symbols and <code>~</code>. The available symbols:</p
 <li><code>$key</code> — a dataset's storage key (<code>host/path[#version]</code>). Only meaningful inside
   a dataset's <code>storage_path</code> (whose default is <code>$datasets_dir/$key</code>).</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[_STORAGE]</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">datasets_dir</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;datasets&quot;</span><span class="w">               </span><span class="c1"># default: repo-local ./datasets/</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">datacache_dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;$user_cache_dir/myproj&quot;</span><span class="w"> </span><span class="c1"># produced artifacts on the machine cache dir</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">scratch</span><span class="w">       </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/tmp/$USER/scratch&quot;</span><span class="w">     </span><span class="c1"># user-defined symbol</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="k">[_STORAGE._HOST.</span><span class="s2">&quot;login*.hpc.edu&quot;</span><span class="k">]</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">scratch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/scratch/$USER&quot;</span><span class="w">               </span><span class="c1"># host-specific override of a user symbol</span>
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="k">[bigsim]</span><span class="w">                                 </span><span class="c1"># → datasets/bigsim  (default storage_path)</span>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="n">uri</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://example.com/bigsim.nc&quot;</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="k">[hpc_output]</span><span class="w">                             </span><span class="c1"># per-dataset override (a path expression)</span>
-<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="n">storage_path</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;$scratch/results/$key&quot;</span>
-<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="n">format</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;nc&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[_STORAGE]</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">datacache_dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;$user_cache_dir/myproj&quot;</span><span class="w"> </span><span class="c1"># committed project intent</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">scratch</span><span class="w">       </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/tmp/$USER/scratch&quot;</span><span class="w">     </span><span class="c1"># user-defined symbol</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="k">[_STORAGE._HOST.</span><span class="s2">&quot;login*.hpc.edu&quot;</span><span class="k">]</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">scratch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/scratch/$USER&quot;</span><span class="w">               </span><span class="c1"># host-specific override of a user symbol</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="k">[bigsim]</span><span class="w">                                 </span><span class="c1"># → &lt;datasets_dir&gt;/&lt;key&gt;  (default storage_path)</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">uri</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://example.com/bigsim.nc&quot;</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="k">[hpc_output]</span><span class="w">                             </span><span class="c1"># per-dataset override (a path expression)</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="n">storage_path</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;$scratch/results/$key&quot;</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="n">format</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;nc&quot;</span>
 </code></pre></div>
 <h2 id="resolution-ladder">Resolution ladder<a class="headerlink" href="#resolution-ladder" title="Permanent link">&para;</a></h2>
-<p>For any field/symbol <em>name</em>, first match wins:</p>
+<p>For any field/symbol <em>name</em>, first match wins (more specific scope wins,
+git-style):</p>
 <ol>
 <li><code>DATAMANIFEST_&lt;NAME&gt;</code> environment variable.</li>
-<li>First <code>[_STORAGE._HOST.&lt;glob&gt;].&lt;name&gt;</code> whose glob matches the hostname.</li>
-<li><code>[_STORAGE].&lt;name&gt;</code> base value.</li>
-<li>The predefined symbol or field default.</li>
+<li><code>.datamanifest/config.toml</code> — checkout scope (<code>_HOST</code> glob, then base).</li>
+<li>Manifest <code>[_STORAGE._HOST.&lt;glob&gt;]</code> — committed, shared infrastructure.</li>
+<li>Manifest <code>[_STORAGE]</code> base — committed project intent.</li>
+<li><code>~/.config/datamanifest/config.toml</code> — user scope (<code>_HOST</code> glob, then base).</li>
+<li>Built-in defaults.</li>
 </ol>
 <p>The only two env vars of note are <code>DATAMANIFEST_DATASETS_DIR</code> and
 <code>DATAMANIFEST_DATACACHE_DIR</code>.</p>
@@ -1190,13 +1250,15 @@ interpolate <code>$</code>-symbols and <code>~</code>. The available symbols:</p
 <code>$datasets_dir/$key</code>. A <code>storage_path</code> that contains <code>$key</code> is a tool-managed
 keyed location; an exact path with no <code>$key</code> is a <strong>user-managed</strong> location used
 verbatim that maintenance never touches.</p>
-<h2 id="centralizing-sharing">Centralizing / sharing<a class="headerlink" href="#centralizing-sharing" title="Permanent link">&para;</a></h2>
-<p>Because the default folders are repo-local, point both fields at a machine
-directory to share data across clones or projects — one explicit edit:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[_STORAGE]</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">datasets_dir</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;$user_data_dir/myproj&quot;</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">datacache_dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;$user_cache_dir/myproj&quot;</span>
+<h2 id="keeping-data-inside-the-repository">Keeping data inside the repository<a class="headerlink" href="#keeping-data-inside-the-repository" title="Permanent link">&para;</a></h2>
+<p>The defaults are machine-global. If you prefer the previous repo-local layout
+(visible <code>./datasets/</code> and <code>./cached/</code> folders), it's one committed edit:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[_STORAGE]</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">datasets_dir</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;datasets&quot;</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">datacache_dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;cached&quot;</span>
 </code></pre></div>
+<p>Note that repo-local objects cannot be <code>push</code>/<code>pull</code>ed between machines — the
+sync surface needs a machine-global location to re-attach objects under.</p>
 <h2 id="read-pools-dont-re-download-what-you-already-have">Read pools — don't re-download what you already have<a class="headerlink" href="#read-pools-dont-re-download-what-you-already-have" title="Permanent link">&para;</a></h2>
 <p>If a dataset (or a <code>@cached</code> result) already exists somewhere else on your
 machine — say another project downloaded it — datamanifest can <strong>reuse that copy
@@ -1204,23 +1266,27 @@ in place</strong> instead of fetching it again. It checks a few <strong>read poo
 read-only folders); on a match it records the location and uses it, while new
 downloads still go to your own <code>datasets_dir</code>.</p>
 <ul>
-<li><strong>Datasets</strong> are looked up in well-known shared folders by default (e.g.
-  <code>~/.cache/Datasets</code>), and a found copy is <strong>checksum-verified</strong> before it's
-  trusted.</li>
+<li><strong>Datasets</strong> are looked up by default in the repo-local <code>./datasets/</code> layout
+  (so pre-existing repo-local data is found, never re-downloaded), the shared
+  store (which therefore self-populates as a pool), and the well-known legacy
+  folders (<code>$user_data_dir/datamanifest/datasets</code>, <code>~/.cache/Datasets</code>). A
+  found copy is <strong>checksum-verified</strong> before it's trusted.</li>
 <li><strong><code>@cached</code> results</strong> are not shared by default (opt-in) — there's no standard
   shared location for them, and they carry no content checksum.</li>
 </ul>
 <p>Point the tool at your own shared folders with
-<code>datamanifest storage set datasets_pools &lt;dir&gt; …</code>; see what's reusable with
+<code>datamanifest config set datasets_pools &lt;dir&gt; …</code>; see what's reusable with
 <code>where --scan</code> (report) or pull it all in with <code>refresh --scan</code> (adopt). Pools
 can differ per machine, and an empty list turns them off.</p>
 <h2 id="the-state-file">The state file<a class="headerlink" href="#the-state-file" title="Permanent link">&para;</a></h2>
-<p>Next to the manifest, the tool keeps a small git-ignored <strong>state file</strong>,
-<code>.datamanifest-state.toml</code>, recording <em>where each object ended up on this
-machine</em> (and its checksum) — so it never loses track of your data and never
-re-downloads something it can already find. It's local and disposable: delete it
-and it rebuilds itself as you use your data. <code>list --dirty</code>, <code>refresh</code>, and the
-maintenance actions all operate on it; the full design is in
+<p>Inside the project's private directory, the tool keeps a small git-ignored
+<strong>state file</strong>, <code>.datamanifest/state.toml</code>, recording <em>where each object ended
+up on this machine</em> (and its checksum) — so it never loses track of your data
+and never re-downloads something it can already find. It's local and
+disposable: delete it and it rebuilds itself as you use your data. The legacy
+sibling names (<code>.datamanifest-state.toml</code>, <code>cached.toml</code>) are still read; the
+first write relocates them. <code>list --dirty</code>, <code>refresh</code>, and the maintenance
+actions all operate on it; the full design is in
 <a href="https://github.com/perrette/datamanifest/blob/main/design/design-state-file.md">design-state-file.md</a>.</p>
 
 
