@@ -1092,7 +1092,7 @@ def test_normalize_moves_recorded_stray_to_directive(tmp_path):
     assert str(stray) in out.stdout
 
     r = _run("normalize", "--dry-run", env=env)
-    assert "Would move" in r.stdout and str(stray) in r.stdout
+    assert "Would move" in r.stdout and "stray" in r.stdout
     assert stray.exists()                          # dry run touched nothing
 
     r = _run("normalize", env=env)
@@ -1157,25 +1157,32 @@ def _repoint_state_to_archive(tmp_path):
     state.write_text(state.read_text().replace(rec, rec + ".zip"))
 
 
-def test_normalize_repoints_archive_level_record(tmp_path):
+def test_archive_level_record_is_refresh_business_not_normalize(tmp_path):
     # Record points at the archive while the extracted dir already sits at the
-    # directive: only the record moves — no bytes copied, nothing deleted.
+    # directive: the bytes are in place, only the record lags. Resolution
+    # ignores the archive-level record, `refresh` repoints it (record only),
+    # and normalize has nothing to do.
     env, extracted, archive = _extract_project(tmp_path)
     _repoint_state_to_archive(tmp_path)
 
-    r = _run("normalize", "--dry-run", env=env)
-    assert "Would repoint" in r.stdout and "Would copy" not in r.stdout
+    # Reads resolve the extracted dir, not the recorded archive.
+    p = _run("path", "a", env=env)
+    assert p.stdout.strip() == extracted
 
-    r = _run("normalize", env=env)
+    assert "Would normalize: 0 objects" in _run(
+        "normalize", "--dry-run", env=env).stdout
+
+    r = _run("refresh", env=env)
     assert r.returncode == 0, r.stderr
-    assert "Repoint" in r.stdout and "Normalized: 1 object" in r.stdout
-    assert os.path.isdir(extracted)                 # extracted dir untouched
+    assert "Repoint 1 relocated record" in r.stdout
+    assert "reconciled 1 entry" in r.stdout
+    assert os.path.isdir(extracted)                 # bytes untouched
     assert os.path.isfile(archive)                  # archive kept
     state = (tmp_path / ".datamanifest" / "state.toml").read_text()
     rec = state.split('storage_path = "')[1].split('"')[0]
     assert not rec.endswith(".zip")                 # record back at the dir level
-    # Idempotent: a second run is a no-op.
-    assert "Normalized: 0 objects" in _run("normalize", env=env).stdout
+    # Idempotent: nothing left to reconcile.
+    assert "reconciled 0 entries" in _run("refresh", env=env).stdout
 
 
 def test_normalize_extracts_archive_only_record(tmp_path):

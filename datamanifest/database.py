@@ -918,11 +918,12 @@ def resolve_existing_path(db: "Database", entry: "DatasetEntry", extract=None) -
     )
     if eff_extract == entry.extract:
         recorded = state_recorded_dataset_path(db, entry)
-        if (
-            recorded
-            and recorded != os.path.abspath(derived)
-            and (os.path.isfile(recorded) or os.path.isdir(recorded))
-        ):
+        # An extract dataset is read from its extracted *directory*; a record
+        # pointing at a file is archive-level (e.g. an old import) and never
+        # wins — resolution falls back to the derived directory.
+        present = (os.path.isdir(recorded) if eff_extract
+                   else os.path.isfile(recorded) or os.path.isdir(recorded))
+        if recorded and recorded != os.path.abspath(derived) and present:
             return recorded
     return derived
 

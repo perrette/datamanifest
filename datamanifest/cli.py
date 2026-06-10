@@ -313,7 +313,15 @@ def _enumerate_objects(db, heavy=frozenset({"size"})):
             ))
         except Exception:  # noqa: BLE001 - unresolvable entry is simply absent
             derived_abs = ""
-        location, present, dirty = _dataset_state(recorded_abs, derived_abs)
+        if (entry.extract and recorded_abs and os.path.isfile(recorded_abs)
+                and derived_abs and os.path.isdir(derived_abs)):
+            # Archive-level record (e.g. an old import) while the extracted
+            # dir — the dataset's natural level — already sits at the derived
+            # path: the bytes are in place, only the record lags. Classified
+            # "relocated" so `refresh` repoints it without touching bytes.
+            location, present, dirty = derived_abs, True, "relocated"
+        else:
+            location, present, dirty = _dataset_state(recorded_abs, derived_abs)
         if entry.skip_download:
             dirty = ""                      # user-managed external file: not tracked
         objects.append(CacheObject(
@@ -669,6 +677,43 @@ def _record_portable(path, project_root):
     return ap
 
 
+def _tilde(path):
+    """*path* with ``$HOME`` contracted to ``~`` (display only)."""
+    home = os.path.expanduser("~")
+    ap = os.path.abspath(path)
+    if ap == home or ap.startswith(home + os.sep):
+        return "~" + ap[len(home):]
+    return ap
+
+
+def _fmt_transition(src, dst):
+    """Compact display of a planned ``src -> dst``: ``$HOME`` shown as ``~`` and
+    the shared leading/trailing path components factored out git-style, e.g.
+    ``…/refs/heads/{master.zip -> master}`` or ``{pool -> store}/k/f.csv``."""
+    s, d = _tilde(src).split(os.sep), _tilde(dst).split(os.sep)
+    i = 0
+    while i < min(len(s), len(d)) and s[i] == d[i]:
+        i += 1
+    j = 0
+    while (j < min(len(s), len(d)) - i
+           and s[len(s) - 1 - j] == d[len(d) - 1 - j]):
+        j += 1
+    if i + j == 0:
+        return f"{_tilde(src)} -> {_tilde(dst)}"
+    core = ("{" + os.sep.join(s[i:len(s) - j]) + " -> "
+            + os.sep.join(d[i:len(d) - j]) + "}")
+    pre, suf = os.sep.join(s[:i]), os.sep.join(s[len(s) - j:])
+    return os.sep.join(p for p in (pre, core, suf) if p)
+
+
+def _print_group(header, rows):
+    """*header*, then one aligned ``  key  detail`` row per planned object."""
+    print(header)
+    width = max(len(k) for k, _ in rows)
+    for key, detail in rows:
+        print(f"  {key:<{width}}  {detail}".rstrip())
+
+
 def _dataset_protected(db, obj):
     """Whether a fetched dataset object is protected from delete/move — a
     user-managed exact ``storage_path`` (no ``$key``), a ``skip_download`` entry
@@ -1007,70 +1052,96 @@ def _refresh(objects, db, *, dry_run=False, pools=None):
     index = CachedIndex.read_or_empty(index_path)
     changed = 0
 
+    # Pass 1 — classify. (A missing dataset whose bytes turn up in a read pool
+    # is recovered, not dropped — non-destructive. Cached artifacts have no
+    # such checksummed pool recovery here — they are dropped, and re-imported
+    # by `--scan` from a datacache pool if one is configured. An untracked
+    # dataset is adopted without re-hashing — refresh touches no bytes; the
+    # actual sha256 is recorded on the next download / verify. A cached orphan
+    # is left as an orphan, not adopted as a root.)
+    plans = {}                  # action -> [(obj, entry, recorded target)]
     for obj in objects:
         dirty = getattr(obj, "dirty", "")
         if dirty == "relocated":
-            verb = "Refreshed" if do_it else "Would refresh"
-            print(f"{verb} (relocated): {obj.key} -> {obj.location}")
-            if do_it:
+            plans.setdefault("relocated", []).append((obj, None, obj.location))
+        elif dirty == "missing":
+            entry = db.datasets.get(obj.key) if obj.kind == "datasets" else None
+            pooled = (resolve_from_pools(db, entry, pools=pools)
+                      if entry is not None else "")
+            if pooled:
+                plans.setdefault("recovered", []).append((obj, entry, pooled))
+            else:
+                plans.setdefault("dropped", []).append((obj, entry, ""))
+        elif dirty == "untracked":
+            entry = db.datasets.get(obj.key) if obj.kind == "datasets" else None
+            if entry is not None:
+                plans.setdefault("adopted", []).append(
+                    (obj, entry, obj.location))
+            else:
+                plans.setdefault("orphan", []).append((obj, None, ""))
+
+    def _header(action, n):
+        s = "" if n == 1 else "s"
+        text = {
+            "relocated": f"repoint {n} relocated record{s} to where the "
+                         "bytes are",
+            "recovered": f"recover {n} missing dataset{s} from a read pool",
+            "dropped": f"drop {n} record{s} whose bytes are gone",
+            "adopted": f"adopt {n} present-but-unrecorded dataset{s}",
+            "orphan": f"leave {n} untracked artifact{s} as orphan{s} "
+                      "(not adopted)",
+        }[action]
+        return (f"Would {text}:" if dry_run
+                else text[0].upper() + text[1:] + ":")
+
+    # Pass 2 — report each group, then apply its record edits.
+    for action in ("relocated", "recovered", "dropped", "adopted", "orphan"):
+        group = plans.get(action)
+        if not group:
+            continue
+        _print_group(_header(action, len(group)),
+                     [(obj.key, _tilde(target) if target else "")
+                      for obj, _, target in group])
+        if action != "orphan":
+            changed += len(group)
+        if not do_it:
+            continue
+        for obj, entry, target in group:
+            if action == "relocated":
                 if obj.kind == "cached":
                     index.set_instance_path(
-                        cachetype=obj.cachetype, version=obj.version, hash=obj.hash,
-                        storage_path=_record_portable(obj.location, project_root),
+                        cachetype=obj.cachetype, version=obj.version,
+                        hash=obj.hash,
+                        storage_path=_record_portable(target, project_root),
                     )
                 else:
                     entry = db.datasets.get(obj.key)
                     if entry is not None:
                         index.register_dataset(
                             key=entry.key,
-                            storage_path=_record_portable(obj.location, project_root),
+                            storage_path=_record_portable(target, project_root),
                         )
-            changed += 1
-        elif dirty == "missing":
-            # A missing dataset whose bytes turn up in a read pool is recovered,
-            # not dropped (non-destructive). Cached artifacts have no such
-            # checksummed pool recovery here — they are dropped (and re-imported
-            # by `--scan` from a datacache pool if one is configured).
-            entry = db.datasets.get(obj.key) if obj.kind == "datasets" else None
-            pooled = (resolve_from_pools(db, entry, pools=pools)
-                      if entry is not None else "")
-            if pooled:
-                verb = "Recovered" if do_it else "Would recover"
-                print(f"{verb} (pool): {obj.key} -> {pooled}")
-                if do_it:
-                    sha = "" if (db.skip_checksum or entry.skip_checksum) else (entry.sha256 or "")
-                    index.register_dataset(
-                        key=entry.key,
-                        storage_path=_record_portable(pooled, project_root), sha256=sha,
+            elif action == "recovered":
+                sha = ("" if (db.skip_checksum or entry.skip_checksum)
+                       else (entry.sha256 or ""))
+                index.register_dataset(
+                    key=entry.key,
+                    storage_path=_record_portable(target, project_root),
+                    sha256=sha,
+                )
+            elif action == "dropped":
+                if obj.kind == "cached":
+                    index.remove_instance(
+                        cachetype=obj.cachetype, version=obj.version,
+                        hash=obj.hash,
                     )
-            else:
-                verb = "Dropped" if do_it else "Would drop"
-                print(f"{verb} (missing): {obj.key}")
-                if do_it:
-                    if obj.kind == "cached":
-                        index.remove_instance(
-                            cachetype=obj.cachetype, version=obj.version, hash=obj.hash,
-                        )
-                    elif entry is not None:
-                        index.remove_dataset(entry.key)
-            changed += 1
-        elif dirty == "untracked":
-            entry = db.datasets.get(obj.key) if obj.kind == "datasets" else None
-            if entry is not None:
-                # Adopt a present-but-unrecorded dataset: record its location.
-                # No re-hash here (refresh touches no bytes); the actual sha256 is
-                # recorded on the next download / verify.
-                verb = "Adopted" if do_it else "Would adopt"
-                print(f"{verb} (untracked): {obj.key} -> {obj.location}")
-                if do_it:
-                    index.register_dataset(
-                        key=entry.key,
-                        storage_path=_record_portable(obj.location, project_root),
-                    )
-                changed += 1
-            else:
-                # A cached orphan — left as an orphan (not adopted as a root).
-                print(f"Left orphan (untracked artifact; not adopted): {obj.key}")
+                elif entry is not None:
+                    index.remove_dataset(entry.key)
+            elif action == "adopted":
+                index.register_dataset(
+                    key=entry.key,
+                    storage_path=_record_portable(target, project_root),
+                )
 
     if do_it and changed:
         index.write(index_path)
@@ -1105,11 +1176,14 @@ def _normalize(objects, db, *, dry_run=False, copy=False):
     (staging sibling + atomic rename) before the record is repointed — nothing
     is deleted first.
 
-    An ``extract`` dataset whose record points at the *archive* (e.g. an
-    imported cache file) is handled at its natural level — the extracted
-    directory: the record is repointed when that directory already sits at the
-    derived path, the archive is extracted there otherwise. The archive bytes
-    are never copied onto the directory path and the archive itself is kept."""
+    An ``extract`` dataset recorded at its *archive* (a file, e.g. an imported
+    cache copy) with no extracted dir at the derived path is **extracted**
+    there — the archive bytes are never copied onto the directory path and the
+    archive itself is kept. (When the extracted dir already sits at the derived
+    path, only the record lags: that is "relocated", `refresh`'s job.)
+
+    Output is grouped per action — one explanatory header, then an aligned
+    ``key  src -> dst`` row per object (shared path parts factored out)."""
     from . import storage as storage_mod
     from .cache import CachedIndex
     from .config import hash_path
@@ -1129,9 +1203,12 @@ def _normalize(objects, db, *, dry_run=False, copy=False):
     changed = skipped = 0
     index_dirty = False
 
+    # Pass 1 — classify every selected out-of-place object into an action.
+    plans = {}                               # action -> [(obj, entry)]
     for obj in objects:
         if not _is_out_of_place(obj):
             continue
+        entry = None
         if obj.kind == "datasets":
             protected, entry = _dataset_protected(db, obj)
             if protected:
@@ -1141,23 +1218,45 @@ def _normalize(objects, db, *, dry_run=False, copy=False):
                 continue
         elif obj.kind != "cached":
             continue
-        src, dst = obj.location, obj.derived
-        if obj.kind == "datasets" and entry.extract and os.path.isfile(src):
-            # The record points at the archive, but an extract dataset's
-            # natural level — what `checksum` hashes and loaders read — is the
-            # extracted directory. Only the record moves when that directory is
-            # already at the directive; otherwise the archive is extracted
-            # there. Either way the archive stays where it is.
-            in_place = os.path.isdir(dst)
-            action = "repoint" if in_place else "extract"
-            note = (" (extracted dir already at directive)" if in_place
-                    else " (archive kept)")
-            verb = ("Would " + action) if dry_run else action.capitalize()
-            print(f"{verb}{note}: {obj.key}  {src} -> {dst}")
-            if not do_it:
-                changed += 1
-                continue
-            if not in_place:
+        if (obj.kind == "datasets" and entry.extract
+                and os.path.isfile(obj.location)):
+            action = "extract"
+        elif copy:
+            action = "copy"
+        else:
+            pools = dc_pools if obj.kind == "cached" else ds_pools
+            in_pool = any(_under(os.path.abspath(obj.location), r)
+                          for r in pools)
+            action = "pool-copy" if in_pool else "move"
+        plans.setdefault(action, []).append((obj, entry))
+
+    def _header(action, n):
+        s = "" if n == 1 else "s"
+        text = {
+            "extract": f"extract {n} archive-level dataset{s} at the "
+                       "directive (archives kept)",
+            "pool-copy": f"copy {n} object{s} from a read pool "
+                         "(pools are never drained)",
+            "copy": f"copy {n} object{s} to the directive (sources kept)",
+            "move": f"move {n} object{s} to the directive",
+        }[action]
+        return (f"Would {text}:" if dry_run
+                else text[0].upper() + text[1:] + ":")
+
+    # Pass 2 — report each group, then perform its actions.
+    for action in ("extract", "pool-copy", "copy", "move"):
+        group = plans.get(action)
+        if not group:
+            continue
+        _print_group(_header(action, len(group)),
+                     [(obj.key, _fmt_transition(obj.location, obj.derived))
+                      for obj, _ in group])
+        if not do_it:
+            changed += len(group)
+            continue
+        for obj, entry in group:
+            src, dst = obj.location, obj.derived
+            if action == "extract":
                 try:
                     extract_file(src, dst, entry.format)
                 except Exception as exc:  # noqa: BLE001 - reported per object
@@ -1166,62 +1265,55 @@ def _normalize(objects, db, *, dry_run=False, copy=False):
                     _remove_path_and_markers(dst)
                     skipped += 1
                     continue
-            declared = (bool(entry.checksum)
-                        and not (db.skip_checksum or entry.skip_checksum))
-            if declared:
-                actual = hash_path(dst, entry.hash_algo or "sha256")
-                if actual != entry.hash_value:
-                    print(f"Error: checksum mismatch for {obj.key} at {dst} "
-                          f"(expected {entry.checksum}, got {actual[:12]}…); "
-                          "record unchanged.", file=sys.stderr)
-                    if not in_place:   # remove only what this run created
+                declared = (bool(entry.checksum)
+                            and not (db.skip_checksum or entry.skip_checksum))
+                if declared:
+                    actual = hash_path(dst, entry.hash_algo or "sha256")
+                    if actual != entry.hash_value:
+                        print(f"Error: checksum mismatch for {obj.key} at "
+                              f"{dst} (expected {entry.checksum}, got "
+                              f"{actual[:12]}…); record unchanged.",
+                              file=sys.stderr)
                         _remove_path_and_markers(dst)
-                    skipped += 1
-                    continue
-            index.register_dataset(
-                key=entry.key, storage_path=_record_portable(dst, project_root))
-            index_dirty = True
-            changed += 1
-            continue
-        pools = dc_pools if obj.kind == "cached" else ds_pools
-        in_pool = any(_under(os.path.abspath(src), r) for r in pools)
-        action = "copy" if (copy or in_pool) else "move"
-        why = " (read pool, never drained)" if (in_pool and not copy) else ""
-        verb = ("Would " + action) if dry_run else action.capitalize()
-        print(f"{verb}{why}: {obj.key}  {src} -> {dst}")
-        if not do_it:
-            changed += 1
-            continue
+                        skipped += 1
+                        continue
+                index.register_dataset(
+                    key=entry.key,
+                    storage_path=_record_portable(dst, project_root))
+                index_dirty = True
+                changed += 1
+                continue
 
-        copy_object_bytes(src, dst)
-        # Verify a declared dataset checksum on the landed copy before any
-        # record changes (a mismatch aborts this object; nothing was deleted).
-        if obj.kind == "datasets":
-            entry = db.datasets.get(obj.key)
-            declared = (entry is not None and bool(entry.checksum)
-                        and not (db.skip_checksum or entry.skip_checksum))
-            if declared:
-                actual = hash_path(dst, entry.hash_algo or "sha256")
-                if actual != entry.hash_value:
-                    print(f"Error: checksum mismatch for {obj.key} after copy "
-                          f"(expected {entry.checksum}, got {actual[:12]}…); "
-                          "record unchanged, source kept.", file=sys.stderr)
-                    _remove_path_and_markers(dst)
-                    skipped += 1
-                    continue
-            if os.path.isfile(dst) and os.path.isfile(src + ".complete"):
-                import shutil as _sh
-                _sh.copy2(src + ".complete", dst + ".complete")
-            index.register_dataset(
-                key=entry.key, storage_path=_record_portable(dst, project_root))
-            index_dirty = True
-        else:
-            index_dirty |= index.set_instance_path(
-                cachetype=obj.cachetype, version=obj.version, hash=obj.hash,
-                storage_path=_record_portable(dst, project_root))
-        if action == "move":
-            _remove_path_and_markers(src)
-        changed += 1
+            copy_object_bytes(src, dst)
+            # Verify a declared dataset checksum on the landed copy before any
+            # record changes (a mismatch aborts this object; nothing deleted).
+            if obj.kind == "datasets":
+                declared = (entry is not None and bool(entry.checksum)
+                            and not (db.skip_checksum or entry.skip_checksum))
+                if declared:
+                    actual = hash_path(dst, entry.hash_algo or "sha256")
+                    if actual != entry.hash_value:
+                        print(f"Error: checksum mismatch for {obj.key} after "
+                              f"copy (expected {entry.checksum}, got "
+                              f"{actual[:12]}…); record unchanged, source "
+                              "kept.", file=sys.stderr)
+                        _remove_path_and_markers(dst)
+                        skipped += 1
+                        continue
+                if os.path.isfile(dst) and os.path.isfile(src + ".complete"):
+                    import shutil as _sh
+                    _sh.copy2(src + ".complete", dst + ".complete")
+                index.register_dataset(
+                    key=entry.key,
+                    storage_path=_record_portable(dst, project_root))
+                index_dirty = True
+            else:
+                index_dirty |= index.set_instance_path(
+                    cachetype=obj.cachetype, version=obj.version, hash=obj.hash,
+                    storage_path=_record_portable(dst, project_root))
+            if action == "move":
+                _remove_path_and_markers(src)
+            changed += 1
 
     if do_it and index_dirty:
         index.write()
