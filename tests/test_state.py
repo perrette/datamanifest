@@ -1,4 +1,4 @@
-"""The fetched-dataset side of the state file (.datamanifest-state.toml).
+"""The fetched-dataset side of the state file (.datamanifest/state.toml).
 
 A download records the dataset's resolved ``storage_path`` and actual ``sha256``
 (unless checksums are skipped) into the state file sitting next to the manifest,
@@ -34,7 +34,7 @@ def _project(tmp_path, *, skip_checksum=False):
 
 
 def _state(tmp_path):
-    return tmp_path / ".datamanifest-state.toml"
+    return tmp_path / ".datamanifest" / "state.toml"
 
 
 def test_download_records_storage_path_and_sha256(tmp_path):
@@ -107,4 +107,4 @@ def test_no_state_file_written_without_a_manifest(tmp_path, monkeypatch):
     db.datasets_toml = ""
     db.register_dataset(f"file://{src / 'a.csv'}", name="a", persist=False)
     download_dataset(db, "a")
-    assert not (tmp_path / ".datamanifest-state.toml").exists()
+    assert not (tmp_path / ".datamanifest" / "state.toml").exists()

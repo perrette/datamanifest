@@ -878,7 +878,8 @@ def get_dataset_path(
     if entry.skip_download or entry.lazy_access:
         return entry.uri
     if datasets_folder:
-        storage_config = {**(storage_config or {}), "datasets_dir": datasets_folder}
+        storage_config = storage.override_fields(
+            storage_config, datasets_dir=datasets_folder)
     if extract is None:
         extract = entry.extract
     key = entry.key
@@ -926,7 +927,7 @@ def resolve_existing_path(db: "Database", entry: "DatasetEntry", extract=None) -
     return derived
 
 
-# ----- state-file (.datamanifest-state.toml) integration for fetched datasets -
+# ----- state-file (.datamanifest/state.toml) integration for fetched datasets -
 def _state_base(db: "Database") -> str:
     """The directory the state file is a sibling of — the manifest's directory.
 
@@ -1367,7 +1368,11 @@ class Database:
         # Database-level passthrough for unknown _* top-level tables (mirrors
         # per-dataset extra). schema_version comes from [_META].schema; None => v0.
         self.extra: dict = {}
-        self.storage_config: dict = {}
+        # The layered scoped config (checkout > manifest [_STORAGE] > user);
+        # rebuilt with the manifest layer when a manifest is read.
+        self.storage_config = storage.load_scoped_config(
+            project_root=self.get_project_root(),
+        )
         self.schema_version = None
         if datasets_toml and os.path.isfile(datasets_toml):
             # Loading from the toml must never write it back — read commands
@@ -1624,8 +1629,13 @@ class Database:
             if k.startswith("_") and k not in _known_structural:
                 self.extra[k] = dict(v) if isinstance(v, dict) else v
 
-        # Expose [_STORAGE] as a parsed read-only config dict (verbatim copy stays in extra).
-        self.storage_config = dict(self.extra.get("_STORAGE", {}))
+        # Expose the layered scoped config — the manifest's [_STORAGE] (verbatim
+        # copy stays in extra) sandwiched between the checkout's
+        # .datamanifest/config.toml and the user-global config file.
+        self.storage_config = storage.load_scoped_config(
+            project_root=self.get_project_root(),
+            manifest_config=dict(self.extra.get("_STORAGE", {})),
+        )
 
         names = [k for k in datasets if not k.startswith("_")]
         for i, name in enumerate(names):

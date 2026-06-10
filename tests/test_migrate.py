@@ -31,7 +31,7 @@ def _isolate_legacy_roots(tmp_path, monkeypatch):
     return userdata
 
 
-def test_migrate_writes_default_two_fields_and_strips_retired(tmp_path):
+def test_migrate_writes_no_defaults_and_strips_retired(tmp_path):
     toml = _write(tmp_path, """
 [_META]
 schema = 1
@@ -54,9 +54,10 @@ local_path = "/mnt/archive/c.csv"
         data = tomllib.load(f)
 
     storage = data["_STORAGE"]
-    # The two fields are written at their spec-v4 defaults.
-    assert storage["datasets_dir"] == "datasets"
-    assert storage["datacache_dir"] == "cached"
+    # No folder defaults are written out — a written-out default would shadow
+    # the user's machine-wide config (the rungs below the manifest).
+    assert "datasets_dir" not in storage
+    assert "datacache_dir" not in storage
     # User-defined symbols are preserved; the retired keys are gone.
     assert storage["scratch"] == "/scratch/bob"
     assert "default" not in storage
@@ -123,25 +124,29 @@ def test_migrate_dry_run_does_not_write(tmp_path):
     assert toml.read_text() == before
 
 
-def test_migrate_default_dataset_resolves_repo_local(tmp_path):
-    """After migration a plain dataset resolves under the repo-local default."""
+def test_migrate_default_dataset_resolves_to_shared_store(tmp_path):
+    """After migration a plain dataset resolves under the built-in default (the
+    machine-wide shared store) — the manifest commits no folder field."""
+    import platformdirs
+
     from datamanifest.store import locations
 
     toml = _write(tmp_path, "[_META]\nschema = 1\n\n[d]\nuri = \"https://x.com/h/a.csv\"\n")
     migrate_manifest(str(toml))
     with open(toml, "rb") as f:
-        cfg = tomllib.load(f)["_STORAGE"]
+        cfg = tomllib.load(f).get("_STORAGE", {})
 
     resolved = locations.dataset_path(
         "", "x.com/h/a.csv", project_root=str(tmp_path), storage_config=cfg,
     )
-    assert resolved == str(tmp_path / "datasets" / "x.com/h/a.csv")
+    assert resolved == os.path.join(platformdirs.user_data_dir(), "datamanifest",
+                                    "shared", "datasets", "x.com/h/a.csv")
 
 
 # ----- discovery → state file --------------------------------------------------
 
 def _state(tmp_path):
-    return CachedIndex.read(tmp_path / ".datamanifest-state.toml")
+    return CachedIndex.read(tmp_path / ".datamanifest" / "state.toml")
 
 
 def test_migrate_discovers_legacy_dataset_into_state(tmp_path, monkeypatch):
@@ -161,8 +166,8 @@ def test_migrate_discovers_legacy_dataset_into_state(tmp_path, monkeypatch):
     sp = idx.dataset_path_of(key)
     assert sp, "legacy data should be recorded in the state file"
     assert os.path.abspath(os.path.join(tmp_path, sp)) == str(legacy)
-    # Manifest keeps the clean default (no machine path committed).
-    assert tomllib.loads(toml.read_text())["_STORAGE"]["datasets_dir"] == "datasets"
+    # Manifest stays clean — no machine path, no folder field committed.
+    assert "datasets_dir" not in tomllib.loads(toml.read_text()).get("_STORAGE", {})
 
 
 def test_migrate_records_every_discovered_dataset(tmp_path, monkeypatch):
@@ -193,7 +198,7 @@ def test_migrate_skips_user_managed_and_skip_download(tmp_path, monkeypatch):
                   'storage_path = "/custom/a.csv"\n')
     migrate_manifest(str(toml), no_input=True)
     # storage_path is user-managed → not adopted by discovery.
-    assert not (tmp_path / ".datamanifest-state.toml").exists() \
+    assert not (tmp_path / ".datamanifest" / "state.toml").exists() \
         or _state(tmp_path).dataset_path_of(key) == ""
 
 
@@ -238,7 +243,7 @@ def test_migrate_dry_run_discovers_but_writes_nothing(tmp_path, monkeypatch):
     summary = migrate_manifest(str(toml), no_input=True, dry_run=True)
     assert "Would update" in summary and "a → " in summary       # reported
     assert toml.read_text() == before                            # manifest untouched
-    assert not (tmp_path / ".datamanifest-state.toml").exists()  # state not written
+    assert not (tmp_path / ".datamanifest" / "state.toml").exists()  # state not written
 
 
 def test_migrate_pool_override(tmp_path, monkeypatch):
@@ -271,6 +276,7 @@ def test_migrate_host_dir_footer_when_accepted(tmp_path, monkeypatch):
 
     summary = migrate_manifest(str(toml), datasets_pools=[str(alt)])
     assert "new downloads on this host go to" in summary
-    assert "repo-local defaults" not in summary
-    data = tomllib.loads(toml.read_text())
-    assert data["_STORAGE"]["_HOST"][socket.gethostname()]["datasets_dir"] == str(alt)
+    # Written to the checkout's git-ignored local config, never the manifest.
+    local = tomllib.loads((tmp_path / ".datamanifest" / "config.toml").read_text())
+    assert local["_HOST"][socket.gethostname()]["datasets_dir"] == str(alt)
+    assert "_HOST" not in tomllib.loads(toml.read_text()).get("_STORAGE", {})

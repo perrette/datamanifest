@@ -1,4 +1,4 @@
-"""The state file (``.datamanifest-state.toml``) — the local object inventory.
+"""The state file (``.datamanifest/state.toml``) — the local object inventory.
 
 The state file is to ``datamanifest.toml`` what a lockfile is to a manifest,
 except it is **git-ignored, regenerable local state**: ``datamanifest.toml`` says
@@ -41,9 +41,10 @@ sidecar.
 Older shapes are still **read** and rewritten forward: schema 4 (top-level
 ``["<cachetype>"]`` recipe tables) migrates into the ``datacache`` namespace;
 schema 3 (params-body + recipe-level ``storage_path``), schema 2
-(``[[produced]]``) and schema 1 (flat) as before. The previous filename
-``cached.toml`` is still **read** as a fallback (and rewritten to
-``.datamanifest-state.toml`` on the next write).
+(``[[produced]]``) and schema 1 (flat) as before. The previous filenames —
+the sibling ``.datamanifest-state.toml`` and the older ``cached.toml`` — are
+still **read** as fallbacks; the first write relocates the inventory to the
+canonical ``.datamanifest/state.toml`` (and removes the legacy file).
 
 Layering: this module imports only the Layer 0 substrate
 (:func:`datamanifest.store.sort_recursive` for canonical key ordering) plus
@@ -59,6 +60,7 @@ except ModuleNotFoundError:  # Python < 3.11
 import tomli_w
 
 from ..store import sort_recursive
+from ..store.locations import PRIVATE_DIR_NAME, ensure_ignored_dir
 
 __all__ = [
     "CachedIndex",
@@ -69,14 +71,18 @@ __all__ = [
     "DATASET_STATE_FIELDS",
 ]
 
-# The canonical state-file name (git-ignored). ``CACHED_INDEX_NAME`` is kept as
-# the historical alias used across the codebase.
-STATE_FILE_NAME = ".datamanifest-state.toml"
+# The state file's own basename inside the ``.datamanifest/`` private dir.
+_STATE_BASENAME = "state.toml"
+
+# The canonical state-file location — inside the git-ignored ``.datamanifest/``
+# private dir, as a path relative to the project (manifest) directory.
+# ``CACHED_INDEX_NAME`` is kept as the historical alias used across the codebase.
+STATE_FILE_NAME = os.path.join(PRIVATE_DIR_NAME, _STATE_BASENAME)
 CACHED_INDEX_NAME = STATE_FILE_NAME
-# Filenames read as a fallback when the canonical one is absent (so a project
-# carrying the previous ``cached.toml`` keeps resolving; the next write migrates
-# it to the canonical name).
-_LEGACY_INDEX_NAMES = ("cached.toml",)
+# Sibling filenames read as a fallback when the canonical one is absent (so a
+# project carrying the previous ``.datamanifest-state.toml`` / ``cached.toml``
+# keeps resolving; the next write relocates it to the canonical path).
+_LEGACY_INDEX_NAMES = (".datamanifest-state.toml", "cached.toml")
 
 # Produced-recipe fields (one per (cachetype, version)); each instance is a
 # ``hash -> storage_path`` entry. Fetched-dataset entries carry the fields below.
@@ -86,7 +92,7 @@ DATASET_STATE_FIELDS = ("key", "storage_path", "sha256")
 
 
 class CachedIndex:
-    """Read/register/write a ``.datamanifest-state.toml`` object inventory (schema 5).
+    """Read/register/write a ``.datamanifest/state.toml`` object inventory (schema 5).
 
     In memory the inventory is two maps:
 
@@ -131,25 +137,34 @@ class CachedIndex:
         when versioned, else the bare cachetype)."""
         return f"{cachetype}{cls._VERSION_SEP}{version}" if version else cachetype
 
-    # ----- path helpers (canonical name + legacy fallback) -----
+    # ----- path helpers (canonical location + legacy fallback) -----
+    @classmethod
+    def _dir_state_path(cls, d: str) -> str:
+        """The canonical state-file path under directory *d* — *d* is normally
+        the project (manifest) dir; the ``.datamanifest`` private dir itself is
+        also accepted."""
+        if os.path.basename(os.path.abspath(d)) == PRIVATE_DIR_NAME:
+            return os.path.join(d, _STATE_BASENAME)
+        return os.path.join(d, STATE_FILE_NAME)
+
     @classmethod
     def _resolve_path(cls, path: str) -> str:
         """Normalize *path* to a state-file path: a directory yields its canonical
-        ``.datamanifest-state.toml``; a file path is returned verbatim (so an
+        ``.datamanifest/state.toml``; a file path is returned verbatim (so an
         explicit legacy / custom name is honored)."""
         path = os.fspath(path)
         if os.path.isdir(path):
-            return os.path.join(path, STATE_FILE_NAME)
+            return cls._dir_state_path(path)
         return path
 
     @classmethod
     def _canonical_path(cls, path: str) -> str:
-        """The path a write should target: a directory or a legacy-named file
-        migrates to the canonical ``.datamanifest-state.toml`` sibling; a
-        canonical or explicit custom file path is honored verbatim."""
+        """The path a write should target: a directory or a legacy-named sibling
+        file relocates to the canonical ``.datamanifest/state.toml``; the
+        canonical path or an explicit custom file path is honored verbatim."""
         path = os.fspath(path)
         if os.path.isdir(path):
-            return os.path.join(path, STATE_FILE_NAME)
+            return cls._dir_state_path(path)
         if os.path.basename(path) in _LEGACY_INDEX_NAMES:
             return os.path.join(os.path.dirname(path) or ".", STATE_FILE_NAME)
         return path
@@ -157,8 +172,9 @@ class CachedIndex:
     @classmethod
     def locate(cls, base: str) -> str:
         """The state file to **read** at *base* (a directory or a file path): the
-        canonical ``.datamanifest-state.toml`` when present, else a legacy
-        ``cached.toml`` sibling, else the canonical path (which may not exist).
+        canonical ``.datamanifest/state.toml`` when present, else a legacy
+        sibling (``.datamanifest-state.toml`` / ``cached.toml``), else the
+        canonical path (which may not exist).
 
         Lets callers find an existing inventory under either name without first
         knowing which is on disk.
@@ -167,7 +183,7 @@ class CachedIndex:
         if os.path.isfile(base):
             return base
         d = base if os.path.isdir(base) else (os.path.dirname(base) or ".")
-        canonical = os.path.join(d, STATE_FILE_NAME)
+        canonical = cls._dir_state_path(d)
         if os.path.isfile(canonical):
             return canonical
         for legacy in _LEGACY_INDEX_NAMES:
@@ -294,16 +310,14 @@ class CachedIndex:
     @classmethod
     def read_or_empty(cls, path: str) -> "CachedIndex":
         """Read the state file at *path* (canonical or legacy name), or return an
-        empty one bound to the canonical path when none exists. Either way the
-        bound ``path`` is the canonical name, so the next :meth:`write` migrates a
-        legacy file forward."""
-        canonical = cls._canonical_path(path)
+        empty one bound to the canonical path when none exists. A legacy-named
+        file stays bound to its own path, so the next :meth:`write` relocates it
+        to the canonical ``.datamanifest/state.toml`` (and removes the legacy
+        file)."""
         target = cls.locate(path)
         if os.path.isfile(target):
-            idx = cls.read(target)
-            idx.path = canonical
-            return idx
-        return cls(path=canonical)
+            return cls.read(target)
+        return cls(path=cls._canonical_path(path))
 
     # ----- produced recipes -----
     def register(
@@ -495,20 +509,26 @@ class CachedIndex:
         return out
 
     def write(self, path: str = "") -> str:
-        """Write the state file to *path* (or its bound ``path``, migrating a
-        legacy name to the canonical one), canonically ordered. Returns the path
-        written.
+        """Write the state file to *path* (or its bound ``path``), relocating a
+        legacy-named inventory to the canonical ``.datamanifest/state.toml`` (the
+        legacy file is removed once the canonical one is written), canonically
+        ordered. Returns the path written.
 
         The write is **atomic** — a sibling temp file is filled and then
         ``os.replace``-renamed into place — so concurrent writers (parallel
         downloads / ``@cached`` produces, each re-reading and additively merging
         before writing) never observe or leave a half-written inventory.
         """
-        target = self._canonical_path(path) if path else self.path
+        prior = self.path
+        target = self._canonical_path(path or self.path)
         if not target:
             raise ValueError("no path given and CachedIndex has no loaded path")
         target = self._resolve_path(target)
-        os.makedirs(os.path.dirname(target) or ".", exist_ok=True)
+        parent = os.path.dirname(target) or "."
+        if os.path.basename(parent) == PRIVATE_DIR_NAME:
+            ensure_ignored_dir(parent)
+        else:
+            os.makedirs(parent, exist_ok=True)
         data = self.to_dict()
         # ``_META`` (and any ``_``-table) first, then ``datacache`` / ``datasets``.
         ordered = {
@@ -521,5 +541,19 @@ class CachedIndex:
         with open(tmp, "wb") as f:
             tomli_w.dump(ordered, f)
         os.replace(tmp, target)
+        # First write relocates: drop the legacy-named file the inventory was
+        # read from, so an old copy never shadows (or diverges from) the
+        # canonical one. Only a legacy sibling of the same project dir is
+        # removed (an explicit write elsewhere never deletes its read source).
+        if prior and prior != target \
+                and os.path.basename(prior) in _LEGACY_INDEX_NAMES \
+                and os.path.isfile(prior):
+            prior_dir = os.path.dirname(os.path.abspath(prior))
+            project_dir = os.path.dirname(os.path.dirname(os.path.abspath(target)))
+            if prior_dir == project_dir:
+                try:
+                    os.remove(prior)
+                except OSError:
+                    pass
         self.path = target
         return target

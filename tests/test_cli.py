@@ -120,7 +120,7 @@ def test_where_selectors_print_bare_path(tmp_path):
     dd = _run("where", "--datasets-dir", env=env)
     assert dd.stdout.strip() == str(tmp_path / "datasets")
     sf = _run("where", "--state-file", env=env)
-    assert sf.stdout.strip().endswith(".datamanifest-state.toml")
+    assert sf.stdout.strip().endswith(os.path.join(".datamanifest", "state.toml"))
     assert ":" not in sf.stdout.strip()                # no "label : value" form
     # Selectors are mutually exclusive.
     assert _run("where", "--manifest", "--state-file", env=env).returncode != 0
@@ -246,7 +246,7 @@ def _registered_artifact(tmp_path, cache, cachetype, key_table, version=""):
         artifact.rename(dest)
         artifact = dest
     h = key.split("/", 1)[1]
-    idx = CachedIndex(path=str(tmp_path / ".datamanifest-state.toml"))
+    idx = CachedIndex(path=str(tmp_path / ".datamanifest" / "state.toml"))
     idx.register(cachetype=cachetype, hash=h, version=version,
                  storage_path=str(artifact), ref="m:f", format="txt")
     idx.write()
@@ -272,7 +272,7 @@ def test_list_move_keeps_cached_toml_consistent(tmp_path):
     assert (moved / "data.txt").is_file() and not artifact.exists()   # bytes moved
 
     # cached.toml repointed at the new home (relative to the manifest dir).
-    back = CachedIndex.read(tmp_path / ".datamanifest-state.toml")
+    back = CachedIndex.read(tmp_path / ".datamanifest" / "state.toml")
     assert back.instance_path_of(cachetype="ct", version="", hash=h) == \
         os.path.join("moved", "ct", h)
 
@@ -293,7 +293,7 @@ def test_list_delete_prunes_cached_toml(tmp_path):
     assert run.returncode == 0, run.stderr
     assert not artifact.exists()                                 # bytes gone
 
-    back = CachedIndex.read(tmp_path / ".datamanifest-state.toml")
+    back = CachedIndex.read(tmp_path / ".datamanifest" / "state.toml")
     assert ("ct", "") not in back.recipes                       # pruned from index
     assert "Nothing to list" in _run("list", h, env=env).stdout
 
@@ -671,7 +671,7 @@ def test_format_in_place(tmp_path):
     assert text.index("[a]") < text.index("[b]")
 
 
-# ----- storage (edit [_STORAGE] without hand-writing _HOST) -----
+# ----- config (scoped storage configuration) -----
 
 def _load_toml(path):
     try:
@@ -688,57 +688,105 @@ def _storage_project(tmp_path):
     return toml
 
 
-def test_storage_set_all_hosts_writes_base(tmp_path):
+def test_config_set_defaults_to_local(tmp_path):
+    # The default scope is the checkout's git-ignored config file — personal by
+    # default; the committed manifest is only written with --project / --host.
     toml = _storage_project(tmp_path)
-    r = _run("storage", "set", "datacache_dir", "cached", "--all-hosts",
+    r = _run("config", "set", "datacache_dir", "/fast", env=_env_with_toml(toml))
+    assert r.returncode == 0, r.stderr
+    local = tmp_path / ".datamanifest" / "config.toml"
+    assert _load_toml(local)["datacache_dir"] == "/fast"
+    assert "_STORAGE" not in _load_toml(toml)
+    # The private dir self-ignores (one .gitignore with *).
+    assert (tmp_path / ".datamanifest" / ".gitignore").read_text().strip() == "*"
+
+
+def test_config_set_project_writes_manifest_base(tmp_path):
+    toml = _storage_project(tmp_path)
+    r = _run("config", "set", "datacache_dir", "cached", "--project",
              env=_env_with_toml(toml))
     assert r.returncode == 0, r.stderr
     assert _load_toml(toml)["_STORAGE"]["datacache_dir"] == "cached"
 
 
-def test_storage_set_host_glob(tmp_path):
+def test_config_set_host_glob_writes_manifest_host_table(tmp_path):
     toml = _storage_project(tmp_path)
-    r = _run("storage", "set", "datasets_dir", "/scratch/data",
+    r = _run("config", "set", "datasets_dir", "/scratch/data",
              "--host", "login*.hpc.edu", env=_env_with_toml(toml))
     assert r.returncode == 0, r.stderr
     host = _load_toml(toml)["_STORAGE"]["_HOST"]["login*.hpc.edu"]
     assert host["datasets_dir"] == "/scratch/data"
 
 
-def test_storage_set_defaults_to_this_host(tmp_path):
+def test_config_set_local_host_glob(tmp_path):
+    # --host combined with --local scopes within the local config file.
     toml = _storage_project(tmp_path)
-    r = _run("storage", "set", "datacache_dir", "/fast", env=_env_with_toml(toml))
+    r = _run("config", "set", "datasets_dir", "/scratch/data", "--local",
+             "--host", "login*", env=_env_with_toml(toml))
     assert r.returncode == 0, r.stderr
-    host = socket.gethostname()
-    assert _load_toml(toml)["_STORAGE"]["_HOST"][host]["datacache_dir"] == "/fast"
+    local = tmp_path / ".datamanifest" / "config.toml"
+    assert _load_toml(local)["_HOST"]["login*"]["datasets_dir"] == "/scratch/data"
+    assert "_STORAGE" not in _load_toml(toml)
 
 
-def test_storage_unset_removes_and_prunes(tmp_path):
+def test_config_set_global_writes_user_file(tmp_path):
     toml = _storage_project(tmp_path)
     env = _env_with_toml(toml)
-    _run("storage", "set", "datacache_dir", "/fast", env=env)        # this host
-    r = _run("storage", "unset", "datacache_dir", env=env)
+    r = _run("config", "set", "datasets_dir", "/pool", "--global", env=env)
     assert r.returncode == 0, r.stderr
-    # The empty host table (and _HOST) are pruned.
+    user_cfg = os.path.join(env["XDG_CONFIG_HOME"], "datamanifest", "config.toml")
+    assert _load_toml(user_cfg)["datasets_dir"] == "/pool"
+    # The user-global rung is honored when nothing more specific is set.
+    dd = _run("where", "--datasets-dir", env=env)
+    assert dd.stdout.strip() == "/pool"
+
+
+def test_config_scope_precedence_local_over_project_over_global(tmp_path):
+    toml = _storage_project(tmp_path)
+    env = _env_with_toml(toml)
+    _run("config", "set", "datasets_dir", "/from-global", "--global", env=env)
+    _run("config", "set", "datasets_dir", "/from-project", "--project", env=env)
+    assert _run("where", "--datasets-dir", env=env).stdout.strip() == "/from-project"
+    _run("config", "set", "datasets_dir", "/from-local", env=env)
+    assert _run("where", "--datasets-dir", env=env).stdout.strip() == "/from-local"
+
+
+def test_config_unset_removes_and_prunes(tmp_path):
+    toml = _storage_project(tmp_path)
+    env = _env_with_toml(toml)
+    _run("config", "set", "datacache_dir", "/fast", "--host", "h1", env=env)
+    r = _run("config", "unset", "datacache_dir", "--host", "h1", env=env)
+    assert r.returncode == 0, r.stderr
+    # The empty host table (and _HOST) are pruned from the manifest.
     assert "_HOST" not in _load_toml(toml).get("_STORAGE", {})
 
 
-def test_storage_set_rejects_reserved_field(tmp_path):
+def test_config_set_rejects_reserved_field(tmp_path):
     toml = _storage_project(tmp_path)
-    r = _run("storage", "set", "_HOST", "x", "--all-hosts", env=_env_with_toml(toml))
+    r = _run("config", "set", "_HOST", "x", "--project", env=_env_with_toml(toml))
     assert r.returncode != 0
     assert "invalid field" in (r.stdout + r.stderr).lower()
 
 
-def test_storage_show_resolves_for_this_host(tmp_path):
+def test_config_show_resolves_for_this_host(tmp_path):
     toml = _storage_project(tmp_path)
     env = _env_with_toml(toml)
-    _run("storage", "set", "datasets_dir", "$user_data_dir/myproj", "--all-hosts",
+    _run("config", "set", "datasets_dir", "$user_data_dir/myproj", "--project",
          env=env)
-    r = _run("storage", "show", env=env)
+    r = _run("config", "show", env=env)
     assert r.returncode == 0, r.stderr
     assert "Resolved for this host" in r.stdout
     assert "myproj" in r.stdout                       # resolved, $user_data_dir expanded
+
+
+def test_storage_alias_is_deprecated_and_forwards(tmp_path):
+    toml = _storage_project(tmp_path)
+    env = _env_with_toml(toml)
+    r = _run("storage", "set", "datacache_dir", "cached", "--all-hosts", env=env)
+    assert r.returncode == 0, r.stderr
+    assert "deprecated" in r.stderr.lower()
+    # --all-hosts maps onto the --project scope (the manifest base).
+    assert _load_toml(toml)["_STORAGE"]["datacache_dir"] == "cached"
 
 
 # ----- first-order delete / move (by id, like push/pull) -----
@@ -790,7 +838,7 @@ def test_move_by_name_relocates_and_repoints_state(tmp_path):
     run = _run("move", "mydata", str(dest), env=env)
     assert run.returncode == 0, run.stderr
     assert dest.exists()
-    state = (tmp_path / ".datamanifest-state.toml").read_text()
+    state = (tmp_path / ".datamanifest" / "state.toml").read_text()
     assert "archive" in state                       # recorded location repointed
     assert toml.read_text().count("[mydata]") == 1  # manifest unchanged
 
@@ -870,7 +918,7 @@ def _outside_project(tmp_path):
     stray = tmp_path / "stray" / "example.com"
     stray.mkdir(parents=True)
     (stray / "c.csv").write_bytes(b"c\n")
-    with open(tmp_path / ".datamanifest-state.toml", "a") as f:
+    with open(tmp_path / ".datamanifest" / "state.toml", "a") as f:
         f.write(f'\n[datasets."example.com/c.csv"]\n'
                 f'storage_path = "{stray / "c.csv"}"\nsha256 = "deadbeef"\n')
     return env, stray

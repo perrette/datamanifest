@@ -304,15 +304,16 @@ def test_conformance(fixture_name, fixtures_dir):
     storage = expected.get("storage")
     if storage is not None:
         roots = storage["roots"]
-        base = sorted(k for k in db.storage_config if not k.startswith("_"))
+        manifest_storage = db.extra.get("_STORAGE", {})
+        base = sorted(k for k in manifest_storage if not k.startswith("_"))
         assert base == roots["base"], (
             f"{fixture_name}: storage roots base {base} != {roots['base']}"
         )
-        host_patterns = sorted(db.storage_config.get("_HOST", {}).keys())
+        host_patterns = sorted(manifest_storage.get("_HOST", {}).keys())
         assert host_patterns == roots["host_patterns"], (
             f"{fixture_name}: host_patterns {host_patterns} != {roots['host_patterns']}"
         )
-        profiles = sorted(db.storage_config.get("_PROFILE", {}).keys())
+        profiles = sorted(manifest_storage.get("_PROFILE", {}).keys())
         assert profiles == roots["profiles"], (
             f"{fixture_name}: profiles {profiles} != {roots['profiles']}"
         )

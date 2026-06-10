@@ -218,7 +218,7 @@ def _enumerate_objects(db, heavy=frozenset({"size"})):
 
     Reachability and dirty status are resolved here — the one place that bridges
     both layers — from the project's sibling state file
-    (``.datamanifest-state.toml``): a produced artifact is ``referenced`` iff its
+    (``.datamanifest/state.toml``): a produced artifact is ``referenced`` iff its
     ``(cachetype, version, hash)`` is rooted there; a fetched dataset is always
     referenced by its manifest entry. ``dirty`` compares each object's recorded
     location against where its bytes actually are: ``""`` clean, ``relocated``
@@ -674,7 +674,7 @@ def _dataset_protected(db, obj):
 
 
 def _cmd_refresh(args):
-    """Reconcile the state file (`.datamanifest-state.toml`) with disk.
+    """Reconcile the state file (`.datamanifest/state.toml`) with disk.
 
     First-order maintenance over the whole inventory: relocate stale recorded
     locations to where the bytes actually are, drop records whose bytes are gone,
@@ -1325,7 +1325,7 @@ def _cmd_init(args):
         f.write(
             "# datamanifest.toml — dataset manifest.\n"
             "# Add datasets with `datamanifest add <uri>`; data lives under\n"
-            "# ./datasets/ and ./cached/ by default (see `datamanifest storage`).\n\n"
+            "# the machine-wide shared store by default (see `datamanifest config`).\n\n"
             "[_META]\nschema = 1\n"
         )
     print(f"Created: {toml_path}")
@@ -1509,22 +1509,23 @@ def _cmd_where(args):
             print("  (none found)")
 
 
-# ----- storage config editing ([_STORAGE]) -----------------------------------
+# ----- scoped config editing (`config`; `storage` is the deprecated alias) ----
 
 # Storage fields that hold a list (not a scalar path expression).
 _STORAGE_LIST_FIELDS = ("datasets_pools", "datacache_pools")
 
 
 def _valid_storage_field(field: str) -> bool:
-    """Whether *field* is a settable ``[_STORAGE]`` key — a folder field
-    (``datasets_dir`` / ``datacache_dir``) or a user ``$symbol`` name (a plain
-    identifier). Reserved ``_``-prefixed keys (``_HOST`` / ``_META`` …) are not."""
+    """Whether *field* is a settable config key — a folder field (``datasets_dir``
+    / ``datacache_dir``), ``project`` / ``default_remote``, a user ``$symbol``
+    name (a plain identifier), or a ``*_pools`` list. Reserved ``_``-prefixed
+    keys (``_HOST`` / ``_META`` …) are not."""
     return bool(field) and not field.startswith("_") and field.replace("_", "a").isalnum()
 
 
 def _storage_db(action: str):
-    """The active database for a ``storage`` edit, or exit with a clear error when
-    there is no manifest to edit."""
+    """The active database for a config edit, or exit with a clear error when
+    there is no project to edit."""
     db = _get_db()
     if not db.datasets_toml:
         print(f"Error: no manifest found to {action} (run inside a project with a "
@@ -1533,13 +1534,79 @@ def _storage_db(action: str):
     return db
 
 
-def _cmd_storage_set(args):
-    """Set a ``[_STORAGE]`` field. By default it applies to **this host** (written
-    under ``[_STORAGE._HOST."<hostname>"]``); ``--host GLOB`` targets a host glob,
-    ``--all-hosts`` the project-wide base. Edits the manifest (the committed spec)."""
+def _config_scope(args):
+    """The targeted scope from the ``--local`` / ``--global`` / ``--project`` /
+    ``--host GLOB`` flags: ``("local"|"user"|"project", host_glob)``. ``--host``
+    alone targets the manifest's ``[_STORAGE._HOST.<glob>]`` (committed, shared
+    infrastructure); combined with ``--local`` / ``--global`` it targets that
+    file's ``[_HOST.<glob>]`` section instead."""
+    scope = getattr(args, "scope", None) or "local"
+    host = getattr(args, "host", None) or ""
+    if host and scope == "local" and not getattr(args, "scope", None):
+        # bare --host GLOB → the manifest's committed _HOST table
+        scope = "project"
+    return scope, host
+
+
+def _scoped_config_file(db, scope):
+    """The config-file path for a file-backed *scope* (``local`` / ``user``)."""
+    from . import storage as storage_mod
+
+    if scope == "user":
+        return storage_mod.user_config_path()
+    root = db.get_project_root()
+    return storage_mod.local_config_path(root)
+
+
+def _read_toml_or_empty(path):
+    try:
+        import tomllib
+    except ModuleNotFoundError:  # Python 3.10
+        import tomli as tomllib
+    if not path or not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, "rb") as f:
+            return tomllib.load(f)
+    except Exception as e:  # noqa: BLE001 - refuse to clobber an unreadable file
+        print(f"Error: cannot parse {path}: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def _write_scoped_config(path, data):
+    """Write a scoped config file (sorted canonical TOML); the per-checkout
+    ``.datamanifest/`` dir is created self-git-ignored."""
+    import tomli_w
+
+    from . import storage as storage_mod
+    from .database import _sort_recursive
+
+    parent = os.path.dirname(path) or "."
+    if os.path.basename(parent) == storage_mod.PRIVATE_DIR_NAME:
+        storage_mod.ensure_ignored_dir(parent)
+    else:
+        os.makedirs(parent, exist_ok=True)
+    with open(path, "wb") as f:
+        tomli_w.dump(_sort_recursive(data), f)
+
+
+def _scope_label(scope, host, target):
+    where = {"local": "local (this checkout)", "user": "global (this user)",
+             "project": "project (committed manifest)"}[scope]
+    label = f"{where}: {target}"
+    if host:
+        label += f', host "{host}"'
+    return label
+
+
+def _cmd_config_set(args):
+    """Set a config field in the targeted scope (default ``--local``: the
+    checkout's git-ignored ``.datamanifest/config.toml`` — personal by default,
+    shared deliberately via ``--project`` / ``--host``)."""
     if not _valid_storage_field(args.field):
         print(f"Error: invalid field name {args.field!r} (use datasets_dir / "
-              "datacache_dir, a $symbol, or a *_pools list).", file=sys.stderr)
+              "datacache_dir, project, default_remote, a $symbol, or a *_pools "
+              "list).", file=sys.stderr)
         sys.exit(1)
     # A list field (datasets_pools / datacache_pools) takes any number of values
     # (zero = an explicit empty list, i.e. disabled); a scalar takes exactly one.
@@ -1552,52 +1619,73 @@ def _cmd_storage_set(args):
               file=sys.stderr)
         sys.exit(1)
 
-    db = _storage_db("edit")
-    storage = db.extra.setdefault("_STORAGE", {})
-    if args.all_hosts:
-        storage[args.field] = value
-        where = "all hosts"
-    else:
-        host = args.host or socket.gethostname()
-        storage.setdefault("_HOST", {}).setdefault(host, {})[args.field] = value
-        where = f'host "{host}"' + ("" if args.host else " (this machine)")
-    db.write(db.datasets_toml)
-    print(f"Set {args.field} = {value!r} for {where}.")
-
-
-def _cmd_storage_unset(args):
-    """Remove a ``[_STORAGE]`` field (same targeting as ``set``: this host by
-    default, ``--host GLOB`` or ``--all-hosts``). Prunes now-empty host tables."""
-    db = _storage_db("edit")
-    storage = db.extra.get("_STORAGE", {})
-    removed = False
-    if args.all_hosts:
-        removed = storage.pop(args.field, None) is not None
-        where = "all hosts"
-    else:
-        host = args.host or socket.gethostname()
-        host_tbl = storage.get("_HOST", {})
-        if host in host_tbl and args.field in host_tbl[host]:
-            del host_tbl[host][args.field]
-            removed = True
-            if not host_tbl[host]:
-                del host_tbl[host]
-            if not host_tbl:
-                storage.pop("_HOST", None)
-        where = f'host "{host}"'
-    if removed:
+    scope, host = _config_scope(args)
+    if scope == "project":
+        db = _storage_db("edit")
+        storage = db.extra.setdefault("_STORAGE", {})
+        table = (storage.setdefault("_HOST", {}).setdefault(host, {})
+                 if host else storage)
+        table[args.field] = value
         db.write(db.datasets_toml)
-        print(f"Unset {args.field} for {where}.")
+        target = db.datasets_toml
     else:
-        print(f"Nothing to unset: {args.field} not set for {where}.")
+        db = _storage_db("configure") if scope == "local" else _get_db()
+        path = _scoped_config_file(db, scope)
+        data = _read_toml_or_empty(path)
+        table = (data.setdefault("_HOST", {}).setdefault(host, {})
+                 if host else data)
+        table[args.field] = value
+        _write_scoped_config(path, data)
+        target = path
+    print(f"Set {args.field} = {value!r} [{_scope_label(scope, host, target)}].")
 
 
-def _cmd_storage_show(args):
-    """Show the storage config resolved for this host, plus the raw rules."""
+def _cmd_config_unset(args):
+    """Remove a config field from the targeted scope (same targeting as ``set``).
+    Prunes now-empty host tables."""
+    def _drop(table, field, host):
+        if host:
+            host_tbl = table.get("_HOST", {})
+            if host in host_tbl and field in host_tbl[host]:
+                del host_tbl[host][field]
+                if not host_tbl[host]:
+                    del host_tbl[host]
+                if not host_tbl:
+                    table.pop("_HOST", None)
+                return True
+            return False
+        return table.pop(field, None) is not None
+
+    scope, host = _config_scope(args)
+    if scope == "project":
+        db = _storage_db("edit")
+        storage = db.extra.get("_STORAGE", {})
+        removed = _drop(storage, args.field, host)
+        if removed:
+            db.write(db.datasets_toml)
+        target = db.datasets_toml
+    else:
+        db = _storage_db("configure") if scope == "local" else _get_db()
+        path = _scoped_config_file(db, scope)
+        data = _read_toml_or_empty(path)
+        removed = _drop(data, args.field, host)
+        if removed:
+            _write_scoped_config(path, data)
+        target = path
+    label = _scope_label(scope, host, target)
+    if removed:
+        print(f"Unset {args.field} [{label}].")
+    else:
+        print(f"Nothing to unset: {args.field} not set [{label}].")
+
+
+def _cmd_config_show(args):
+    """Show the config resolved for this host, plus every scope's raw rules
+    (most specific first: env, local, project manifest, user-global)."""
     from . import storage as storage_mod
 
     db = _get_db()
-    cfg = db.extra.get("_STORAGE", {})
+    cfg = db.storage_config
     root = db.get_project_root()
     host = socket.gethostname()
     on = _color_enabled()
@@ -1617,17 +1705,54 @@ def _cmd_storage_show(args):
         if pools:
             print(f"  {field:<14} -> {', '.join(pools)}")
 
-    print(_paint("[_STORAGE] rules:", "bold", on=on))
-    base = {k: v for k, v in cfg.items() if k != "_HOST"}
-    if not base and not cfg.get("_HOST"):
-        print(_paint("  (none — repo-local defaults: ./datasets, ./cached)", "dim", on=on))
-    for k, v in base.items():
-        print(f"  {k} = {v!r}")
-    for pattern, mapping in cfg.get("_HOST", {}).items():
-        if isinstance(mapping, dict):
-            for k, v in mapping.items():
-                marker = "  ←matches" if _host_matches(host, pattern) else ""
-                print(f'  [_HOST "{pattern}"] {k} = {v!r}{_paint(marker, "green", on=on)}')
+    env_rules = {k: v for k, v in os.environ.items()
+                 if k.startswith("DATAMANIFEST_") and k != "DATAMANIFEST_TOML"}
+    if env_rules:
+        print(_paint("environment:", "bold", on=on))
+        for k, v in sorted(env_rules.items()):
+            print(f"  {k} = {v!r}")
+
+    layers = getattr(cfg, "layers", None)
+    if layers is None:
+        layers = (cfg or {},)
+        scopes = [("project — [_STORAGE] in " + (db.datasets_toml or "(none)"),
+                   layers[0])]
+    else:
+        scopes = [
+            ("local — " + (storage_mod.local_config_path(root) or "(no project)"),
+             cfg.local),
+            ("project — [_STORAGE] in " + (db.datasets_toml or "(none)"),
+             cfg.manifest),
+            ("global — " + storage_mod.user_config_path(), cfg.user),
+        ]
+    any_rule = False
+    for title, table in scopes:
+        base = {k: v for k, v in table.items() if k != "_HOST"}
+        host_tbl = table.get("_HOST", {})
+        if not base and not host_tbl:
+            continue
+        any_rule = True
+        print(_paint(f"{title}:", "bold", on=on))
+        for k, v in base.items():
+            print(f"  {k} = {v!r}")
+        for pattern, mapping in host_tbl.items():
+            if isinstance(mapping, dict):
+                for k, v in mapping.items():
+                    marker = "  ←matches" if _host_matches(host, pattern) else ""
+                    print(f'  [_HOST "{pattern}"] {k} = {v!r}'
+                          f'{_paint(marker, "green", on=on)}')
+    if not any_rule and not env_rules:
+        print(_paint("  (no rules — built-in defaults apply)", "dim", on=on))
+
+
+def _cmd_storage_alias(args):
+    """The deprecated ``storage`` entry points — forward to ``config``."""
+    print("Warning: `datamanifest storage` is deprecated; use "
+          "`datamanifest config`.", file=sys.stderr)
+    # Map the retired --all-hosts flag onto the --project scope.
+    if getattr(args, "all_hosts", False):
+        args.scope = "project"
+    args.func2(args)
 
 
 def _host_matches(host: str, pattern: str) -> bool:
@@ -2110,7 +2235,7 @@ def main():
     # refresh
     p_refresh = subparsers.add_parser(
         "refresh",
-        help="Reconcile the state file (.datamanifest-state.toml) with disk: "
+        help="Reconcile the state file (.datamanifest/state.toml) with disk: "
              "relocate stale records, drop missing ones, adopt present-but-"
              "untracked datasets. Applies by default (edits only local state)",
         description=(
@@ -2136,55 +2261,100 @@ def main():
     _add_pool_override_flags(p_refresh)
     p_refresh.set_defaults(func=_cmd_refresh)
 
-    # storage (edit [_STORAGE] without hand-writing the _HOST syntax)
-    p_storage = subparsers.add_parser(
-        "storage",
-        help="Show or edit the manifest's [_STORAGE] config (folders + per-host "
-             "overrides) without hand-editing the _HOST syntax",
-        description=(
-            "Show or edit [_STORAGE] in datamanifest.toml. `set`/`unset` target "
-            "THIS host by default (written under [_STORAGE._HOST.\"<hostname>\"]); "
-            "--host GLOB targets a host pattern, --all-hosts the project-wide "
-            "base. `show` (the default) prints the config resolved for this host "
-            "plus the raw rules."
-        ),
-    )
-    storage_sub = p_storage.add_subparsers(dest="storage_cmd", metavar="{show,set,unset}")
-
-    p_st_show = storage_sub.add_parser(
-        "show", help="Show storage config resolved for this host + the raw rules")
-    p_st_show.set_defaults(func=_cmd_storage_show)
-
-    def _add_target_flags(p):
+    # config — scoped storage configuration (git-config style).
+    def _add_scope_flags(p, *, deprecated_alias=False):
         excl = p.add_mutually_exclusive_group()
         excl.add_argument(
-            "--host", metavar="GLOB",
-            help="Apply on hosts matching GLOB (fnmatch); default: this host only",
+            "--local", dest="scope", action="store_const", const="local",
+            default=None,
+            help="Target the checkout's git-ignored .datamanifest/config.toml "
+                 "(the default — personal, never committed)",
         )
         excl.add_argument(
-            "--all-hosts", action="store_true",
-            help="Apply as the project-wide base value (all hosts)",
+            "--global", dest="scope", action="store_const", const="user",
+            help="Target the user-global ~/.config/datamanifest/config.toml",
         )
+        excl.add_argument(
+            "--project", dest="scope", action="store_const", const="project",
+            help="Target the committed manifest's [_STORAGE] base (shared "
+                 "project intent)",
+        )
+        p.add_argument(
+            "--host", metavar="GLOB",
+            help="Scope the value to hosts matching GLOB (fnmatch). Alone: the "
+                 "manifest's [_STORAGE._HOST.<glob>] (committed, shared "
+                 "infrastructure); with --local/--global: that file's [_HOST] "
+                 "section",
+        )
+        if deprecated_alias:
+            p.add_argument("--all-hosts", action="store_true",
+                           help=argparse.SUPPRESS)
 
-    p_st_set = storage_sub.add_parser(
-        "set", help="Set a folder field, a $symbol, or a *_pools list")
-    p_st_set.add_argument("field", metavar="FIELD",
-                          help="datasets_dir, datacache_dir, a $symbol, or "
-                               "datasets_pools / datacache_pools (a list)")
-    p_st_set.add_argument("value", metavar="VALUE", nargs="*",
-                          help="Path expression(s) (may use $user_data_dir, $repo, "
-                               "$USER, …); a *_pools field accepts several (or "
-                               "none, for an explicit empty list)")
-    _add_target_flags(p_st_set)
-    p_st_set.set_defaults(func=_cmd_storage_set)
+    def _wire_config_parser(p, *, alias=False):
+        sub = p.add_subparsers(dest="config_cmd", metavar="{show,set,unset}")
 
-    p_st_unset = storage_sub.add_parser(
-        "unset", help="Remove a storage field (this host by default)")
-    p_st_unset.add_argument("field", metavar="FIELD")
-    _add_target_flags(p_st_unset)
-    p_st_unset.set_defaults(func=_cmd_storage_unset)
+        def _wrap(fn):
+            if not alias:
+                return fn
+            def wrapped(args, _fn=fn):
+                args.func2 = _fn
+                _cmd_storage_alias(args)
+            return wrapped
 
-    p_storage.set_defaults(func=_cmd_storage_show)   # bare `storage` → show
+        p_show = sub.add_parser(
+            "show", help="Show the config resolved for this host + every "
+                         "scope's raw rules")
+        p_show.set_defaults(func=_wrap(_cmd_config_show))
+
+        p_set = sub.add_parser(
+            "set", help="Set a folder field, project, default_remote, a "
+                        "$symbol, or a *_pools list")
+        p_set.add_argument("field", metavar="FIELD",
+                           help="datasets_dir, datacache_dir, project, "
+                                "default_remote, a $symbol, or datasets_pools / "
+                                "datacache_pools (a list)")
+        p_set.add_argument("value", metavar="VALUE", nargs="*",
+                           help="Path expression(s) (may use $user_data_dir, "
+                                "$repo, $project, $USER, …); a *_pools field "
+                                "accepts several (or none, for an explicit "
+                                "empty list)")
+        _add_scope_flags(p_set, deprecated_alias=alias)
+        p_set.set_defaults(func=_wrap(_cmd_config_set))
+
+        p_unset = sub.add_parser(
+            "unset", help="Remove a config field from the targeted scope")
+        p_unset.add_argument("field", metavar="FIELD")
+        _add_scope_flags(p_unset, deprecated_alias=alias)
+        p_unset.set_defaults(func=_wrap(_cmd_config_unset))
+
+        p.set_defaults(func=_wrap(_cmd_config_show))   # bare → show
+
+    p_config = subparsers.add_parser(
+        "config",
+        help="Show or edit the scoped storage config (checkout / manifest / "
+             "user-global, with per-host overrides)",
+        description=(
+            "Show or edit the storage configuration across its scopes. "
+            "`set`/`unset` write to the checkout's git-ignored "
+            ".datamanifest/config.toml by default (--local) — personal by "
+            "default, shared deliberately: --project edits the committed "
+            "manifest's [_STORAGE] base, --host GLOB its per-host table, "
+            "--global the user-wide ~/.config/datamanifest/config.toml. "
+            "Resolution order: env vars, local config (host then base), "
+            "manifest (host then base), global config (host then base), "
+            "built-in defaults. `show` (the default) prints the resolved "
+            "values plus every scope's raw rules."
+        ),
+    )
+    _wire_config_parser(p_config)
+
+    # storage — deprecated alias of `config`.
+    p_storage = subparsers.add_parser(
+        "storage",
+        help="Deprecated alias of `config`",
+        description="Deprecated alias of `datamanifest config`.",
+    )
+    _wire_config_parser(p_storage, alias=True)
 
     # format
     p_format = subparsers.add_parser(

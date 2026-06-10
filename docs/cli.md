@@ -145,7 +145,7 @@ Recompute stored checksums from what's on disk (e.g. after regenerating data).
 
 ### `refresh [--scan] [--dry-run]`
 
-Reconcile the git-ignored state file (`.datamanifest-state.toml`) with disk:
+Reconcile the git-ignored state file (`.datamanifest/state.toml`) with disk:
 repoint records whose bytes moved, drop records whose bytes are gone, adopt
 present-but-untracked datasets. No downloads, no file moves, no bytes touched —
 so it applies by default; `--dry-run` previews, and `list --dirty` shows what
@@ -192,31 +192,38 @@ size) and transfers nothing. For bulk transfers, filter with `list` and use its
   environment (the tool probes `DATAMANIFEST_*` via
   `ssh <host> 'source ~/.bashrc; env'`), then the manifest's
   `[_STORAGE._HOST]` rules for that host, then the default.
-- A **local / `$repo`-relative object is not syncable** — point
-  `datasets_dir` / `datacache_dir` at a machine-global location (e.g.
-  `$user_data_dir/…`) for an object to be syncable.
+- A **local / `$repo`-relative object is not syncable**. The default folders
+  are machine-global, so objects are syncable out of the box; only an
+  explicitly repo-local configuration opts out.
 - Sync **writes no manifest** — a transferred object lands in the destination
   store as an orphan (present, unreferenced) and is immediately usable; it is
   idempotent (a no-op when the target already holds the object complete).
 
 ## Configure storage
 
-### `storage [show]` / `storage set FIELD VALUE... [--host GLOB|--all-hosts]` / `storage unset FIELD [...]`
+### `config [show]` / `config set FIELD VALUE... [--local|--global|--project|--host GLOB]` / `config unset FIELD [...]`
 
-Show or edit `[_STORAGE]` without hand-writing the `_HOST` syntax. `set`/`unset`
-target **this host** by default (written under `[_STORAGE._HOST."<hostname>"]`);
-`--host GLOB` targets a host pattern (fnmatch), `--all-hosts` the project-wide
-base. `FIELD` is `datasets_dir`/`datacache_dir`, a user `$symbol`, or a
-`datasets_pools`/`datacache_pools` list (several values, or none for an explicit
-empty list). `show` (the default) prints the config resolved for this host plus
-the raw rules.
+Show or edit the scoped storage configuration. `set`/`unset` write to the
+checkout's git-ignored `.datamanifest/config.toml` by default (`--local`) —
+personal by default, shared deliberately: `--project` edits the committed
+manifest's `[_STORAGE]` base, `--host GLOB` its per-host table (with
+`--local`/`--global`, the `_HOST` section of that file instead), `--global` the
+user-wide `~/.config/datamanifest/config.toml`. `FIELD` is
+`datasets_dir`/`datacache_dir`, `project`, `default_remote`, a user `$symbol`,
+or a `datasets_pools`/`datacache_pools` list (several values, or none for an
+explicit empty list). `show` (the default) prints the config resolved for this
+host plus every scope's raw rules.
 
 ```bash
-datamanifest storage set datacache_dir "/scratch/$USER/cache"                 # this host only
-datamanifest storage set datacache_dir "$user_cache_dir/myproj" --all-hosts   # project default
-datamanifest storage set datasets_dir /fast/data --host "login*.hpc.edu"      # a host glob
-datamanifest storage                  # show resolved config + raw rules
+datamanifest config set datacache_dir "/scratch/$USER/cache"               # this checkout
+datamanifest config set datasets_dir /pool --global                        # this user
+datamanifest config set datacache_dir "$user_cache_dir/myproj" --project   # committed default
+datamanifest config set datasets_dir /fast/data --host "login*.hpc.edu"    # committed, per-host
+datamanifest config                   # show resolved config + raw rules
 ```
+
+`datamanifest storage` is a deprecated alias of `config` (`--all-hosts` maps to
+`--project`).
 
 ## Manifest tools
 
@@ -229,15 +236,16 @@ byte-identical output). Reads stdin by default; `-i` rewrites FILE in place.
 
 Upgrade an older manifest to the current format **without moving any data**:
 
-- modernizes the storage settings (writes the two folder fields at their
-  repo-local defaults, drops retired keys, carries `local_path` →
-  `storage_path`) and any inline language bindings;
+- modernizes the storage settings (drops retired keys, carries `local_path` →
+  `storage_path`; no folder defaults are written out — they would shadow your
+  machine-wide config) and any inline language bindings;
 - **finds data you already have** — it looks in the old default locations on
   disk (and the read pools) and records each file's real location in the state
-  file, so existing downloads keep working while new ones follow the clean
-  defaults. If one location holds most of your data, it offers to point
-  `datasets_dir` there for this machine; if a file turns up in two places, it
-  asks which to use (`--no-input` picks automatically).
+  file, so existing downloads keep working while new ones follow the
+  configured directive. If one location holds most of your data, it offers to
+  point `datasets_dir` there (written to the git-ignored
+  `.datamanifest/config.toml`, never the committed manifest); if a file turns
+  up in two places, it asks which to use (`--no-input` picks automatically).
 
 `migrate`, `refresh --scan` and `where --scan` also accept `--datasets-pools` /
 `--datacache-pools` to override the read pools for a single run (no values =

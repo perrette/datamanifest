@@ -115,7 +115,7 @@ def test_lazy_access_registers_and_loads_in_place(tmp_path):
     assert entry.lang_python_loader == FSSPEC_LOADER_REF
     # No download, no state record (nothing local), and the loader streams it.
     assert load_dataset(db, name) == {"v": 1}
-    assert not (tmp_path / ".datamanifest-state.toml").exists()
+    assert not (tmp_path / ".datamanifest" / "state.toml").exists()
 
 
 def test_add_lazy_cli_wiring(tmp_path, monkeypatch, capsys):

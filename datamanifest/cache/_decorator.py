@@ -314,24 +314,30 @@ def _discover_manifest(project_root):
     return project_root_from_paths(toml), toml
 
 
-def _load_storage_config(manifest_toml) -> dict:
-    """The ``[_STORAGE]`` table from *manifest_toml* (empty when absent/unreadable).
+def _load_storage_config(manifest_toml):
+    """The layered scoped config for the project holding *manifest_toml* — the
+    checkout's ``.datamanifest/config.toml``, the manifest's ``[_STORAGE]``
+    table, and the user-global config file.
 
-    Reading the table is a plain TOML load — **no** ``Database`` / fetch layer —
-    so the same centralized storage settings that drive fetched datasets (folder
-    roots, ``_HOST`` / ``_PROFILE`` per-machine overrides, ``_SCOPE`` / ``_PREFIX``)
-    also drive produced artifacts: ``$cache`` and friends resolve identically for
-    cache and fetch. Mirrors ``Database.storage_config`` (``dict(extra["_STORAGE"])``).
+    Reading is a plain TOML load — **no** ``Database`` / fetch layer — so the
+    same centralized storage settings that drive fetched datasets also drive
+    produced artifacts: ``$datacache_dir`` and friends resolve identically for
+    cache and fetch. Mirrors ``Database.storage_config``.
     """
-    if not manifest_toml or not os.path.isfile(manifest_toml):
-        return {}
-    try:
-        with open(manifest_toml, "rb") as f:
-            data = tomllib.load(f)
-    except Exception:  # noqa: BLE001 - a malformed manifest contributes no config
-        return {}
-    table = data.get("_STORAGE", {})
-    return dict(table) if isinstance(table, dict) else {}
+    table = {}
+    if manifest_toml and os.path.isfile(manifest_toml):
+        try:
+            with open(manifest_toml, "rb") as f:
+                data = tomllib.load(f)
+            raw = data.get("_STORAGE", {})
+            table = dict(raw) if isinstance(raw, dict) else {}
+        except Exception:  # noqa: BLE001 - a malformed manifest contributes no config
+            pass
+    project_root = os.path.dirname(os.path.abspath(manifest_toml)) \
+        if manifest_toml else ""
+    return locations.load_scoped_config(
+        project_root=project_root, manifest_config=table,
+    )
 
 
 def _locate_cached_toml(cached_toml, project_root) -> str:

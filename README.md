@@ -35,7 +35,7 @@ them, and caches your own computed results with the same machinery.
   machines.** Add and download datasets, inspect and repair what's on disk, move
   or centralize where data is stored, and push/pull datasets and cached results
   between machines over rsync+ssh — all without touching your analysis code. A
-  git-ignored `.datamanifest-state.toml` records where each object actually landed
+  git-ignored `.datamanifest/state.toml` records where each object actually landed
   on this machine, keeping local location tracking separate from the portable,
   shareable manifest.
 <!-- intro-end -->
@@ -75,7 +75,8 @@ path = datamanifest.get_dataset_path("co2")    # just the on-disk path
 ```
 
 **Commit `datamanifest.toml`** — the recipe of what to fetch and how. The data
-and a local `.datamanifest-state.toml` stay git-ignored; a collaborator clones
+lives in a machine-wide shared store (deduplicated across your projects) and
+the private `.datamanifest/` directory stays git-ignored; a collaborator clones
 and runs `datamanifest download`. See the
 [quickstart](https://perrette.github.io/datamanifest/quickstart/) for the full
 walkthrough.

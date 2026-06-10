@@ -62,7 +62,7 @@ def test_relocated_is_flagged_and_refreshed(tmp_path):
 
     # Point the recorded location at a stale path while the bytes stay at the
     # derived location → "relocated" (state record disagrees with disk).
-    state = tmp_path / ".datamanifest-state.toml"
+    state = tmp_path / ".datamanifest" / "state.toml"
     idx = CachedIndex.read(state)
     idx.set_dataset_path(key, str(tmp_path / "stale" / "a.csv"))
     idx.write()
@@ -91,7 +91,7 @@ def test_missing_is_flagged_and_dropped_by_refresh(tmp_path):
 
     _refresh(_enumerate_objects(db), db, dry_run=False)
     # The stale entry is dropped from the state file.
-    idx = CachedIndex.read(tmp_path / ".datamanifest-state.toml")
+    idx = CachedIndex.read(tmp_path / ".datamanifest" / "state.toml")
     assert idx.dataset_path_of(key) == ""
 
 
@@ -102,7 +102,7 @@ def test_untracked_dataset_is_adopted_by_refresh(tmp_path):
 
     # Present on disk but not recorded (e.g. fetched before the state file
     # existed): drop the entry, keep the bytes.
-    state = tmp_path / ".datamanifest-state.toml"
+    state = tmp_path / ".datamanifest" / "state.toml"
     idx = CachedIndex.read(state)
     idx.remove_dataset(key)
     idx.write()
@@ -123,7 +123,7 @@ def test_dataset_delete_removes_bytes_and_entry(tmp_path):
 
     _maintain(_enumerate_objects(db), _args(delete=True), db)
     assert not os.path.exists(path)                       # bytes gone
-    idx = CachedIndex.read(tmp_path / ".datamanifest-state.toml")
+    idx = CachedIndex.read(tmp_path / ".datamanifest" / "state.toml")
     assert idx.dataset_path_of(key) == ""                 # entry pruned
     # Manifest untouched — the dataset is still declared.
     assert "[a]" in (tmp_path / "datamanifest.toml").read_text()
@@ -140,7 +140,7 @@ def test_dataset_move_repoints_state_not_manifest(tmp_path):
     moved = dest / key
     assert moved.exists() and not os.path.exists(path)    # bytes relocated
     # State repointed at the new home; manifest unchanged.
-    idx = CachedIndex.read(tmp_path / ".datamanifest-state.toml")
+    idx = CachedIndex.read(tmp_path / ".datamanifest" / "state.toml")
     assert os.path.abspath(os.path.join(tmp_path, idx.dataset_path_of(key))) \
         == os.path.abspath(str(moved))
     assert (tmp_path / "datamanifest.toml").read_text() == before
@@ -154,7 +154,7 @@ def test_remove_prunes_state_record(tmp_path):
     db = _project(tmp_path)
     download_dataset(db, "a")
     key = db.datasets["a"].key
-    state = tmp_path / ".datamanifest-state.toml"
+    state = tmp_path / ".datamanifest" / "state.toml"
     assert CachedIndex.read(state).dataset_path_of(key)        # recorded after download
 
     delete_dataset(db, "a")
@@ -169,7 +169,7 @@ def test_remove_keep_cache_keeps_state_record(tmp_path):
     download_dataset(db, "a")
     key = db.datasets["a"].key
     delete_dataset(db, "a", keep_cache=True)
-    state = tmp_path / ".datamanifest-state.toml"
+    state = tmp_path / ".datamanifest" / "state.toml"
     assert CachedIndex.read(state).dataset_path_of(key)        # still recorded
 
 
@@ -200,7 +200,8 @@ def test_refresh_recovers_missing_from_pool_without_scan(tmp_path):
         f'[_STORAGE]\ndatasets_dir = "datasets"\ndatasets_pools = ["{pool}"]\n'
         '[a]\nuri = "https://example.com/a.csv"\n'
     )
-    state = tmp_path / ".datamanifest-state.toml"
+    state = tmp_path / ".datamanifest" / "state.toml"
+    state.parent.mkdir(exist_ok=True)
     state.write_text('[_META]\nschema = 5\n'
                      '[datasets."example.com/a.csv"]\nstorage_path = "gone/a.csv"\n')
     db = Database(datasets_toml=str(toml))
@@ -219,7 +220,8 @@ def test_refresh_drops_missing_when_not_in_any_pool(tmp_path):
         '[_STORAGE]\ndatasets_dir = "datasets"\ndatasets_pools = []\n'  # pools off
         '[a]\nuri = "https://example.com/a.csv"\n'
     )
-    state = tmp_path / ".datamanifest-state.toml"
+    state = tmp_path / ".datamanifest" / "state.toml"
+    state.parent.mkdir(exist_ok=True)
     state.write_text('[_META]\nschema = 5\n'
                      '[datasets."example.com/a.csv"]\nstorage_path = "gone/a.csv"\n')
     db = Database(datasets_toml=str(toml))

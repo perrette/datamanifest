@@ -131,7 +131,7 @@ def test_import_pooch_adopts_cache(tmp_path):
 
     # Each file is recorded in the state file at its actual cache location — so
     # resolution finds it there with no re-download.
-    idx = CachedIndex.read(tmp_path / ".datamanifest-state.toml")
+    idx = CachedIndex.read(tmp_path / ".datamanifest" / "state.toml")
     rec = idx.dataset_path_of("data.example.org/g.nc")
     assert os.path.abspath(os.path.join(tmp_path, rec)) == str(cache / "g.nc")
     assert idx.dataset_path_of("data.example.org/sub/d.csv")
@@ -157,7 +157,7 @@ def test_import_pooch_cache_mismatch_not_adopted(tmp_path):
     assert "checksum mismatch" in summary
     # Declared (the manifest keeps the registry's hash) but NOT adopted.
     assert "g" in _manifest(toml)
-    assert not (tmp_path / ".datamanifest-state.toml").exists()
+    assert not (tmp_path / ".datamanifest" / "state.toml").exists()
 
 
 def test_import_pooch_dry_run_writes_nothing(tmp_path):
@@ -169,7 +169,7 @@ def test_import_pooch_dry_run_writes_nothing(tmp_path):
                            dry_run=True)
     assert "Would import 3 dataset(s)" in summary
     assert toml.read_text() == before                                # manifest untouched
-    assert not (tmp_path / ".datamanifest-state.toml").exists()       # state untouched
+    assert not (tmp_path / ".datamanifest" / "state.toml").exists()       # state untouched
 
 
 # ----- generic CSV / URL list ------------------------------------------------
@@ -225,7 +225,7 @@ def test_import_csv_adopts_cache(tmp_path):
 
     summary = import_csv(db, str(csv), cache_dir=str(cache))
     assert "1 adopted from the cache" in summary
-    idx = CachedIndex.read(tmp_path / ".datamanifest-state.toml")
+    idx = CachedIndex.read(tmp_path / ".datamanifest" / "state.toml")
     assert idx.dataset_path_of("h/grid.csv")
 
 
@@ -398,7 +398,7 @@ def test_import_dvc_reconstructs_remote_uri_and_adopts_cache(tmp_path):
     # uri reconstructed from the default remote's content-addressed layout.
     assert entry["uri"] == f"s3://bucket/dvcstore/files/md5/{md5[:2]}/{md5[2:]}"
     # The cached object is adopted in place (state records it; sha256 computed).
-    idx = CachedIndex.read(tmp_path / ".datamanifest-state.toml")
+    idx = CachedIndex.read(tmp_path / ".datamanifest" / "state.toml")
     assert idx.dataset_path_of(f"bucket/dvcstore/files/md5/{md5[:2]}/{md5[2:]}")
 
 

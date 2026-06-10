@@ -1308,14 +1308,19 @@ def test_get_dataset_path_storage_path_no_root():
     assert path == "data/foo.csv"
 
 
-def test_get_dataset_path_v4_default_is_repo_local(tmp_path):
-    """spec-v4: the default storage_path ``$datasets_dir/$key`` ⇒ repo-local
-    ``<project_root>/datasets/<key>`` with no configuration."""
+def test_get_dataset_path_v5_default_is_shared_store(tmp_path):
+    """spec-v5: the default storage_path ``$datasets_dir/$key`` ⇒ the
+    machine-wide shared keyed store with no configuration."""
+    import os
+
+    import platformdirs
+
     from datamanifest.database import get_dataset_path, init_dataset_entry
 
     entry = init_dataset_entry("https://example.com/host/f.csv")
-    assert get_dataset_path(entry, project_root=str(tmp_path)) == str(
-        tmp_path / "datasets" / entry.key
+    assert get_dataset_path(entry, project_root=str(tmp_path)) == os.path.join(
+        platformdirs.user_data_dir(), "datamanifest", "shared", "datasets",
+        entry.key,
     )
 
 

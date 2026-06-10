@@ -5,21 +5,23 @@
 1. **Language upgrade (v0 → v1)** — promote each dataset's inline ``python=`` to
    ``[<ds>._LANG.python].fetcher`` and a flat ``julia=`` to
    ``[<ds>._LANG.julia].fetcher`` (see :func:`datamanifest.database.migrate_v0_to_v1`).
-2. **Storage reshape (spec-v3 → v4)** — write the two folder fields
-   ``[_STORAGE].datasets_dir`` / ``datacache_dir`` at their **defaults** (repo-local
-   ``./datasets`` / ``./cached``), drop the retired scope/prefix/store rungs, and
-   carry an explicit ``local_path`` over to ``storage_path``. The committed manifest
-   stays clean and portable.
-3. **Discovery → state file** — probe known locations (the v4 repo-local default
+2. **Storage reshape (spec-v3 → v5)** — drop the retired scope/prefix/store
+   rungs and carry an explicit ``local_path`` over to ``storage_path``. The
+   folder fields are **not** written out: a written-out default would
+   permanently shadow the user's machine-wide preference (the config-file
+   rungs below the manifest), so the committed manifest stays clean — folders
+   resolve via the scoped-config ladder.
+3. **Discovery → state file** — probe known locations (the repo-local layout
    **and** legacy roots such as ``$user_data_dir/datamanifest/datasets`` and
    ``~/.cache/Datasets``) for data that already exists on disk, and record each
-   find's actual location in the git-ignored ``.datamanifest-state.toml`` so
+   find's actual location in the git-ignored ``.datamanifest/state.toml`` so
    read-first resolution keeps finding it where it already lives — while *new*
-   data follows the clean default. When one location dominates, it proposes
-   setting ``datasets_dir`` for the current host instead of recording every
-   object. Ambiguity (the same object found in two places) is resolved by an
-   interactive menu on a TTY, or an auto-pick (preferring the repo-local copy)
-   with ``--no-input`` / no TTY.
+   data follows the configured directive. When one location dominates, it
+   proposes setting ``datasets_dir`` — written to the checkout's git-ignored
+   ``.datamanifest/config.toml``, never the committed manifest. Ambiguity (the
+   same object found in two places) is resolved by an interactive menu on a
+   TTY, or an auto-pick (preferring the repo-local copy) with ``--no-input`` /
+   no TTY.
 """
 
 import os
@@ -63,13 +65,7 @@ def migrate_manifest(toml_path, *, env=None, dry_run=False, no_input=False,
 
     db = Database(datasets_toml=toml_path, persist=False)
 
-    datasets_dir = locations.FIELD_DEFAULTS["datasets_dir"]
-    datacache_dir = locations.FIELD_DEFAULTS["datacache_dir"]
-
-    changes = [
-        f"[_STORAGE].datasets_dir  = {datasets_dir!r}  (default; edit to relocate)",
-        f"[_STORAGE].datacache_dir = {datacache_dir!r}  (default; edit to relocate)",
-    ]
+    changes = []
     needs_attention = []
 
     # 1. Language upgrade — scan for the summary, then apply in-place.
@@ -91,17 +87,30 @@ def migrate_manifest(toml_path, *, env=None, dry_run=False, no_input=False,
         elif old_store:
             needs_attention.append(f"{name}  (had store = {old_store!r})")
 
-    new_cfg = {"datasets_dir": datasets_dir, "datacache_dir": datacache_dir}
+    # Carry the manifest's existing [_STORAGE] content forward (explicit folder
+    # fields, _HOST tables, user symbols), dropping only the retired keys. No
+    # defaults are written out — a written-out default would permanently shadow
+    # the user's machine-wide config (the rungs below the manifest).
+    new_cfg = {}
     if isinstance(old_cfg.get("_HOST"), dict):
         new_cfg["_HOST"] = dict(old_cfg["_HOST"])
     for k, v in old_cfg.items():
-        if k in ("datasets_dir", "datacache_dir", "_HOST") or k in _RETIRED_STORAGE_KEYS:
+        if k == "_HOST" or k in _RETIRED_STORAGE_KEYS:
             continue
         new_cfg.setdefault(k, v)
-    db.extra["_STORAGE"] = new_cfg
+    if new_cfg:
+        db.extra["_STORAGE"] = new_cfg
+    else:
+        db.extra.pop("_STORAGE", None)
 
-    # 3. Discover existing data on disk and record it in the state file (may also
-    #    add a host-scoped datasets_dir override to db.extra["_STORAGE"]).
+    # Rebuild the layered config with the reshaped manifest table, so discovery
+    # resolves the directive the migrated project will actually use.
+    db.storage_config = locations.load_scoped_config(
+        project_root=project_root, manifest_config=new_cfg, env=env,
+    )
+
+    # 3. Discover existing data on disk and record it in the state file (may
+    #    also write a host-scoped datasets_dir to .datamanifest/config.toml).
     ds_roots = (locations.resolve_pool_exprs(
         datasets_pools, project_root=project_root, storage_config=new_cfg)
         if datasets_pools is not None else None)
@@ -116,13 +125,14 @@ def migrate_manifest(toml_path, *, env=None, dry_run=False, no_input=False,
     cached_toml = os.path.join(project_root, CACHED_INDEX_NAME)
     legacy_cached = os.path.join(project_root, "cached.toml")
     if os.path.isfile(legacy_cached) and not os.path.isfile(cached_toml):
-        changes.append("migrated cached.toml → .datamanifest-state.toml")
+        changes.append("migrated cached.toml → .datamanifest/state.toml")
 
     if not dry_run:
         db.write(toml_path)
 
     verb = "Would update" if dry_run else "Updated"
-    summary = [f"{verb} {toml_path}:", "  " + "\n  ".join(changes)]
+    summary = [f"{verb} {toml_path}:",
+               "  " + "\n  ".join(changes) if changes else "  (no manifest changes)"]
     if discovery:
         summary.append("\nDiscovered existing data (recorded in the state file):\n  "
                        + "\n  ".join(discovery))
@@ -133,17 +143,18 @@ def migrate_manifest(toml_path, *, env=None, dry_run=False, no_input=False,
         )
     if host_datasets_dir:
         summary.append(
-            f"\nDone. Existing data was recorded in .datamanifest-state.toml (it "
+            f"\nDone. Existing data was recorded in .datamanifest/state.toml (it "
             f"resolves in place); new downloads on this host go to "
-            f"{host_datasets_dir!r}. No bytes were moved."
+            f"{host_datasets_dir!r} (written to .datamanifest/config.toml — "
+            "personal, git-ignored). No bytes were moved."
         )
     else:
         summary.append(
-            "\nDone. Existing data was recorded in .datamanifest-state.toml so it "
-            "resolves in place; new data follows the repo-local defaults "
-            "(./datasets/, ./cached/). Point [_STORAGE].datasets_dir / "
-            "datacache_dir elsewhere with `datamanifest storage` if you prefer. "
-            "No bytes were moved."
+            "\nDone. Existing data was recorded in .datamanifest/state.toml so it "
+            "resolves in place; new data follows the configured directive "
+            "(`datamanifest config show`; the default is the machine-wide shared "
+            "store). Point datasets_dir / datacache_dir elsewhere with "
+            "`datamanifest config set` if you prefer. No bytes were moved."
         )
     return "\n".join(summary)
 
@@ -166,6 +177,8 @@ def _candidate_dataset_roots(project_root, env):
     roots = [
         os.path.join(project_root, "datasets"),
         os.path.join(project_root, "Datasets"),
+        os.path.join(platformdirs.user_data_dir(), "datamanifest", "shared",
+                     "datasets"),
         os.path.join(platformdirs.user_data_dir("datamanifest"), "datasets"),
         os.path.join(platformdirs.user_data_dir(), "datasets"),
         os.path.join(os.path.expanduser("~"), ".cache", "Datasets"),
@@ -256,10 +269,25 @@ def _confirm(question, *, no_input):
     return input(f"{question} [y/N]: ").strip().lower() in ("y", "yes")
 
 
+def _write_local_host_dir(project_root, host, datasets_dir):
+    """Record a host-scoped ``datasets_dir`` in the checkout's local config file
+    (``.datamanifest/config.toml``), merging with any existing content."""
+    path = locations.local_config_path(project_root)
+    data = locations.read_config_file(path)
+    data.setdefault("_HOST", {}).setdefault(host, {})["datasets_dir"] = datasets_dir
+    locations.ensure_ignored_dir(os.path.dirname(path))
+    import tomli_w
+
+    from .store import sort_recursive
+    with open(path, "wb") as f:
+        tomli_w.dump(sort_recursive(data), f)
+
+
 def _discover_and_record(db, project_root, env, *, dry_run, no_input,
                          dataset_roots=None, datacache_roots=None):
     """Probe candidate roots for existing data, record finds in the state file,
-    and (when one location dominates) propose a host-scoped ``datasets_dir``.
+    and (when one location dominates) propose a host-scoped ``datasets_dir``
+    (written to the checkout's git-ignored ``.datamanifest/config.toml``).
     Returns a list of human-readable summary lines. Writes nothing on *dry_run*.
     *dataset_roots* / *datacache_roots* override the built-in candidate roots."""
     from .cache import CachedIndex
@@ -267,7 +295,13 @@ def _discover_and_record(db, project_root, env, *, dry_run, no_input,
     lines = []
     roots = (dataset_roots if dataset_roots is not None
              else _candidate_dataset_roots(project_root, env))
-    default_root = os.path.join(os.path.abspath(project_root), "datasets")
+    # The directive new downloads would follow — a dominant find elsewhere
+    # triggers the "send downloads there too?" proposal.
+    try:
+        default_root = os.path.abspath(locations.datasets_dir(
+            project_root=project_root, storage_config=db.storage_config, env=env))
+    except Exception:  # noqa: BLE001 - an unresolvable directive never blocks
+        default_root = os.path.join(os.path.abspath(project_root), "datasets")
 
     # Find, per dataset, the candidate locations that actually hold bytes.
     chosen = {}                       # name -> adopted absolute location
@@ -291,23 +325,26 @@ def _discover_and_record(db, project_root, env, *, dry_run, no_input,
         suffix = os.sep + key.replace("/", os.sep)
         root_of[name] = loc[:-len(suffix)] if loc.endswith(suffix) else os.path.dirname(loc)
 
-    # Dominant non-default root → offer to set datasets_dir for this host.
+    # Dominant non-default root → offer to set datasets_dir for this host, in
+    # the checkout's git-ignored local config (never the committed manifest —
+    # an absolute per-user path must not leak to collaborators).
     host_dir = None
     if root_of:
         top_root, top_n = Counter(root_of.values()).most_common(1)[0]
         if top_n == len(root_of) and top_n > 0 and top_root != default_root:
             if _confirm(
                 f"All {top_n} discovered dataset(s) are under {top_root!r}. "
-                "Send new downloads there too (set datasets_dir for this host)?",
+                "Send new downloads there too (set datasets_dir in the local, "
+                "git-ignored config)?",
                 no_input=no_input,
             ):
-                storage = db.extra.setdefault("_STORAGE", {})
                 host = socket.gethostname()
-                storage.setdefault("_HOST", {}).setdefault(host, {})["datasets_dir"] = top_root
+                if not dry_run:
+                    _write_local_host_dir(project_root, host, top_root)
                 host_dir = top_root
                 lines.append(
-                    f'[_STORAGE._HOST."{host}"].datasets_dir = {top_root!r}  '
-                    "(new downloads land here on this host)"
+                    f'.datamanifest/config.toml: [_HOST."{host}"].datasets_dir '
+                    f"= {top_root!r}  (new downloads land here on this host)"
                 )
 
     # Record EVERY discovered dataset's real location in the state file — a

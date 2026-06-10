@@ -102,7 +102,8 @@ the loaders map, and the fetch/load resolution ladders.
 ## Storage
 
 Where data lives is configured in `[_STORAGE]` (two folder fields,
-`datasets_dir` and `datacache_dir`, both repo-local by default) and per dataset
+`datasets_dir` and `datacache_dir`, machine-global by default — a shared keyed
+dataset store and a per-project cache) and per dataset
 via `storage_path`. This is its own topic — see the
 [Storage model](storage.md) page.
 

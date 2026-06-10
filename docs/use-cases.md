@@ -74,14 +74,16 @@ datamanifest list --older-than 90d --move /archive --dry-run # DEST then options
 
 ## Put data where you want it
 
-Storage is two folders set in `[_STORAGE]` — `datasets_dir` (fetched data) and
-`datacache_dir` (`@cached` results) — repo-local `./datasets/` and `./cached/`
-by default. `datamanifest storage` edits them, per host if you like:
+Storage is two folders — `datasets_dir` (fetched data, default: a machine-wide
+shared store deduplicated by dataset key) and `datacache_dir` (`@cached`
+results, default: a per-project folder under your OS cache dir).
+`datamanifest config` edits them at the scope you want — this checkout (the
+default, git-ignored), this user, or the committed project:
 
 ```bash
-datamanifest storage set datasets_dir "/scratch/$USER/data"                  # this host only
-datamanifest storage set datacache_dir "$user_cache_dir/myproj" --all-hosts  # project default
-datamanifest storage                                                         # show resolved config
+datamanifest config set datasets_dir "/scratch/$USER/data"                 # this checkout
+datamanifest config set datacache_dir "$user_cache_dir/myproj" --project   # committed default
+datamanifest config                                                        # show resolved config
 ```
 
 Pointing the folders at a machine directory (instead of the repo) shares data

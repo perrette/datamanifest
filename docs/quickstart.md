@@ -7,7 +7,7 @@ datamanifest init                  # create datamanifest.toml here
 datamanifest add https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv --name co2
 datamanifest list                  # what's tracked, and where it lives
 datamanifest path co2              # resolve the on-disk path (for a script)
-datamanifest storage               # where data goes on this host; `storage set` to change
+datamanifest config                # where data goes on this host; `config set` to change
 ```
 
 The `add` above downloaded the Mauna Loa CO₂ record and wrote one entry to
@@ -19,11 +19,13 @@ checksum = "sha256:0058b3788040b5c27b2b5c1dd6d26226b7e4deef85e34c153e64806c37df7
 uri = "https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv"
 ```
 
-**Commit `datamanifest.toml`** — it's the recipe (what to fetch and how). The
-downloaded data and a local `.datamanifest-state.toml` (which records *where*
-each file landed on this machine) stay git-ignored. A collaborator clones the
-repo and runs `datamanifest download` to materialize everything. Data lives
-under `./datasets/` and `./cached/` by default — point it elsewhere with the
+**Commit `datamanifest.toml`** — it's the recipe (what to fetch and how). It is
+the only file to commit: the private `.datamanifest/` directory (which records
+*where* each file landed on this machine) ignores itself from git. A
+collaborator clones the repo and runs `datamanifest download` to materialize
+everything. Data lives in a machine-wide shared store by default — shared
+across your projects, deduplicated by dataset key — and the produced cache in a
+per-project folder under your OS cache dir; point either elsewhere with the
 [storage model](storage.md).
 
 ## The CLI / API split

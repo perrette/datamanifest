@@ -68,7 +68,7 @@ def test_download_reuses_pooled_copy_in_place(tmp_path):
     assert not (tmp_path / "datasets").exists()
     # Recorded in the state file.
     from datamanifest.cache import CachedIndex
-    idx = CachedIndex.read(tmp_path / ".datamanifest-state.toml")
+    idx = CachedIndex.read(tmp_path / ".datamanifest" / "state.toml")
     assert idx.dataset_path_of("example.com/a.csv")
 
 
@@ -161,10 +161,10 @@ def test_refresh_scan_adopts_pool_dataset(tmp_path):
     db = _project(tmp_path, pool_dir=str(pool))
     # Dry run records nothing.
     _refresh_scan_pools(db, dry_run=True)
-    assert not (tmp_path / ".datamanifest-state.toml").exists()
+    assert not (tmp_path / ".datamanifest" / "state.toml").exists()
     # Apply adopts it.
     _refresh_scan_pools(db, dry_run=False)
-    idx = CachedIndex.read(tmp_path / ".datamanifest-state.toml")
+    idx = CachedIndex.read(tmp_path / ".datamanifest" / "state.toml")
     assert idx.dataset_path_of("example.com/a.csv")
 
 
@@ -235,7 +235,7 @@ def test_refresh_scan_pool_override(tmp_path):
         '[a]\nuri = "https://example.com/a.csv"\n'
     )
     db = Database(datasets_toml=str(toml))
-    state = tmp_path / ".datamanifest-state.toml"
+    state = tmp_path / ".datamanifest" / "state.toml"
 
     _refresh_scan_pools(db, dry_run=False)                       # config disabled
     assert not state.exists() or CachedIndex.read(state).dataset_path_of("example.com/a.csv") == ""

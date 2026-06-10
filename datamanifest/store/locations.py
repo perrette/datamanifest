@@ -1,35 +1,56 @@
-"""Storage-path resolution for the spec-v4 storage model.
+"""Storage-path resolution for the spec-v5 storage model.
 
 Storage reduces to **two folder fields** in ``[_STORAGE]``:
 
-- ``datasets_dir``  (default ``"datasets"``) — where fetched datasets go.
-- ``datacache_dir`` (default ``"cached"``)   — where the produced cache goes.
+- ``datasets_dir``  — where fetched datasets go. Default: the machine-wide
+  **shared keyed store** ``$user_data_dir/datamanifest/shared/datasets``. A
+  dataset key (``host/path[#version]``) is globally unique, so one shared store
+  dedups across projects; it coincides with a default read pool, so the pool
+  self-populates.
+- ``datacache_dir`` — where the produced cache goes. Default: the per-project
+  cache ``$user_cache_dir/datamanifest/projects/$project/cached``
+  (``cachetype/hash`` is *not* globally unique, hence the ``$project`` segment).
 
-Both default to **relative** paths ⇒ resolved against the project root (``$repo``)
-⇒ visible local ``./datasets/`` and ``./cached/``. A fetched dataset lands at
-``<datasets_dir>/<key>``; a produced artifact at
+A fetched dataset lands at ``<datasets_dir>/<key>``; a produced artifact at
 ``<datacache_dir>/<cachetype>/[<version>/]<hash>/``. No scope, no content prefix,
-no derived name, no application name in between — the folder you set **is** the
-location.
+no derived name in between — the folder you set **is** the location.
 
 A folder path may interpolate ``$``-symbols (``$NAME`` / ``${NAME}``):
 
 - **Predefined** — ``$user_data_dir`` / ``$user_cache_dir`` (straight from
-  ``platformdirs``, **bare**: no app name) and ``$repo`` (the project root).
+  ``platformdirs``, **bare**: no app name), ``$repo`` (the project root) and
+  ``$project`` (the project name; default: the basename of the project root,
+  overridable like any field).
 - **The two fields** are themselves referenceable: ``$datasets_dir`` /
   ``$datacache_dir``.
 - **``$key``** — the dataset's storage key (only meaningful in a ``storage_path``).
 - **User-defined** — any other bare ``[_STORAGE]`` key.
 - Otherwise the environment variable ``NAME``, else left verbatim. ``~`` → home.
 
-Resolution ladder for a symbol/field *NAME* (first match wins):
+Scoped configuration (git-config style): besides the committed manifest's
+``[_STORAGE]``, two ``[_STORAGE]``-shaped TOML files configure storage without
+touching the manifest — folder directives are per-machine, so they get
+per-machine homes:
+
+- ``<repo>/.datamanifest/config.toml`` — per-checkout, git-ignored (personal).
+- ``$XDG_CONFIG_HOME/datamanifest/config.toml`` — user-global.
+
+Both may carry ``_HOST`` sections (home dirs / checkouts often live on
+filesystems shared across cluster nodes). The full resolution ladder for a
+symbol/field *NAME* (first match wins; more specific scope wins):
 
 1. ``DATAMANIFEST_<NAME>`` environment variable.
-2. ``[_STORAGE._HOST.<glob>].<name>`` — first host glob (``fnmatch``) matching the
-   hostname.
-3. ``[_STORAGE].<name>`` base value.
-4. the predefined default (``$user_*_dir`` / ``$repo``) or the field default
-   (``datasets_dir="datasets"``, ``datacache_dir="cached"``).
+2. ``.datamanifest/config.toml``         (checkout: ``_HOST`` glob, then base).
+3. manifest ``[_STORAGE._HOST.<glob>]``  (committed, shared infrastructure).
+4. manifest ``[_STORAGE]`` base          (committed project intent).
+5. ``~/.config/datamanifest/config.toml`` (user: ``_HOST`` glob, then base).
+6. the predefined default (``$user_*_dir`` / ``$repo`` / ``$project``) or the
+   field default.
+
+The ``storage_config`` argument the resolvers take is either a plain dict (one
+layer — the manifest's ``[_STORAGE]``, the historical form) or a
+:class:`ScopedConfig` carrying all three layers (what :class:`Database` builds
+via :func:`load_scoped_config`).
 
 A relative resolved path is taken relative to the project root.
 """
@@ -41,6 +62,11 @@ import re
 import socket
 
 import platformdirs
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10
+    import tomli as tomllib
 
 __all__ = [
     "resolve_symbol",
@@ -60,13 +86,25 @@ __all__ = [
     "tmp_path",
     "lock_path",
     "marker_path",
+    "ScopedConfig",
+    "load_scoped_config",
+    "override_fields",
+    "read_config_file",
+    "local_config_path",
+    "user_config_path",
+    "ensure_ignored_dir",
+    "PRIVATE_DIR_NAME",
 ]
 
-# The two storage fields and their built-in (relative ⇒ repo-local) defaults.
-FIELD_DEFAULTS = {"datasets_dir": "datasets", "datacache_dir": "cached"}
+# The two storage fields and their built-in (machine-global) defaults: a shared
+# keyed dataset store, and a per-project produced cache (see module docstring).
+FIELD_DEFAULTS = {
+    "datasets_dir": "$user_data_dir/datamanifest/shared/datasets",
+    "datacache_dir": "$user_cache_dir/datamanifest/projects/$project/cached",
+}
 
 # Predefined symbols resolved from the platform / project root.
-PREDEFINED_SYMBOLS = ("user_data_dir", "user_cache_dir", "repo")
+PREDEFINED_SYMBOLS = ("user_data_dir", "user_cache_dir", "repo", "project")
 
 # Path-expression token: ``$NAME`` or ``${NAME}`` (a defined symbol, the runtime
 # ``$key``, or an environment variable).
@@ -115,32 +153,152 @@ def _patched_environ(env):
 
 
 def _predefined_default(name, project_root, env):
-    """The built-in resolution of a predefined symbol (rung 4)."""
+    """The built-in resolution of a predefined symbol (the last ladder rung)."""
     if name == "repo":
         return project_root or ""
+    if name == "project":
+        # The project name namespacing the per-project cache: the basename of
+        # the project root (the checkout's folder name; the cwd when rootless).
+        # Overridable on the ordinary ladder (a committed ``project = "..."``
+        # is shared intent). Renames are safe: the state file keeps finding old
+        # artifacts at their recorded locations.
+        return os.path.basename(os.path.abspath(project_root or os.getcwd()))
     with _patched_environ(env):
         if name == "user_cache_dir":
             return platformdirs.user_cache_dir()
         return platformdirs.user_data_dir()
 
 
+# ----- scoped configuration (git-config style layers) -------------------------
+
+# The per-checkout private directory (git-ignored as a whole): holds the local
+# config file and the state file.
+PRIVATE_DIR_NAME = ".datamanifest"
+_LOCAL_CONFIG_SUBPATH = os.path.join(PRIVATE_DIR_NAME, "config.toml")
+
+
+class ScopedConfig:
+    """The three storage-config layers, most specific first: per-checkout
+    (``.datamanifest/config.toml``), the manifest's committed ``[_STORAGE]``,
+    and user-global (``~/.config/datamanifest/config.toml``).
+
+    Each layer is an ``[_STORAGE]``-shaped dict (folder fields, ``$symbols``,
+    ``*_pools``, ``project``, ``default_remote``, plus ``_HOST`` glob tables).
+    The resolvers walk the layers in order — within a layer the ``_HOST`` glob
+    wins over the base value.
+    """
+
+    __slots__ = ("local", "manifest", "user")
+
+    def __init__(self, local=None, manifest=None, user=None):
+        self.local = dict(local) if local else {}
+        self.manifest = dict(manifest) if manifest else {}
+        self.user = dict(user) if user else {}
+
+    @property
+    def layers(self):
+        return (self.local, self.manifest, self.user)
+
+    def __eq__(self, other):
+        if not isinstance(other, ScopedConfig):
+            return NotImplemented
+        return self.layers == other.layers
+
+    def __repr__(self):
+        return (f"ScopedConfig(local={self.local!r}, manifest={self.manifest!r}, "
+                f"user={self.user!r})")
+
+
+def local_config_path(project_root):
+    """The per-checkout config file path (``<root>/.datamanifest/config.toml``),
+    or ``""`` when there is no project root."""
+    if not project_root:
+        return ""
+    return os.path.join(project_root, _LOCAL_CONFIG_SUBPATH)
+
+
+def user_config_path(env=os.environ):
+    """The user-global config file path
+    (``$XDG_CONFIG_HOME/datamanifest/config.toml``, default ``~/.config/…``)."""
+    xdg = env.get("XDG_CONFIG_HOME", "")
+    if not xdg:
+        with _patched_environ(env):
+            xdg = os.path.join(os.path.expanduser("~"), ".config")
+    return os.path.join(xdg, "datamanifest", "config.toml")
+
+
+def read_config_file(path):
+    """Read a scoped config file — an ``[_STORAGE]``-shaped table at the TOML
+    top level. Returns ``{}`` when absent or unreadable (a broken config file
+    must not block path resolution)."""
+    if not path or not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, "rb") as f:
+            return tomllib.load(f)
+    except Exception:  # noqa: BLE001 - malformed config contributes nothing
+        return {}
+
+
+def load_scoped_config(project_root="", manifest_config=None, env=os.environ):
+    """Build the full :class:`ScopedConfig` ladder for a project: the checkout's
+    ``.datamanifest/config.toml``, the manifest's ``[_STORAGE]`` table
+    (*manifest_config*), and the user-global config file."""
+    return ScopedConfig(
+        local=read_config_file(local_config_path(project_root)),
+        manifest=manifest_config,
+        user=read_config_file(user_config_path(env)),
+    )
+
+
+def ensure_ignored_dir(dirpath):
+    """Create *dirpath* (the ``.datamanifest/`` private dir) with a self-ignoring
+    ``.gitignore`` (``*``), so the whole directory stays out of git without
+    editing the project's own ``.gitignore``."""
+    os.makedirs(dirpath, exist_ok=True)
+    gi = os.path.join(dirpath, ".gitignore")
+    if not os.path.exists(gi):
+        with open(gi, "w") as f:
+            f.write("*\n")
+
+
+def override_fields(storage_config, **fields):
+    """A copy of *storage_config* with *fields* forced in its most-specific
+    layer (for per-call overrides like an explicit ``datasets_folder``)."""
+    if isinstance(storage_config, ScopedConfig):
+        return ScopedConfig(local={**storage_config.local, **fields},
+                            manifest=storage_config.manifest,
+                            user=storage_config.user)
+    return {**(storage_config or {}), **fields}
+
+
+def _layers(storage_config):
+    """The config layers to walk, most specific first — a plain dict is the
+    single (manifest) layer; ``None`` is no config at all."""
+    if storage_config is None:
+        return ({},)
+    if isinstance(storage_config, ScopedConfig):
+        return storage_config.layers
+    return (storage_config,)
+
+
 def _symbol_raw(name, storage_config, env, host):
-    """Walk ladder rungs 1–3 for *name*, returning the first raw (un-expanded)
-    value, or ``None`` if no rung defines it."""
+    """Walk the ladder for *name* (env, then per layer: ``_HOST`` glob, base),
+    returning the first raw (un-expanded) value, or ``None`` if no rung defines
+    it."""
     # 1. DATAMANIFEST_<NAME> environment override.
     raw = env.get(f"DATAMANIFEST_{name.upper()}")
     if raw is not None:
         return raw
 
-    # 2. First matching host glob.
-    for pattern, mapping in storage_config.get("_HOST", {}).items():
-        if isinstance(mapping, dict) and fnmatch.fnmatch(host, pattern) \
-                and isinstance(mapping.get(name), str):
-            return mapping[name]
-
-    # 3. [_STORAGE].<name> base value.
-    if isinstance(storage_config.get(name), str):
-        return storage_config[name]
+    for layer in _layers(storage_config):
+        # First matching host glob within this layer, then its base value.
+        for pattern, mapping in layer.get("_HOST", {}).items():
+            if isinstance(mapping, dict) and fnmatch.fnmatch(host, pattern) \
+                    and isinstance(mapping.get(name), str):
+                return mapping[name]
+        if isinstance(layer.get(name), str):
+            return layer[name]
 
     return None
 
@@ -183,7 +341,8 @@ def resolve_symbol(name, *, key="", project_root="", storage_config=None,
         else:
             raise ValueError(
                 f"undefined symbol ${name}: define it in [_STORAGE], a _HOST "
-                f"override, or DATAMANIFEST_{name.upper()}"
+                f"override, a config file (datamanifest config set), or "
+                f"DATAMANIFEST_{name.upper()}"
             )
 
     return interpolate(
@@ -260,9 +419,14 @@ def datacache_dir(*, project_root="", storage_config=None, env=os.environ,
 
 # Built-in read pools probed when ``[_STORAGE].datasets_pools`` is **undefined** —
 # well-known machine-wide locations where datasets may already live (so they are
-# reused instead of re-downloaded). An explicit (possibly empty) ``datasets_pools``
-# replaces these.
+# reused instead of re-downloaded): the repo-local layout (pre-existing data in
+# unconfigured projects keeps being found, never re-downloaded), the shared
+# store (the default ``datasets_dir``, so the pool self-populates), and the
+# legacy locations. An explicit (possibly empty) ``datasets_pools`` replaces
+# these.
 POOL_DEFAULTS = (
+    "$repo/datasets",
+    "$user_data_dir/datamanifest/shared/datasets",
     "$user_data_dir/datamanifest/datasets",
     "~/.cache/Datasets",
 )
@@ -270,19 +434,20 @@ POOL_DEFAULTS = (
 
 def _pools_raw(field, storage_config, env, host):
     """The raw value of a ``*_pools`` *field* (a list of path expressions, or
-    ``None`` when undefined) via the env > ``_HOST`` glob > base ladder.
-    ``DATAMANIFEST_<FIELD>`` is ``os.pathsep``-separated."""
+    ``None`` when undefined) via the env > per-layer ``_HOST`` glob > base
+    ladder. ``DATAMANIFEST_<FIELD>`` is ``os.pathsep``-separated."""
     raw = env.get(f"DATAMANIFEST_{field.upper()}")
     if raw is not None:
         return [p for p in raw.split(os.pathsep) if p]
-    for pattern, mapping in storage_config.get("_HOST", {}).items():
-        if isinstance(mapping, dict) and fnmatch.fnmatch(host, pattern) \
-                and field in mapping:
-            v = mapping[field]
+    for layer in _layers(storage_config):
+        for pattern, mapping in layer.get("_HOST", {}).items():
+            if isinstance(mapping, dict) and fnmatch.fnmatch(host, pattern) \
+                    and field in mapping:
+                v = mapping[field]
+                return list(v) if isinstance(v, (list, tuple)) else [v]
+        if field in layer:
+            v = layer[field]
             return list(v) if isinstance(v, (list, tuple)) else [v]
-    if field in storage_config:
-        v = storage_config[field]
-        return list(v) if isinstance(v, (list, tuple)) else [v]
     return None
 
 
@@ -295,6 +460,10 @@ def resolve_pool_exprs(exprs, *, project_root="", storage_config=None,
         storage_config = {}
     out = []
     for expr in exprs:
+        # A $repo-rooted pool is meaningless without a project root (it would
+        # resolve to a bogus filesystem-root path) — skip it.
+        if not project_root and ("$repo" in expr or "${repo}" in expr):
+            continue
         try:
             p = resolve_path(expr, project_root=project_root,
                              storage_config=storage_config, env=env, host=host)
