@@ -2215,10 +2215,11 @@ def _cmd_format(args):
     """Rewrite a manifest in canonical form (the cross-tool byte-identity format).
 
     Reads TOML from FILE (or stdin when omitted / ``-``) and emits canonical
-    TOML: every key sorted at every nesting level, via the same recursive sort +
-    ``tomli_w`` serialization as :meth:`Database.write`. Peer tools (e.g.
-    DataManifest.jl) pipe their output through ``datamanifest format`` to obtain
-    byte-identical files. Content is never changed, only re-serialized.
+    TOML: structural ``_*`` tables first at the top level, then the rest, every
+    key sorted at every nesting level — the same ordering + ``tomli_w``
+    serialization as :meth:`Database.write`. Peer tools (e.g. DataManifest.jl)
+    pipe their output through ``datamanifest format`` to obtain byte-identical
+    files. Content is never changed, only re-serialized.
     """
     try:
         import tomllib
@@ -2238,7 +2239,16 @@ def _cmd_format(args):
         with open(path, "rb") as f:
             data = tomllib.load(f)
 
-    out = tomli_w.dumps(_sort_recursive(data))
+    # Same top-level order as Database.write: `_*` tables first, then the
+    # datasets — a uniform code-point sort would drop `_` (0x5F) between the
+    # upper-cased / digit-named datasets and the lower-cased ones.
+    ordered = {
+        k: _sort_recursive(v)
+        for k, v in sorted(
+            data.items(), key=lambda kv: (not kv[0].startswith("_"), kv[0])
+        )
+    }
+    out = tomli_w.dumps(ordered)
 
     if args.in_place:
         if args.file in (None, "-"):

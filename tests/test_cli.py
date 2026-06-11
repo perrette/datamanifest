@@ -647,13 +647,15 @@ def test_init_force_overwrites(tmp_path):
 
 def test_format_sorts_canonically_and_is_idempotent(tmp_path):
     src = tmp_path / "m.toml"
-    # deliberately unsorted: keys within [zeta] reversed, table after _META
-    src.write_text("[zeta]\nb = 2\na = 1\n\n[_META]\nschema = 1\n")
+    # deliberately unsorted: keys within [zeta] reversed, table after _META,
+    # and an upper-cased dataset that a uniform code-point sort would place
+    # *before* [_META]
+    src.write_text("[zeta]\nb = 2\na = 1\n\n[_META]\nschema = 1\n\n[AAA]\nc = 3\n")
     r1 = _run("format", str(src))
     assert r1.returncode == 0, r1.stderr
     out = r1.stdout
-    # `_` (0x5F) sorts before `z` (0x7A): [_META] precedes [zeta]
-    assert out.index("[_META]") < out.index("[zeta]")
+    # same order as Database.write: `_*` tables first, then datasets
+    assert out.index("[_META]") < out.index("[AAA]") < out.index("[zeta]")
     # within [zeta], a before b
     assert out.index("a = 1") < out.index("b = 2")
     # idempotent: formatting the canonical output again yields identical bytes
