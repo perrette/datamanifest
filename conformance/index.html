@@ -540,6 +540,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../adding-datasets/" class="md-nav__link">
         
   
@@ -888,17 +916,6 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#targeted-format-version" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Targeted format version
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#implemented-capabilities" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -910,10 +927,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#conformance-tests" class="md-nav__link">
+  <a href="#conformance-tests-and-the-pinned-spec-version" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Conformance tests
+        Conformance tests and the pinned spec version
       
     </span>
   </a>
@@ -991,17 +1008,6 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#targeted-format-version" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Targeted format version
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#implemented-capabilities" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1013,10 +1019,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#conformance-tests" class="md-nav__link">
+  <a href="#conformance-tests-and-the-pinned-spec-version" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Conformance tests
+        Conformance tests and the pinned spec version
       
     </span>
   </a>
@@ -1050,7 +1056,7 @@
 
 <h1 id="conformance-the-shared-manifest-format">Conformance &amp; the shared manifest format<a class="headerlink" href="#conformance-the-shared-manifest-format" title="Permanent link">&para;</a></h1>
 <p><code>datamanifest</code> reads and writes a manifest format that is <strong>shared across languages</strong> —
-the same <code>datasets.toml</code> can be consumed by sibling implementations (today the Julia
+the same <code>datasets.toml</code> can be consumed by sibling implementations (the Julia
 <a href="https://github.com/awi-esc/DataManifest.jl"><code>DataManifest.jl</code></a>) without conflict, because
 each tool reads the common fields plus its own <code>_LANG</code>-namespaced bindings and preserves
 the rest verbatim. The format is defined in its own specification,
@@ -1062,8 +1068,6 @@ reference.</p>
 this Python implementation supports, and which version of the shared format it targets.</p>
 <p>A deeper, Python-specific walkthrough of the CLI and language bindings lives in
 <a href="../cli/"><code>cli.md</code></a> and <a href="../language-bindings/"><code>language-bindings.md</code></a>.</p>
-<h2 id="targeted-format-version">Targeted format version<a class="headerlink" href="#targeted-format-version" title="Permanent link">&para;</a></h2>
-<p>This release targets <strong>spec-v4</strong> of the shared format.</p>
 <h2 id="implemented-capabilities">Implemented capabilities<a class="headerlink" href="#implemented-capabilities" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -1077,7 +1081,7 @@ this Python implementation supports, and which version of the shared format it t
 <tr>
 <td><code>lang-read</code></td>
 <td>✅</td>
-<td>Parse the <code>_LANG</code> namespace and the language-implicit ("bare") forms — a per-dataset <code>fetcher</code>/<code>loader</code> and the top-level <code>[_LOADERS]</code> format→binding map, read as Python (spec-v3.4) — then apply the fetch/load ladders. Explicit <code>_LANG.python</code> wins over the bare counterpart; a binding present for the running language (bare or explicit) that fails is an error — fail-loud, no silent fall-through (spec-v3.6).</td>
+<td>Parse the <code>_LANG</code> namespace and the language-implicit ("bare") forms — a per-dataset <code>fetcher</code>/<code>loader</code> and the top-level <code>[_LOADERS]</code> format→binding map, read as Python — then apply the fetch/load ladders. Explicit <code>_LANG.python</code> wins over the bare counterpart; a binding present for the running language (bare or explicit) that fails is an error — fail-loud, no silent fall-through.</td>
 </tr>
 <tr>
 <td><code>lang-write</code></td>
@@ -1087,7 +1091,7 @@ this Python implementation supports, and which version of the shared format it t
 <tr>
 <td><code>shell-fetch</code></td>
 <td>✅</td>
-<td>Run the dataset's bare <code>shell</code> command template (spec-v3.5 canonical, language-agnostic) in the fetch ladder, else the legacy <code>_LANG.shell.fetcher</code> fallback.</td>
+<td>Run the dataset's bare <code>shell</code> command template (the canonical, language-agnostic form) in the fetch ladder; the older <code>_LANG.shell.fetcher</code> form is read as a fallback.</td>
 </tr>
 <tr>
 <td><code>storage</code></td>
@@ -1102,7 +1106,7 @@ this Python implementation supports, and which version of the shared format it t
 <tr>
 <td><code>byte-identity</code></td>
 <td>✅</td>
-<td>Canonical lexicographic key ordering (this implementation is the reference).</td>
+<td>Canonical serialization (this implementation is the reference): structural <code>_*</code> tables first at the top level, then the datasets, every key sorted by Unicode code point at every nesting level — <code>datamanifest format</code> exposes it for peer tools.</td>
 </tr>
 <tr>
 <td><code>cache-produce</code></td>
@@ -1126,11 +1130,16 @@ this Python implementation supports, and which version of the shared format it t
 </tr>
 </tbody>
 </table>
-<h2 id="conformance-tests">Conformance tests<a class="headerlink" href="#conformance-tests" title="Permanent link">&para;</a></h2>
-<p><code>tests/test_conformance.py</code> downloads the pinned shared fixture tarball, verifies every
-file against a recorded per-file SHA-256 hash (<code>tests/conformance_pin.toml</code>), and runs only
-the fixtures whose declared capabilities are a subset of those implemented above, skipping
-the rest with a reason.</p>
+<h2 id="conformance-tests-and-the-pinned-spec-version">Conformance tests and the pinned spec version<a class="headerlink" href="#conformance-tests-and-the-pinned-spec-version" title="Permanent link">&para;</a></h2>
+<p>The conformance claim is anchored in <code>tests/conformance_pin.toml</code>, which pins a
+tag of the shared specification repository (currently <code>spec-v1.1</code>) and records
+a SHA-256 hash for every fixture file of that tag. The pin may lag the latest
+spec tag — it is advanced deliberately, when this implementation is verified
+against the newer fixtures, not automatically on every spec release.</p>
+<p><code>tests/test_conformance.py</code> downloads the pinned fixture tarball, verifies every
+file against its recorded hash, and runs only the fixtures whose declared
+capabilities are a subset of those implemented above, skipping the rest with a
+reason.</p>
 
 
 

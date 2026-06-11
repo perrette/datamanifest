@@ -538,6 +538,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../adding-datasets/" class="md-nav__link">
         
   
@@ -914,17 +942,6 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#list-action-verbs-as-remainder-forwarding-flags" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        list action verbs as REMAINDER-forwarding flags
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#list-valued-datasets_dir-datacache_dir-as-sugar" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -989,17 +1006,6 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#list-action-verbs-as-remainder-forwarding-flags" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        list action verbs as REMAINDER-forwarding flags
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#list-valued-datasets_dir-datacache_dir-as-sugar" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1049,35 +1055,14 @@
 <h1 id="roadmap-parked-ideas">Roadmap / parked ideas<a class="headerlink" href="#roadmap-parked-ideas" title="Permanent link">&para;</a></h1>
 <p>Deferred design decisions and enhancements, captured so they aren't lost. None of
 these is committed work; each needs its own pass.</p>
-<h2 id="list-action-verbs-as-remainder-forwarding-flags"><code>list</code> action verbs as REMAINDER-forwarding flags<a class="headerlink" href="#list-action-verbs-as-remainder-forwarding-flags" title="Permanent link">&para;</a></h2>
-<p>Reshape the <code>list</code> maintenance actions so <code>list</code> doesn't duplicate each action
-command's options. Keep the <code>--delete</code> / <code>--move</code> / <code>--push</code> / <code>--pull</code> flags (not
-verbs), but give each <code>nargs=argparse.REMAINDER</code>: everything after the action flag
-is captured raw and forwarded to that command's own parser, applied to the <code>list</code>
-selection.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>datamanifest list --cached --orphan --delete --dry-run --prune
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>datamanifest list --datasets --older-than 30d --move /archive --dry-run
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>datamanifest list --outside --push user@hpc
-</code></pre></div>
-<ul>
-<li>Selection flags come before the action flag; the action flag owns the tail.</li>
-<li>The four action flags sit in a mutually-exclusive group (one action per run).</li>
-<li>Implementation: define each action's options <strong>once</strong> in a shared helper; the
-  standalone command = <code>id</code> + those opts, the <code>list</code> path parses the captured tail
-  with <em>just</em> those opts (no <code>id</code> — the <code>list</code> selection replaces it) and feeds the
-  selected objects into the shared <code>_maintain</code> / sync engine.</li>
-<li>The one real refactor: make the forwarded verb parse its tail without an <code>id</code>.</li>
-</ul>
-<p>Goal: remove the <code>--delete</code>/<code>--move</code>/<code>--push</code>/<code>--pull</code> option duplication from the
-<code>list</code> parser; one definition site per action.</p>
 <h2 id="list-valued-datasets_dir-datacache_dir-as-sugar">List-valued <code>datasets_dir</code> / <code>datacache_dir</code> as sugar<a class="headerlink" href="#list-valued-datasets_dir-datacache_dir-as-sugar" title="Permanent link">&para;</a></h2>
 <p>Accept a list value for <code>datasets_dir</code> / <code>datacache_dir</code> as <strong>pure desugaring</strong>:
 element 0 is the write dir, the rest are <em>prepended to the resolved read pools</em>,
 while keeping the separate <code>*_pools</code> keys and the undefined⇒default-pools rule
 intact. <code>$datasets_dir</code> still resolves to a scalar (element 0). One read-site
-branch; no spec polymorphism on <code>*_pools</code>, no symbol ambiguity. (Investigated;
-keep design A — separate <code>*_pools</code> keys — for now; this is the optional ergonomic
-affordance to add later if wanted.)</p>
+branch; no spec polymorphism on <code>*_pools</code>, no symbol ambiguity. The separate
+<code>*_pools</code> keys are what's implemented; this would be an optional ergonomic
+addition on top.</p>
 <h2 id="cross-language-decisions-to-propagate">Cross-language decisions to propagate<a class="headerlink" href="#cross-language-decisions-to-propagate" title="Permanent link">&para;</a></h2>
 <p>See <a href="https://github.com/perrette/datamanifest/blob/main/design/design-remote-protocols.md"><code>design-remote-protocols.md</code></a> → "Decisions to
 propagate to the spec repo + DataManifest.jl": object-store URI schemes,

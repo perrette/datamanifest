@@ -622,6 +622,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../adding-datasets/" class="md-nav__link">
         
   
@@ -1081,7 +1109,8 @@ and <code>version="v2"</code> to invalidate when the function's <em>logic</em> c
 <code>datamanifest list</code> shows cached results grouped by function with their
 parameters; <code>datamanifest list --orphan --delete</code> cleans up.</p>
 <p>The <code>@cached</code> cache shares the same storage and bookkeeping as fetched data — it
-lands under <code>datacache_dir</code> (<code>./cached/</code> by default) and shows up in <code>list</code>
+lands under <a href="../storage/"><code>datacache_dir</code></a> (default:
+<code>$user_cache_dir/datamanifest/projects/$project/cached</code>) and shows up in <code>list</code>
 alongside your datasets. The <a href="https://github.com/perrette/datamanifest/blob/main/design/design-notes.md">design notes</a> cover how an
 artifact's identity (<code>cachetype</code>, <code>version</code>, parameter hash) is derived.</p>
 <h2 id="finding-the-manifest-and-targeting-a-specific-database">Finding the manifest, and targeting a specific database<a class="headerlink" href="#finding-the-manifest-and-targeting-a-specific-database" title="Permanent link">&para;</a></h2>
@@ -1093,6 +1122,20 @@ methods (<code>mydb.download_dataset("co2")</code>). Every <code>datamanifest.X(
 <code>resolve_db(db).X(...)</code> — the method on <code>db</code>, or on the default database when
 <code>db</code> is None. See the docstrings (<code>help(datamanifest)</code>) and the
 <a href="https://github.com/perrette/datamanifest/blob/main/design/design-notes.md">design notes</a>.</p>
+<p>The full public surface, beyond <code>load_dataset</code> / <code>get_dataset_path</code>:</p>
+<ul>
+<li><code>add(...)</code> / <code>register_dataset(...)</code> — register a dataset (with / without
+  downloading), like the CLI's <a href="../cli/#set-up-and-add-data"><code>add</code></a>;</li>
+<li><code>download_dataset(name)</code> / <code>download_datasets()</code> — fetch one / all;</li>
+<li><code>delete_dataset(name, keep_cache=False)</code> — drop a manifest entry and, unless
+  <code>keep_cache</code>, its files (the CLI's <code>remove</code>);</li>
+<li><code>resolve_db(db)</code> / <code>get_default_database()</code> — the database behind the
+  module-level functions;</li>
+<li><code>Database</code>, <code>DatasetEntry</code> — the underlying classes;</li>
+<li><code>validate_loader</code> / <code>validate_loaders</code> — resolve one / every loader binding
+  to its callable, raising on failure, without loading any data;</li>
+<li><code>datamanifest.cache.cached</code> — the <a href="#caching-computed-results">caching decorator</a>.</li>
+</ul>
 <h2 id="a-file-less-database-no-manifest">A file-less database (no manifest)<a class="headerlink" href="#a-file-less-database-no-manifest" title="Permanent link">&para;</a></h2>
 <p>For library code that wants checksummed downloads into a folder it controls —
 an OS-appropriate data dir, say — a <strong>file-less database</strong> skips the manifest

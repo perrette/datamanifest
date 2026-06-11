@@ -78,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#per-language-bindings-_lang" class="md-skip">
+        <a href="#language-bindings" class="md-skip">
           Skip to content
         </a>
       
@@ -542,6 +542,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../adding-datasets/" class="md-nav__link">
         
   
@@ -658,21 +686,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#the-ladders" class="md-nav__link">
+  <a href="#bare-bindings-single-language-projects" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The ladders
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#language-implicit-bare-bindings" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Language-implicit (bare) bindings
+        Bare bindings (single-language projects)
       
     </span>
   </a>
@@ -684,6 +701,28 @@
     <span class="md-ellipsis">
       
         Parameterized bindings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-language-bindings-_lang" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-language bindings (_LANG)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resolution-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resolution order
       
     </span>
   </a>
@@ -1013,21 +1052,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#the-ladders" class="md-nav__link">
+  <a href="#bare-bindings-single-language-projects" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The ladders
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#language-implicit-bare-bindings" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Language-implicit (bare) bindings
+        Bare bindings (single-language projects)
       
     </span>
   </a>
@@ -1039,6 +1067,28 @@
     <span class="md-ellipsis">
       
         Parameterized bindings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-language-bindings-_lang" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-language bindings (_LANG)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resolution-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resolution order
       
     </span>
   </a>
@@ -1092,143 +1142,166 @@
   
 
 
-<h1 id="per-language-bindings-_lang">Per-language bindings (<code>_LANG</code>)<a class="headerlink" href="#per-language-bindings-_lang" title="Permanent link">&para;</a></h1>
-<p>Language-specific bindings live in a dedicated <code>_LANG</code> namespace, so a single
-manifest can serve multiple language implementations without conflicts. The
+<h1 id="language-bindings">Language bindings<a class="headerlink" href="#language-bindings" title="Permanent link">&para;</a></h1>
+<p>A <strong>fetcher</strong> is a function or command that produces a dataset's bytes,
+instead of (or in addition to) downloading its <code>uri</code>. A <strong>loader</strong> is a
+function that reads the dataset from disk into memory, overriding the default
+loader for its <code>format</code>. Both are declared in the manifest as <strong>bindings</strong>: a
+binding names a function by a <code>module:function</code> reference (a <strong>ref</strong>, resolved
+via <code>importlib</code>) — never inline code — and may optionally carry arguments.</p>
+<p>This page covers the binding forms from the common case to the advanced ones:
+bare bindings for a single-language project, parameterized bindings,
+the per-language <code>_LANG</code> namespace for manifests shared across languages, the
+order in which fetchers and loaders are resolved, cross-language fetch, and
+the legacy fields accepted on read. The
 <a href="../use-cases/#one-manifest-several-languages">use cases page</a> shows the short
-version; this page is the full behaviour: the fetch/load ladders, the bare
-(language-implicit) forms, parameterized bindings, cross-language fetch, and
-the legacy fields still accepted on read.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[mydata._LANG.python]</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">fetcher</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;mypkg.fetch:download_mydata&quot;</span><span class="w">   </span><span class="c1"># entry-point ref; resolved via importlib</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">loader</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;mypkg.load:load_mydata&quot;</span>
+version.</p>
+<h2 id="bare-bindings-single-language-projects">Bare bindings (single-language projects)<a class="headerlink" href="#bare-bindings-single-language-projects" title="Permanent link">&para;</a></h2>
+<p>In a project used from one language, bindings are written directly on the
+dataset table — a bare <code>fetcher</code> and/or <code>loader</code> — and project-wide
+<code>format → loader</code> defaults go in a top-level <code>[_LOADERS]</code> table. "Bare" means
+<strong>language-implicit</strong>: the reading tool interprets these as bindings in its
+own language (here, Python).</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[_LOADERS]</span><span class="w">                                </span><span class="c1"># format → loader defaults</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">csv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;myproject.io:read_csv&quot;</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">nc</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;myproject.io:read_nc&quot;</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="k">[_LANG.python.loaders]</span><span class="w">                    </span><span class="c1"># project-wide format → loader defaults</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">csv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;pandas.io.parsers:read_csv&quot;</span><span class="w">        </span><span class="c1"># string form (a bare module:function ref)</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">nc</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">ref</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;myclimate.loaders:load_nc&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">kwargs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">decode_times</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">false</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span><span class="w">  </span><span class="c1"># table form</span>
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="k">[mydata._LANG.julia]</span>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="n">fetcher</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;MyPkg.fetch_mydata&quot;</span><span class="w">            </span><span class="c1"># preserved verbatim; Python never touches it</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="k">[temperature]</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">uri</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://example.com/temperature.csv&quot;</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">format</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;csv&quot;</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">loader</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;myproject.loaders:load_temperature&quot;</span><span class="w">   </span><span class="c1"># per-dataset loader</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="k">[derived]</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="n">format</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;nc&quot;</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="n">fetcher</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;myproject.build:derived&quot;</span><span class="w">             </span><span class="c1"># per-dataset fetcher (no uri)</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="k">[model_output]</span><span class="w">                                  </span><span class="c1"># language-agnostic shell fetcher</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="n">format</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;nc&quot;</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="n">shell</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;make model_output OUTPUT=$download_path&quot;</span><span class="w">   </span><span class="c1"># same command for every tool</span>
 </code></pre></div>
-<p>Foreign <code>_LANG.&lt;other&gt;</code> subtrees (e.g. <code>_LANG.julia</code>) are preserved verbatim on
-every read→write cycle; Python never modifies them. Unknown structural tables
-(any <code>_*</code> key Python does not recognise) are similarly passed through.</p>
-<h2 id="the-ladders">The ladders<a class="headerlink" href="#the-ladders" title="Permanent link">&para;</a></h2>
-<p><strong>Fetch ladder</strong> (per dataset, in order):</p>
+<p>The <code>shell</code> field is a separate, <strong>language-agnostic</strong> fetcher: a command
+template run as a subprocess, the same command for every tool. It is a fetcher
+only — a subprocess cannot return an in-memory object, so there is no shell
+loader.</p>
+<p>Bare bindings are kept bare on write (never rewritten into the <code>_LANG</code>
+namespace below), so a hand-authored single-language manifest round-trips
+unchanged.</p>
+<p>A full, runnable example manifest — bare loaders/fetchers, a parameterized
+loader, a <code>shell</code> fetcher — lives in the spec's
+<a href="https://perrette.github.io/datamanifest.toml">examples</a>.</p>
+<h2 id="parameterized-bindings">Parameterized bindings<a class="headerlink" href="#parameterized-bindings" title="Permanent link">&para;</a></h2>
+<p>A binding may be a <code>{ ref, args, kwargs }</code> table instead of a plain string, so
+one function is reused across datasets that differ only in arguments:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[esm_5x5.loader]</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">ref</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;myclimate.loaders:load_esm&quot;</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">args</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;$path&quot;</span><span class="p">]</span><span class="w">                                     </span><span class="c1"># positional, in order</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">kwargs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">grid</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;5x5&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">skip_models</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;CESM.*&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span><span class="w">    </span><span class="c1"># keyword</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="k">[esm_10x10.loader]</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">ref</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;myclimate.loaders:load_esm&quot;</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">args</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;$path&quot;</span><span class="p">]</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">kwargs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">grid</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;10x10&quot;</span><span class="w"> </span><span class="p">}</span>
+</code></pre></div>
+<p>String values in <code>args</code> and <code>kwargs</code> undergo <code>$var</code> substitution before the
+call. Available variables: <code>$download_path</code> (fetcher), <code>$path</code> (loader),
+<code>$key</code>, <code>$version</code>, <code>$doi</code>, <code>$format</code>, <code>$branch</code>, <code>$uri</code>, <code>$project_root</code>.</p>
+<p>The two forms are interchangeable at every binding site — per-dataset
+<code>fetcher</code>/<code>loader</code> (bare or under <code>_LANG</code>), and every entry of the
+project-wide loaders maps. A bare string <code>"module:function"</code> is an alias for
+<code>{ ref = "module:function" }</code> and makes the conventional call (a loader gets
+the dataset path; a fetcher the standard context); with <code>args</code>/<code>kwargs</code> the
+call is explicit — <code>ref(*args, **kwargs)</code>, nothing auto-injected. On write, a
+binding with no <code>args</code>/<code>kwargs</code> is the string form, one that carries them is
+the table form. (The <code>shell</code> field is a command-template string, not a
+<code>module:function</code> binding, so it is always a string.)</p>
+<h2 id="per-language-bindings-_lang">Per-language bindings (<code>_LANG</code>)<a class="headerlink" href="#per-language-bindings-_lang" title="Permanent link">&para;</a></h2>
+<p>A manifest read from more than one language writes its bindings per language,
+under a dedicated <code>_LANG</code> namespace, so each tool sees only its own:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[mydata._LANG.python]</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">fetcher</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;mypkg.fetch:download_mydata&quot;</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">loader</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;mypkg.load:load_mydata&quot;</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="k">[mydata._LANG.julia]</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">fetcher</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;MyPkg.fetch_mydata&quot;</span><span class="w">            </span><span class="c1"># preserved verbatim; Python never touches it</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="k">[_LANG.python.loaders]</span><span class="w">                    </span><span class="c1"># project-wide format → loader defaults</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">csv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;pandas.io.parsers:read_csv&quot;</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="n">nc</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">ref</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;myclimate.loaders:load_nc&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">kwargs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">decode_times</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">false</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
+</code></pre></div>
+<ul>
+<li><code>[&lt;dataset&gt;._LANG.&lt;lang&gt;]</code> holds the per-dataset <code>fetcher</code> / <code>loader</code> for
+  language <code>&lt;lang&gt;</code> (each a binding in either form).</li>
+<li><code>[_LANG.python.loaders]</code> is the per-language counterpart of <code>[_LOADERS]</code>:
+  project-wide <code>format → loader</code> defaults for Python.</li>
+</ul>
+<p>Foreign <code>_LANG.&lt;other&gt;</code> subtrees (e.g. <code>_LANG.julia</code>) are preserved verbatim
+on every read→write cycle; Python never modifies them. Unknown structural
+tables (any <code>_*</code> key Python does not recognize) are likewise passed through.</p>
+<h2 id="resolution-order">Resolution order<a class="headerlink" href="#resolution-order" title="Permanent link">&para;</a></h2>
+<p>At runtime the tool collapses these declarations to one effective fetcher and
+one effective loader per dataset, trying each rung in order and using the
+first that applies.</p>
+<p><strong>Fetch order</strong> (per dataset):</p>
 <ol>
 <li>Own Python fetcher — explicit <code>_LANG.python.fetcher</code>, else the bare
-   <code>fetcher</code>, else legacy <code>python=</code></li>
-<li>Bare <code>shell</code> command template (else legacy <code>_LANG.shell.fetcher</code>)</li>
-<li>Cross-language fetch — run a fetcher defined in another language</li>
+   <code>fetcher</code>, else the legacy <code>python=</code></li>
+<li>The <code>shell</code> command template (else the legacy <code>_LANG.shell.fetcher</code>)</li>
+<li>Cross-language fetch — run a fetcher defined in another language (see
+   below)</li>
 <li>Plain <code>uri</code> download</li>
 <li>Error — no source available</li>
 </ol>
-<p><strong>Load ladder</strong> (per dataset, in order):</p>
+<p><strong>Load order</strong> (per dataset):</p>
 <ol>
 <li>Own Python loader — explicit <code>_LANG.python.loader</code>, else the bare <code>loader</code></li>
-<li>Manifest format default — <code>[_LANG.python.loaders][format]</code>, else the bare
-   <code>[_LOADERS][format]</code> map</li>
+<li>Manifest format default — <code>[_LANG.python.loaders][format]</code>, else
+   <code>[_LOADERS][format]</code></li>
 <li>Built-in format default (csv, parquet, nc, …)</li>
 <li>Error</li>
 </ol>
 <p>At every own-language rung the explicit <code>_LANG.python</code> binding wins over the
 bare one. A binding that is <strong>present</strong> for the running language — bare <em>or</em>
-explicit <code>_LANG.python</code> — is <strong>fail-loud</strong>: if it fails to resolve it is an
-error, and if it resolves and then raises the error propagates — never a silent
-fall-through to a different loader/fetcher. The ladder falls through only to
-skip rungs that are <strong>absent</strong> (another language's <code>_LANG.&lt;other&gt;</code> binding, or
-no own loader). A manifest meant for more than one language uses explicit
-<code>[&lt;ds&gt;._LANG.&lt;lang&gt;]</code> bindings (absent, and so correctly skipped, in the
-others).</p>
-<h2 id="language-implicit-bare-bindings">Language-implicit (bare) bindings<a class="headerlink" href="#language-implicit-bare-bindings" title="Permanent link">&para;</a></h2>
-<p>For a single-language project the <code>[&lt;ds&gt;._LANG.&lt;lang&gt;]</code> wrapper is needless
-ceremony. A dataset may instead carry a <strong>bare</strong> <code>fetcher</code>/<code>loader</code> directly,
-and a top-level <code>[_LOADERS]</code> table may carry a bare <code>format → binding</code> map — all
-read as bindings in the running tool's <strong>own language</strong> (here, Python):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[_LOADERS]</span><span class="w">                                </span><span class="c1"># language-implicit format → loader defaults</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">csv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;myproject.io:read_csv&quot;</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">nc</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;myproject.io:read_nc&quot;</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="k">[temperature]</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">uri</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://example.com/temperature.csv&quot;</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">format</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;csv&quot;</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">loader</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;myproject.loaders:load_temperature&quot;</span><span class="w">   </span><span class="c1"># bare per-dataset loader</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="k">[derived]</span>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">format</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;nc&quot;</span>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="n">fetcher</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;myproject.build:derived&quot;</span><span class="w">             </span><span class="c1"># bare per-dataset fetcher (no uri)</span>
-<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
-<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="k">[model_output]</span><span class="w">                                  </span><span class="c1"># bare, language-agnostic shell fetcher</span>
-<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="n">format</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;nc&quot;</span>
-<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="n">shell</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;make model_output OUTPUT=$download_path&quot;</span><span class="w">   </span><span class="c1"># same command for every tool</span>
-</code></pre></div>
-<p>The bare <code>shell</code> field is the <strong>canonical, language-agnostic</strong> shell fetcher
-(the same command for every tool — not a <code>_LANG</code> tag); the legacy
-<code>[&lt;ds&gt;._LANG.shell].fetcher</code> is still read and preserved as the fallback. Bare
-bindings are kept <strong>bare</strong> on write (never promoted into <code>_LANG.python</code>), so a
-hand-authored single-language manifest round-trips unchanged.</p>
-<p>A full, runnable example manifest — bare loaders/fetchers, a parameterized
-loader, the bare <code>shell</code> fetcher — lives in the spec's
-<a href="https://perrette.github.io/datamanifest.toml">examples</a>.</p>
-<h2 id="parameterized-bindings">Parameterized bindings<a class="headerlink" href="#parameterized-bindings" title="Permanent link">&para;</a></h2>
-<p>A binding (a <code>fetcher</code>, a <code>loader</code>, or an entry in the <code>[_LANG.python.loaders]</code>
-map) may be a <code>{ ref, args, kwargs }</code> table instead of a plain string, so one
-entry-point can be reused across datasets that differ only in arguments:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[esm_5x5._LANG.python.loader]</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">ref</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;myclimate.loaders:load_esm&quot;</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">args</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;$path&quot;</span><span class="p">]</span><span class="w">                                     </span><span class="c1"># positional, in order</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">kwargs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">grid</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;5x5&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">skip_models</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;CESM.*&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span><span class="w">    </span><span class="c1"># keyword</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="k">[esm_10x10._LANG.python.loader]</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">ref</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;myclimate.loaders:load_esm&quot;</span>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">args</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;$path&quot;</span><span class="p">]</span>
-<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">kwargs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">grid</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;10x10&quot;</span><span class="w"> </span><span class="p">}</span>
-</code></pre></div>
-<p>String values in <code>args</code> and <code>kwargs</code> undergo <code>$var</code> substitution before the
-call. Available variables: <code>$download_path</code> (fetcher), <code>$path</code> (loader),
-<code>$key</code>, <code>$version</code>, <code>$doi</code>, <code>$format</code>, <code>$branch</code>, <code>$uri</code>, <code>$project_root</code>.</p>
-<p>The two forms are interchangeable at <strong>every</strong> binding site — explicit
-<code>[&lt;ds&gt;._LANG.python]</code> <code>fetcher</code>/<code>loader</code>, the language-implicit bare
-<code>fetcher</code>/<code>loader</code>, and the project-wide <code>[_LANG.python.loaders]</code> / bare
-<code>[_LOADERS]</code> defaults. (The <code>shell</code> field is a separate command-template
-string, not a <code>module:function</code> binding, so it is always a string, never a
-table.) A bare string <code>"module:function"</code> is the alias for
-<code>{ ref = "module:function" }</code> and makes the conventional call (a loader gets
-the dataset path; a fetcher the standard context). Canonical writing: a binding
-with no <code>args</code>/<code>kwargs</code> is written as the <strong>string</strong>, one that carries them as
-the <strong>table</strong>.</p>
+explicit <code>_LANG.python</code> — fails loud: if it does not resolve, that is an
+error, and if it resolves and then raises, the error propagates — never a
+silent fall-through to a different loader or fetcher. The ladder only skips
+rungs that are <strong>absent</strong> (another language's <code>_LANG.&lt;other&gt;</code> binding, or no
+own loader). A manifest meant for more than one language uses explicit
+<code>[&lt;ds&gt;._LANG.&lt;lang&gt;]</code> bindings, which are absent — and so correctly skipped —
+in the other languages.</p>
 <h2 id="cross-language-fetch">Cross-language fetch<a class="headerlink" href="#cross-language-fetch" title="Permanent link">&para;</a></h2>
 <p>The rare case: a dataset whose only fetcher is defined in another language
-(e.g. <code>[&lt;ds&gt;._LANG.julia].fetcher</code>), with no native Python fetcher, no shell
-fetcher, and no <code>uri</code>. Python materializes it by invoking the <strong>local Julia
-<code>DataManifest</code> environment</strong> directly —
+(e.g. <code>[&lt;ds&gt;._LANG.julia].fetcher</code>), with no Python fetcher, no shell fetcher,
+and no <code>uri</code>. Running a foreign fetcher on a dataset's behalf is called
+<strong>delegation</strong>.</p>
+<p>Python materializes such a dataset by invoking the local Julia <code>DataManifest</code>
+environment directly —
 <code>julia --project=&lt;env&gt; -e 'using DataManifest; download_dataset(Database("&lt;datasets.toml&gt;"), "&lt;name&gt;")'</code>
 — which writes the bytes into the shared store; Python then reads them from
-disk (load never crosses languages, only bytes do).</p>
-<p>The Julia env is discovered by walking up from the manifest directory (or
-<code>$JULIA_PROJECT</code>) for a <code>Project.toml</code> whose <code>[deps]</code> lists <code>DataManifest</code>, and
-the rung is gated on <code>julia</code> being on <code>PATH</code>. When the toolchain is absent the
-rung <strong>logs a warning and skips</strong>, and the ladder advances to the <code>uri</code>
-download. Cross-language fetch applies to fetched datasets only (never
-<code>@cached</code> produced datasets); it is <strong>on by default</strong> and probe-gated (a no-op
-unless a foreign fetcher and a usable Julia env are both present). Toggle it
-per file with <code>delegate = false</code>, or per run with the <code>--delegate</code> /
-<code>--no-delegate</code> flags on <code>datamanifest download</code>.</p>
+disk. Loading never crosses languages; only bytes on disk do.</p>
+<p>The Julia environment is discovered at <code>$JULIA_PROJECT</code>, else by walking up
+from the manifest directory for a <code>Project.toml</code> whose <code>[deps]</code> lists
+<code>DataManifest</code>; the rung also requires <code>julia</code> on <code>PATH</code>. When the toolchain
+is absent or the invocation fails, the rung logs a warning and the ladder
+advances to the <code>uri</code> download. Cross-language fetch applies to fetched
+datasets only (never <code>@cached</code> produced datasets); it is on by default and a
+no-op unless a foreign fetcher and a usable Julia environment are both
+present. Turn it off per dataset with <code>delegate = false</code> in the manifest, or
+per run with the <code>--delegate</code> / <code>--no-delegate</code> flags on
+<code>datamanifest download</code>.</p>
 <h2 id="legacy-fields">Legacy fields<a class="headerlink" href="#legacy-fields" title="Permanent link">&para;</a></h2>
-<p>Still accepted on read; only these are deprecated:</p>
+<p>Accepted on read; deprecated:</p>
 <ul>
 <li><strong><code>python=</code></strong> (or <strong><code>callable=</code></strong>) — entry-point reference (<code>"pkg.mod:func"</code>)
-  resolved via <code>importlib</code>. The callable receives keyword arguments
-  <code>(download_path, project_root, entry, uri, key, version, doi, format, branch,
-  requires_paths)</code>. No inline code execution (<code>exec</code>/<code>eval</code>) anywhere.
-  Equivalent to <code>[&lt;ds&gt;._LANG.python].fetcher</code>.</li>
-<li><strong><code>[&lt;ds&gt;._LANG.shell].fetcher</code></strong> — the legacy shell fetcher; read as the
-  fallback for the canonical bare <code>shell</code>.</li>
+  equivalent to <code>[&lt;ds&gt;._LANG.python].fetcher</code>. The callable receives keyword
+  arguments <code>(download_path, project_root, entry, uri, key, version, doi,
+  format, branch, requires_paths)</code>.</li>
+<li><strong><code>[&lt;ds&gt;._LANG.shell].fetcher</code></strong> — read as a fallback for the canonical bare
+  <code>shell</code> field.</li>
 <li><strong><code>python_includes=</code></strong> — list of directory paths prepended to <code>sys.path</code>
-  during ref resolution (obsolete; the project root is auto-added).</li>
+  during ref resolution (obsolete; the project root is added automatically).</li>
 </ul>
 <p>A single manifest can be consumed by several tools: each reads the common
-fields and ignores the other's extension keys. See
+fields and ignores the others' extension keys. See
 <a href="../conformance/">conformance.md</a> for the shared manifest format and what this
 implementation supports.</p>
 

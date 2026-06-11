@@ -540,6 +540,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../adding-datasets/" class="md-nav__link">
         
   
@@ -773,10 +801,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#top-level-layout" class="md-nav__link">
+  <a href="#a-minimal-entry" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Top-level layout
+        A minimal entry
       
     </span>
   </a>
@@ -784,10 +812,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#dataset-fields" class="md-nav__link">
+  <a href="#common-fields" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Dataset fields
+        Common fields
       
     </span>
   </a>
@@ -795,10 +823,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#language-bindings" class="md-nav__link">
+  <a href="#fetchers-and-loaders" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Language bindings
+        Fetchers and loaders
       
     </span>
   </a>
@@ -806,10 +834,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#storage" class="md-nav__link">
+  <a href="#structural-tables" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Storage
+        Structural tables
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rare-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rare fields
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-the-file-is-written" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How the file is written
       
     </span>
   </a>
@@ -1024,10 +1074,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#top-level-layout" class="md-nav__link">
+  <a href="#a-minimal-entry" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Top-level layout
+        A minimal entry
       
     </span>
   </a>
@@ -1035,10 +1085,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#dataset-fields" class="md-nav__link">
+  <a href="#common-fields" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Dataset fields
+        Common fields
       
     </span>
   </a>
@@ -1046,10 +1096,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#language-bindings" class="md-nav__link">
+  <a href="#fetchers-and-loaders" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Language bindings
+        Fetchers and loaders
       
     </span>
   </a>
@@ -1057,10 +1107,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#storage" class="md-nav__link">
+  <a href="#structural-tables" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Storage
+        Structural tables
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rare-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rare fields
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-the-file-is-written" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How the file is written
       
     </span>
   </a>
@@ -1115,35 +1187,31 @@
 
 
 <h1 id="manifest-format-datamanifesttoml">Manifest format (<code>datamanifest.toml</code>)<a class="headerlink" href="#manifest-format-datamanifesttoml" title="Permanent link">&para;</a></h1>
-<p>This page describes the structure of the manifest file — the fields you write by
-hand or that the CLI writes for you. It is a practical reference for this Python
-implementation. The format is shared across languages and defined normatively in
-its own specification: the
-<a href="https://perrette.github.io/datamanifest.toml"><code>datamanifest.toml</code> spec</a>. For the
-cross-tool details — which features this implementation supports and which spec
-version it targets — see <a href="../conformance/">Conformance</a>.</p>
+<p>The manifest is a TOML file that declares the datasets a project depends on:
+where each one comes from, what its content should be, and how to load it. This
+page is a practical reference for the Python implementation. The format itself
+is shared across languages and defined normatively in the
+<a href="https://perrette.github.io/datamanifest.toml"><code>datamanifest.toml</code> specification</a>;
+see <a href="../conformance/">Conformance</a> for which parts this implementation supports.</p>
 <p>The canonical filename is <code>datamanifest.toml</code>; <code>datasets.toml</code> and
 <code>Datasets.toml</code> are also recognized when walking up from the working directory.</p>
-<h2 id="top-level-layout">Top-level layout<a class="headerlink" href="#top-level-layout" title="Permanent link">&para;</a></h2>
-<p>A manifest is a TOML document containing:</p>
-<ul>
-<li><strong>one table per dataset</strong>, keyed by the dataset name — the common case;</li>
-<li><strong><code>[_LANG.python.loaders]</code></strong> — an optional <code>format → loader</code> map of project-wide
-  default loaders (see <a href="../language-bindings/">Language bindings</a>);</li>
-<li><strong><code>[_STORAGE]</code></strong> — optional configuration of where data lives on disk (see
-  <a href="../storage/">Storage model</a>);</li>
-<li><strong><code>[_META]</code></strong> — optional schema marker (<code>schema = 1</code>).</li>
-</ul>
-<p>Keys beginning with <code>_</code> are <strong>structural</strong> — they are not datasets. Unknown <code>_*</code>
-tables (and any foreign-language <code>_LANG.*</code> subtrees) are preserved verbatim on
-write, so a manifest shared with another tool round-trips losslessly.</p>
-<p>A minimal manifest is just dataset tables:</p>
+<h2 id="a-minimal-entry">A minimal entry<a class="headerlink" href="#a-minimal-entry" title="Permanent link">&para;</a></h2>
+<p>A manifest holds <strong>one table per dataset</strong>, keyed by the dataset name. The
+smallest useful entry is a source and a checksum:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[co2]</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">uri</span><span class="w">      </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv&quot;</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">checksum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;sha256:…&quot;</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">format</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;csv&quot;</span>
 </code></pre></div>
-<h2 id="dataset-fields">Dataset fields<a class="headerlink" href="#dataset-fields" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>uri</code> says where the bytes come from.</li>
+<li><code>checksum</code> is a <strong>content digest</strong> — <code>&lt;algo&gt;:&lt;hex&gt;</code>, e.g. <code>sha256:…</code> or
+  <code>md5:…</code> — that pins what the bytes should be. You rarely write it by hand:
+  when it is empty, the digest is computed (as <code>sha256:</code>) on the first
+  successful download and written back; on later fetches the download is
+  verified against it, in the algorithm it names. A bare hex value with no
+  <code>algo:</code> prefix is read as <code>sha256</code>.</li>
+</ul>
+<h2 id="common-fields">Common fields<a class="headerlink" href="#common-fields" title="Permanent link">&para;</a></h2>
 <p>Every field is optional. Types are TOML types; defaults are the empty
 string / empty list / <code>false</code> unless noted.</p>
 <table>
@@ -1151,7 +1219,6 @@ string / empty list / <code>false</code> unless noted.</p>
 <tr>
 <th>Field</th>
 <th>Type</th>
-<th>Default</th>
 <th>Meaning</th>
 </tr>
 </thead>
@@ -1159,139 +1226,166 @@ string / empty list / <code>false</code> unless noted.</p>
 <tr>
 <td><code>uri</code></td>
 <td>string</td>
-<td><code>""</code></td>
 <td>Single source URI: HTTP(S), <code>git</code>/<code>*.git</code>, <code>ssh</code>/<code>sshfs</code>/<code>rsync</code>, object store (<code>s3://</code>, <code>gs://</code>, …), or <code>file://</code>. Mutually exclusive with <code>uris</code>.</td>
 </tr>
 <tr>
 <td><code>uris</code></td>
 <td>array of string</td>
-<td><code>[]</code></td>
 <td>Several source URIs materialized into one dataset folder. Mutually exclusive with <code>uri</code>.</td>
 </tr>
 <tr>
 <td><code>checksum</code></td>
 <td>string</td>
-<td><code>""</code></td>
-<td>Expected content digest as <code>&lt;algo&gt;:&lt;hex&gt;</code> (e.g. <code>sha256:…</code>, <code>md5:…</code>; a bare hex value is read as <code>sha256</code>). Auto-filled (as <code>sha256:</code>) on first successful fetch and verified — in the declared algorithm — at fetch time.</td>
-</tr>
-<tr>
-<td><code>sha256</code> <em>(legacy)</em></td>
-<td>string</td>
-<td><code>""</code></td>
-<td>Deprecated alias for <code>checksum</code>: a bare SHA-256 hex, read as <code>checksum = "sha256:&lt;hex&gt;"</code> and rewritten as <code>checksum</code> on the next save.</td>
+<td>Expected content digest as <code>&lt;algo&gt;:&lt;hex&gt;</code> (see above).</td>
 </tr>
 <tr>
 <td><code>format</code></td>
 <td>string</td>
-<td><code>""</code></td>
 <td>Format hint used to pick a loader (<code>csv</code>, <code>nc</code>, <code>parquet</code>, <code>json</code>, <code>zip</code>, <code>tar.gz</code>, …). Inferred from the URI when absent.</td>
+</tr>
+<tr>
+<td><code>extract</code></td>
+<td>bool</td>
+<td>After download, unpack the archive (<code>zip</code> / <code>tar</code> / <code>tar.gz</code>) and use the extracted directory as the dataset path.</td>
 </tr>
 <tr>
 <td><code>version</code></td>
 <td>string</td>
-<td><code>""</code></td>
 <td>Dataset version; participates in the storage key, so multiple versions coexist on disk.</td>
 </tr>
 <tr>
 <td><code>branch</code></td>
 <td>string</td>
-<td><code>""</code></td>
 <td>For git sources: the branch or tag to clone.</td>
 </tr>
 <tr>
 <td><code>doi</code></td>
 <td>string</td>
-<td><code>""</code></td>
 <td>DOI of the dataset; also usable as a lookup/search key.</td>
-</tr>
-<tr>
-<td><code>extract</code></td>
-<td>bool</td>
-<td><code>false</code></td>
-<td>After download, unpack the archive (<code>zip</code> / <code>tar</code> / <code>tar.gz</code>) and use the extracted directory as the dataset path.</td>
 </tr>
 <tr>
 <td><code>aliases</code></td>
 <td>array of string</td>
-<td><code>[]</code></td>
 <td>Alternative names the dataset can be looked up by.</td>
 </tr>
 <tr>
 <td><code>description</code></td>
 <td>string</td>
-<td><code>""</code></td>
 <td>Human-readable description.</td>
 </tr>
 <tr>
 <td><code>requires</code></td>
 <td>array of string</td>
-<td><code>[]</code></td>
 <td>Names of datasets fetched before this one; defines a dependency graph resolved in topological order.</td>
-</tr>
-<tr>
-<td><code>skip_download</code></td>
-<td>bool</td>
-<td><code>false</code></td>
-<td>Treat the dataset as externally provided — return the <code>uri</code>/path and attempt no download.</td>
-</tr>
-<tr>
-<td><code>skip_checksum</code></td>
-<td>bool</td>
-<td><code>false</code></td>
-<td>Disable checksum verification for this dataset.</td>
-</tr>
-<tr>
-<td><code>storage_path</code></td>
-<td>string</td>
-<td><code>""</code></td>
-<td>Per-dataset location override (a path expression; default <code>$datasets_dir/$key</code>). See <a href="../storage/">Storage model</a>.</td>
-</tr>
-<tr>
-<td><code>delegate</code></td>
-<td>bool</td>
-<td><code>true</code></td>
-<td>Allow cross-language fetch delegation to a peer <code>datamanifest</code> CLI.</td>
 </tr>
 </tbody>
 </table>
-<p><code>host</code>, <code>path</code>, and <code>scheme</code> are <strong>derived</strong> from the URI; the tools omit them on
-write.</p>
-<h2 id="language-bindings">Language bindings<a class="headerlink" href="#language-bindings" title="Permanent link">&para;</a></h2>
+<p><code>host</code>, <code>path</code>, and <code>scheme</code> are <strong>derived</strong> from the URI; the tools omit them
+on write.</p>
+<h2 id="fetchers-and-loaders">Fetchers and loaders<a class="headerlink" href="#fetchers-and-loaders" title="Permanent link">&para;</a></h2>
 <p>By default a dataset is downloaded from its <code>uri</code> and loaded by the built-in
-loader for its <code>format</code>. Both steps can be overridden with <code>module:function</code>
-references (never inline code):</p>
+loader for its <code>format</code>. Both steps can be overridden:</p>
 <ul>
-<li><strong>bare <code>fetcher</code></strong> — a Python <code>module:function</code> called to produce the bytes
+<li>a <strong>fetcher</strong> is a function or command that produces the dataset's bytes,
   instead of (or in addition to) downloading the <code>uri</code>;</li>
-<li><strong>bare <code>loader</code></strong> — a Python <code>module:function</code> called to load the dataset into
-  memory, overriding the format default;</li>
-<li><strong>bare <code>shell</code></strong> — a command template run to fetch the data (with <code>$download_path</code>,
-  <code>$uri</code>, <code>$key</code>, … substitutions); language-agnostic, no loader.</li>
+<li>a <strong>loader</strong> is a function that reads the dataset from disk into memory,
+  overriding the format default.</li>
 </ul>
+<p>A fetcher or loader is declared as a <strong>binding</strong> — a <code>module:function</code>
+reference (called a <strong>ref</strong>), never inline code. The common single-language
+fields are written directly on the dataset table:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[regridded]</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">format</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;nc&quot;</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">fetcher</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;mypkg.build:regrid&quot;</span><span class="w">      </span><span class="c1"># produce the bytes in Python</span>
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">loader</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;mypkg.io:open_regridded&quot;</span><span class="w"> </span><span class="c1"># override the default .nc loader</span>
 </code></pre></div>
-<p>A binding may instead be a <code>{ ref, args, kwargs }</code> table so one function is reused
-across datasets that differ only in arguments, with <code>$var</code> substitution in string
-values:</p>
+<p>A <code>shell</code> field instead names a command template run to fetch the data (with
+<code>$download_path</code>, <code>$uri</code>, <code>$key</code>, … substitutions); it is language-agnostic
+and has no loader counterpart.</p>
+<p>A binding may also be a <code>{ ref, args, kwargs }</code> table, so one function is
+reused across datasets that differ only in arguments, with <code>$var</code> substitution
+in string values:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[esm_5x5.loader]</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">ref</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;mypkg.io:load_esm&quot;</span>
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">args</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;$path&quot;</span><span class="p">]</span>
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">kwargs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">grid</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;5x5&quot;</span><span class="w"> </span><span class="p">}</span>
 </code></pre></div>
-<p>Bindings can also be written per-language under <code>[&lt;dataset&gt;._LANG.&lt;lang&gt;]</code>, and
-project-wide format defaults under <code>[_LANG.python.loaders]</code>. The bare forms above
-are the common single-language case; the
-<a href="../language-bindings/">Language bindings</a> page covers the full <code>_LANG</code> namespace,
-the loaders map, and the fetch/load resolution ladders.</p>
-<h2 id="storage">Storage<a class="headerlink" href="#storage" title="Permanent link">&para;</a></h2>
-<p>Where data lives is configured in <code>[_STORAGE]</code> (two folder fields,
-<code>datasets_dir</code> and <code>datacache_dir</code>, machine-global by default — a shared keyed
-dataset store and a per-project cache) and per dataset
-via <code>storage_path</code>. This is its own topic — see the
-<a href="../storage/">Storage model</a> page.</p>
+<p>Bindings can also be written per language under <code>[&lt;dataset&gt;._LANG.&lt;lang&gt;]</code>,
+with project-wide format defaults under <code>[_LANG.python.loaders]</code>. The
+<a href="../language-bindings/">Language bindings</a> page covers the full picture: the
+<code>_LANG</code> namespace, the loaders maps, and the order in which fetchers and
+loaders are resolved.</p>
+<h2 id="structural-tables">Structural tables<a class="headerlink" href="#structural-tables" title="Permanent link">&para;</a></h2>
+<p>Keys beginning with <code>_</code> are <strong>structural</strong> — they are not datasets. Unknown
+<code>_*</code> tables (and any foreign-language <code>_LANG.*</code> subtrees) are preserved
+verbatim on write, so a manifest shared with another tool round-trips
+losslessly. The defined structural tables are:</p>
+<ul>
+<li><strong><code>[_META]</code></strong> — schema marker (<code>schema = 1</code>).</li>
+<li><strong><code>[_STORAGE]</code></strong> — where data lives on disk: two folder fields
+  (<code>datasets_dir</code> for fetched datasets, <code>datacache_dir</code> for the produced
+  cache — machine-global by default), read pools, and reusable <code>$</code>-symbols.
+  This is its own topic — see the <a href="../storage/">Storage model</a> page.</li>
+<li><strong><code>[_LANG]</code></strong> — per-language configuration; in particular
+  <code>[_LANG.python.loaders]</code>, a project-wide <code>format → loader</code> map (see
+  <a href="../language-bindings/">Language bindings</a>).</li>
+<li><strong><code>[_LOADERS]</code></strong> — the language-implicit counterpart of
+  <code>[_LANG.python.loaders]</code>: a bare <code>format → binding</code> map read as the running
+  tool's own language.</li>
+</ul>
+<h2 id="rare-fields">Rare fields<a class="headerlink" href="#rare-fields" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>skip_download</code></td>
+<td>bool</td>
+<td>Treat the dataset as externally provided — return the <code>uri</code>/path as-is, attempt no download, and never let maintenance touch it.</td>
+</tr>
+<tr>
+<td><code>skip_checksum</code></td>
+<td>bool</td>
+<td>Disable checksum verification for this dataset.</td>
+</tr>
+<tr>
+<td><code>lazy_access</code></td>
+<td>bool</td>
+<td><strong>Lazy access</strong>: open the <code>uri</code> in place (typically an object store) instead of downloading a local copy — no local bytes, no checksum. Requires a loader; in Python, <code>datamanifest add --lazy</code> sets it up with the built-in fsspec loader.</td>
+</tr>
+<tr>
+<td><code>storage_path</code></td>
+<td>string</td>
+<td>Per-dataset location override (a path expression; default <code>$datasets_dir/$key</code>). See <a href="../storage/">Storage model</a>.</td>
+</tr>
+<tr>
+<td><code>key</code></td>
+<td>string</td>
+<td>The dataset's <strong>storage key</strong> — its relative path under the datasets folder. Derived from the URI's host and path (plus <code>version</code>) when absent.</td>
+</tr>
+<tr>
+<td><code>delegate</code></td>
+<td>bool</td>
+<td>Allow <strong>delegation</strong> — cross-language fetch through a peer <code>datamanifest</code> implementation (see <a href="../language-bindings/#cross-language-fetch">Language bindings</a>). Defaults to <code>true</code>; only <code>delegate = false</code> is written.</td>
+</tr>
+<tr>
+<td><code>sha256</code></td>
+<td>string</td>
+<td>Legacy alias for <code>checksum</code>: a bare SHA-256 hex, read as <code>checksum = "sha256:&lt;hex&gt;"</code> and written back as <code>checksum</code> on the next save.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="how-the-file-is-written">How the file is written<a class="headerlink" href="#how-the-file-is-written" title="Permanent link">&para;</a></h2>
+<p>Manifests are written in a canonical form: structural <code>_*</code> tables first at the
+top level, then the datasets — both alphabetical, with keys sorted at every
+nesting level. <code>datamanifest format [FILE]</code> re-serializes any manifest into
+that canonical byte form without changing its content, so different tools can
+emit byte-identical files.</p>
 <h2 id="a-full-example">A full example<a class="headerlink" href="#a-full-example" title="Permanent link">&para;</a></h2>
 <p>The manifest below declares four real datasets fetched from PANGAEA, a CMIP6
 output over SSH, and a GitHub release archive:</p>
@@ -1318,8 +1412,8 @@ output over SSH, and a GitHub release archive:</p>
 </code></pre></div>
 <h2 id="the-normative-specification">The normative specification<a class="headerlink" href="#the-normative-specification" title="Permanent link">&para;</a></h2>
 <p>This page is a practical summary, not the contract. The authoritative,
-cross-language definition — the full field list, the resolution ladders, the
-preservation rules, and the conformance fixtures — lives in the
+cross-language definition — the full field list, the resolution order, the
+preservation rules, and the conformance fixtures — is the
 <a href="https://perrette.github.io/datamanifest.toml"><code>datamanifest.toml</code> specification</a>.</p>
 
 

@@ -540,6 +540,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../adding-datasets/" class="md-nav__link">
         
   
@@ -851,67 +879,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#inspect" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Inspect
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Inspect">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#list-search-filters-output-style-delete-move-dest-push-ssh_host-pull-ssh_host" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        list [SEARCH ...] [filters] [output style] [--delete ... | --move DEST ... | --push SSH_HOST ... | --pull SSH_HOST ...]
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#show-name" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        show NAME
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#path-name" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        path NAME
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#where-manifest-state-file-datasets-dir-datacache-dir-scan" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        where [--manifest|--state-file|--datasets-dir|--datacache-dir] [--scan]
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#fetch-and-verify" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -962,6 +929,67 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#inspect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inspect
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Inspect">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#path-name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        path NAME
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#list-search-filters-output-style-delete-move-dest-push-target-pull-target" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        list [SEARCH ...] [filters] [output style] [--delete ... | --move DEST ... | --push TARGET ... | --pull TARGET ...]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#show-name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        show NAME
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#where-manifest-state-file-datasets-dir-datacache-dir-scan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        where [--manifest|--state-file|--datasets-dir|--datacache-dir] [--scan]
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#maintain" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -978,6 +1006,17 @@
     <span class="md-ellipsis">
       
         refresh [--scan] [--dry-run]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#normalize-term-filters-dry-run-copy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        normalize [TERM...] [filters] [--dry-run] [--copy]
       
     </span>
   </a>
@@ -1035,10 +1074,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#push-id-ssh_host-dry-run-batch-pull-id-ssh_host-dry-run-batch" class="md-nav__link">
+  <a href="#push-id-target-dry-run-batch-pull-id-target-dry-run-batch" class="md-nav__link">
     <span class="md-ellipsis">
       
-        push ID SSH_HOST [--dry-run] [--batch] / pull ID SSH_HOST [--dry-run] [--batch]
+        push ID [TARGET] [--dry-run] [--batch] / pull ID [TARGET] [--dry-run] [--batch]
       
     </span>
   </a>
@@ -1046,10 +1085,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#normalize-term-dry-run-copy" class="md-nav__link">
+  <a href="#export-dest-term-filters-dry-run" class="md-nav__link">
     <span class="md-ellipsis">
       
-        normalize [TERM...] [--dry-run] [--copy]
+        export DEST [TERM...] [filters] [--dry-run]
       
     </span>
   </a>
@@ -1078,17 +1117,6 @@
     <span class="md-ellipsis">
       
         config [show] / config set FIELD VALUE... [--local|--global|--project|--host GLOB] / config unset FIELD [...]
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#export-dest-term-dry-run" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        export DEST [TERM...] [--dry-run]
       
     </span>
   </a>
@@ -1358,67 +1386,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#inspect" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Inspect
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Inspect">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#list-search-filters-output-style-delete-move-dest-push-ssh_host-pull-ssh_host" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        list [SEARCH ...] [filters] [output style] [--delete ... | --move DEST ... | --push SSH_HOST ... | --pull SSH_HOST ...]
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#show-name" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        show NAME
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#path-name" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        path NAME
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#where-manifest-state-file-datasets-dir-datacache-dir-scan" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        where [--manifest|--state-file|--datasets-dir|--datacache-dir] [--scan]
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#fetch-and-verify" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1469,6 +1436,67 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#inspect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inspect
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Inspect">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#path-name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        path NAME
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#list-search-filters-output-style-delete-move-dest-push-target-pull-target" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        list [SEARCH ...] [filters] [output style] [--delete ... | --move DEST ... | --push TARGET ... | --pull TARGET ...]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#show-name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        show NAME
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#where-manifest-state-file-datasets-dir-datacache-dir-scan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        where [--manifest|--state-file|--datasets-dir|--datacache-dir] [--scan]
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#maintain" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1485,6 +1513,17 @@
     <span class="md-ellipsis">
       
         refresh [--scan] [--dry-run]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#normalize-term-filters-dry-run-copy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        normalize [TERM...] [filters] [--dry-run] [--copy]
       
     </span>
   </a>
@@ -1542,10 +1581,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#push-id-ssh_host-dry-run-batch-pull-id-ssh_host-dry-run-batch" class="md-nav__link">
+  <a href="#push-id-target-dry-run-batch-pull-id-target-dry-run-batch" class="md-nav__link">
     <span class="md-ellipsis">
       
-        push ID SSH_HOST [--dry-run] [--batch] / pull ID SSH_HOST [--dry-run] [--batch]
+        push ID [TARGET] [--dry-run] [--batch] / pull ID [TARGET] [--dry-run] [--batch]
       
     </span>
   </a>
@@ -1553,10 +1592,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#normalize-term-dry-run-copy" class="md-nav__link">
+  <a href="#export-dest-term-filters-dry-run" class="md-nav__link">
     <span class="md-ellipsis">
       
-        normalize [TERM...] [--dry-run] [--copy]
+        export DEST [TERM...] [filters] [--dry-run]
       
     </span>
   </a>
@@ -1585,17 +1624,6 @@
     <span class="md-ellipsis">
       
         config [show] / config set FIELD VALUE... [--local|--global|--project|--host GLOB] / config unset FIELD [...]
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#export-dest-term-dry-run" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        export DEST [TERM...] [--dry-run]
       
     </span>
   </a>
@@ -1700,14 +1728,17 @@ operate on has its own page.</p>
 <code>--overwrite</code> replaces an existing duplicate entry.</p>
 <p>Two independent special forms:</p>
 <ol>
-<li><strong>Zenodo</strong> — a DOI / record URL bundles the record's files into one <code>uris=</code>
-   dataset (plain HTTPS; declare-only). <code>--pick GLOB</code> filters files (repeatable),
-   <code>--split</code> makes one dataset per file instead, <code>--name</code> becomes a name <em>prefix</em>.</li>
+<li><strong>Zenodo / PANGAEA</strong> — a DOI / record URL bundles the record's files into
+   one <code>uris=</code> dataset (plain HTTPS; declare-only). A PANGAEA <em>series</em> expands
+   to one entry per child dataset. <code>--pick GLOB</code> filters files (repeatable),
+   <code>--split</code> makes one dataset per file instead, <code>--name</code> becomes a name
+   <em>prefix</em> for a record / a split collection.</li>
 <li><strong><code>--lazy</code></strong> — register an <strong>object-store</strong> URI (<code>s3://</code>, <code>gs://</code>, …) for lazy
    access <em>instead of</em> downloading: it sets <code>lazy_access</code> (a language-neutral
    marker) and a built-in Python fsspec loader, so <code>load()</code> opens it in place.</li>
 </ol>
-<p>The two are unrelated (Zenodo serves HTTPS files; <code>--lazy</code> is for object stores).</p>
+<p>The two are unrelated (Zenodo and PANGAEA serve HTTPS files; <code>--lazy</code> is for
+object stores).</p>
 <h3 id="import-poochcsvurlsintakedvc-source-base-url-url-cache-dir-dir-overwrite-dry-run"><code>import {pooch|csv|urls|intake|dvc} SOURCE [--base-url URL] [--cache-dir DIR] [--overwrite] [--dry-run]</code><a class="headerlink" href="#import-poochcsvurlsintakedvc-source-base-url-url-cache-dir-dir-overwrite-dry-run" title="Permanent link">&para;</a></h3>
 <p>Bulk-import datasets from another tool's catalog:</p>
 <ul>
@@ -1723,8 +1754,21 @@ operate on has its own page.</p>
 <p>With <code>--cache-dir</code> already-downloaded files are <strong>adopted in place,
 checksum-verified — no re-download</strong>. See
 <a href="../adding-datasets/">adding-datasets.md</a> for the full per-source detail.</p>
+<h2 id="fetch-and-verify">Fetch and verify<a class="headerlink" href="#fetch-and-verify" title="Permanent link">&para;</a></h2>
+<h3 id="download-name-all-overwrite-delegate-no-delegate"><code>download [NAME ...] [--all] [--overwrite] [--delegate|--no-delegate]</code><a class="headerlink" href="#download-name-all-overwrite-delegate-no-delegate" title="Permanent link">&para;</a></h3>
+<p>Download specific datasets or <code>--all</code> of them; <code>--overwrite</code> re-downloads.
+<code>--no-delegate</code> disables the cross-language fetch rung for the run (<code>--delegate</code>
+forces it on); see <a href="../language-bindings/#cross-language-fetch">language-bindings.md</a>.</p>
+<h3 id="verify-name"><code>verify [NAME ...]</code><a class="headerlink" href="#verify-name" title="Permanent link">&para;</a></h3>
+<p>Re-check checksums in each dataset's declared algorithm (default: all present
+datasets); exits nonzero on any mismatch.</p>
+<h3 id="update-checksums-name-dry-run"><code>update-checksums [NAME ...] [--dry-run]</code><a class="headerlink" href="#update-checksums-name-dry-run" title="Permanent link">&para;</a></h3>
+<p>Recompute stored checksums from what's on disk (e.g. after regenerating data).</p>
 <h2 id="inspect">Inspect<a class="headerlink" href="#inspect" title="Permanent link">&para;</a></h2>
-<h3 id="list-search-filters-output-style-delete-move-dest-push-ssh_host-pull-ssh_host"><code>list [SEARCH ...] [filters] [output style] [--delete ... | --move DEST ... | --push SSH_HOST ... | --pull SSH_HOST ...]</code><a class="headerlink" href="#list-search-filters-output-style-delete-move-dest-push-ssh_host-pull-ssh_host" title="Permanent link">&para;</a></h3>
+<h3 id="path-name"><code>path NAME</code><a class="headerlink" href="#path-name" title="Permanent link">&para;</a></h3>
+<p>Print the resolved on-disk path (composable in shell:
+<code>python analysis.py --data "$(datamanifest path foo)"</code>).</p>
+<h3 id="list-search-filters-output-style-delete-move-dest-push-target-pull-target"><code>list [SEARCH ...] [filters] [output style] [--delete ... | --move DEST ... | --push TARGET ... | --pull TARGET ...]</code><a class="headerlink" href="#list-search-filters-output-style-delete-move-dest-push-target-pull-target" title="Permanent link">&para;</a></h3>
 <p>List fetched datasets and the cached artifacts this project's state file roots,
 each with its state↔disk status. Free-text <code>SEARCH</code> terms match
 (case-insensitive substring) against each object's key fields; all terms must
@@ -1738,7 +1782,10 @@ match unless <code>--any</code>; <code>--invert</code> selects non-matches.</p>
 <li><code>--dirty</code> — only objects whose state-file record disagrees with disk
   (<code>missing</code> / <code>relocated</code> / <code>untracked</code>).</li>
 <li><code>--outside</code> — only tracked objects stored outside <code>datasets_dir</code> /
-  <code>datacache_dir</code> and the read pools.</li>
+  <code>datacache_dir</code> and the <a href="../storage/">read pools</a>.</li>
+<li><code>--out-of-place</code> — only present objects whose bytes are not at the
+  directive-derived path (recorded ≠ derived) — the <code>normalize</code> selection;
+  read-pool copies count, user-managed exact paths do not.</li>
 <li><code>--hash PREFIX ...</code> — produced artifacts by hash prefix(es).</li>
 <li><code>--format FMT</code> — only objects in this serialization format.</li>
 <li><code>--older-than AGE</code> — only objects last accessed more than AGE ago
@@ -1759,22 +1806,19 @@ previews):</p>
   irrelevant here — the selection is already explicit — and is ignored.)</li>
 <li><code>--move DEST [--dry-run]</code> — move them under DEST and repoint their state
   records (the manifest is not edited). The tail starts with <code>DEST</code>.</li>
-<li><code>--push SSH_HOST [--dry-run]</code> / <code>--pull SSH_HOST [--dry-run]</code> — bulk
+<li><code>--push TARGET [--dry-run]</code> / <code>--pull TARGET [--dry-run]</code> — bulk
   cross-machine sync of the selection (rsync over ssh). The tail starts with
-  <code>SSH_HOST</code>.</li>
+  <code>TARGET</code> (<code>HOST:</code> store / <code>HOST:PATH</code> / local <code>PATH</code>).</li>
 </ul>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>datamanifest list --cached --orphan --delete --dry-run --prune
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>datamanifest list --datasets --older-than 30d --move /archive --dry-run
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>datamanifest list --outside --push user@hpc
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>datamanifest list --datasets --pull user@hpc --dry-run
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>datamanifest list --outside --push user@hpc:
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>datamanifest list --datasets --pull user@hpc: --dry-run
 </code></pre></div>
 <p>Maintenance never touches <strong>user-managed data</strong> — a <code>skip_download</code> entry, or a
 fixed <code>storage_path</code> with no <code>$key</code> — which the tool didn't place.</p>
 <h3 id="show-name"><code>show NAME</code><a class="headerlink" href="#show-name" title="Permanent link">&para;</a></h3>
 <p>Print full entry detail in TOML style.</p>
-<h3 id="path-name"><code>path NAME</code><a class="headerlink" href="#path-name" title="Permanent link">&para;</a></h3>
-<p>Print the resolved on-disk path (composable in shell:
-<code>python analysis.py --data "$(datamanifest path foo)"</code>).</p>
 <h3 id="where-manifest-state-file-datasets-dir-datacache-dir-scan"><code>where [--manifest|--state-file|--datasets-dir|--datacache-dir] [--scan]</code><a class="headerlink" href="#where-manifest-state-file-datasets-dir-datacache-dir-scan" title="Permanent link">&para;</a></h3>
 <p>Show the active manifest, state file, and the <code>datasets_dir</code> / <code>datacache_dir</code>
 resolved for this host with their read pools folded in; notes how many tracked
@@ -1782,16 +1826,6 @@ objects live outside those folders (<code>list --outside</code> to inspect). A s
 selector flag prints just that one bare path (scriptable). <code>--scan</code> probes the
 read pools for datasets present there but not local — the report twin of
 <code>refresh --scan</code>.</p>
-<h2 id="fetch-and-verify">Fetch and verify<a class="headerlink" href="#fetch-and-verify" title="Permanent link">&para;</a></h2>
-<h3 id="download-name-all-overwrite-delegate-no-delegate"><code>download [NAME ...] [--all] [--overwrite] [--delegate|--no-delegate]</code><a class="headerlink" href="#download-name-all-overwrite-delegate-no-delegate" title="Permanent link">&para;</a></h3>
-<p>Download specific datasets or <code>--all</code> of them; <code>--overwrite</code> re-downloads.
-<code>--no-delegate</code> disables the cross-language fetch rung for the run (<code>--delegate</code>
-forces it on); see <a href="../language-bindings/#cross-language-fetch">language-bindings.md</a>.</p>
-<h3 id="verify-name"><code>verify [NAME ...]</code><a class="headerlink" href="#verify-name" title="Permanent link">&para;</a></h3>
-<p>Re-check checksums in each dataset's declared algorithm (default: all present
-datasets); exits nonzero on any mismatch.</p>
-<h3 id="update-checksums-name-dry-run"><code>update-checksums [NAME ...] [--dry-run]</code><a class="headerlink" href="#update-checksums-name-dry-run" title="Permanent link">&para;</a></h3>
-<p>Recompute stored checksums from what's on disk (e.g. after regenerating data).</p>
 <h2 id="maintain">Maintain<a class="headerlink" href="#maintain" title="Permanent link">&para;</a></h2>
 <h3 id="refresh-scan-dry-run"><code>refresh [--scan] [--dry-run]</code><a class="headerlink" href="#refresh-scan-dry-run" title="Permanent link">&para;</a></h3>
 <p>Reconcile the git-ignored state file (<code>.datamanifest/state.toml</code>) with disk:
@@ -1802,94 +1836,14 @@ would change first.</p>
 <p><code>--scan</code> also probes the read pools (including the well-known legacy locations)
 and adopts datasets present there but not local yet (checksum-gated; no
 downloads or copies) — the active twin of <code>where --scan</code>.</p>
-<h3 id="delete-id-dry-run-batch-prune"><code>delete ID [--dry-run] [--batch] [--prune]</code><a class="headerlink" href="#delete-id-dry-run-batch-prune" title="Permanent link">&para;</a></h3>
-<p>Delete a stored object's <strong>bytes</strong> and prune its state-file record. By default
-the manifest entry stays (the recipe survives, so it can be re-fetched);
-<code>--prune</code> also drops the dataset's manifest entry (≡ <code>remove</code>; no effect on
-cached artifacts, which have no entry). Protected (user-managed / skip_download /
-lazy_access) data is skipped. The object is addressed by its machine-independent
-id: a fetched dataset by name/alias/doi, a produced artifact by
-<code>cachetype[/version]/hash</code> (full or an unambiguous hash prefix). An ambiguous id
-errors unless <code>--batch</code> (act on all matches).</p>
-<h3 id="move-id-dest-dry-run-batch"><code>move ID DEST [--dry-run] [--batch]</code><a class="headerlink" href="#move-id-dest-dry-run-batch" title="Permanent link">&para;</a></h3>
-<p>Move a stored object's <strong>bytes</strong> under DEST and repoint its state record; the
-manifest is not edited (a later re-fetch still follows <code>datasets_dir</code>). Same
-addressing as <code>delete</code>.</p>
-<h3 id="remove-name-keep-cache"><code>remove NAME [--keep-cache]</code><a class="headerlink" href="#remove-name-keep-cache" title="Permanent link">&para;</a></h3>
-<p>Delete a dataset's <strong>manifest entry</strong>; <code>--keep-cache</code> preserves its files on
-disk.</p>
-<h2 id="sync-between-machines">Sync between machines<a class="headerlink" href="#sync-between-machines" title="Permanent link">&para;</a></h2>
-<h3 id="push-id-ssh_host-dry-run-batch-pull-id-ssh_host-dry-run-batch"><code>push ID SSH_HOST [--dry-run] [--batch]</code> / <code>pull ID SSH_HOST [--dry-run] [--batch]</code><a class="headerlink" href="#push-id-ssh_host-dry-run-batch-pull-id-ssh_host-dry-run-batch" title="Permanent link">&para;</a></h3>
-<p>Transfer a single stored object to / from an SSH host (rsync over ssh), same
-addressing as <code>delete</code>. <code>--dry-run</code> reports the selection (id, kind, paths,
-size) and transfers nothing. For bulk transfers, filter with <code>list</code> and use its
-<code>--push</code> / <code>--pull</code> actions.</p>
-<p>The <code>TARGET</code> operand follows rsync's colon rule (a colon means remote):</p>
-<table>
-<thead>
-<tr>
-<th>Operand</th>
-<th>Meaning</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>HOST:</code></td>
-<td>the remote machine's <strong>store</strong> (its folders resolved remotely)</td>
-</tr>
-<tr>
-<td><code>HOST:PATH</code></td>
-<td>an explicit folder on an ssh host</td>
-</tr>
-<tr>
-<td><code>NAME:</code></td>
-<td>a <strong>git remote</strong>'s checkout — that project's own store (see below)</td>
-</tr>
-<tr>
-<td><code>PATH</code> (no colon)</td>
-<td>a local folder, keyed layout — <code>push</code> = raw export, <code>pull</code> = adopt-by-copy</td>
-</tr>
-</tbody>
-</table>
-<p>A git-remote name takes precedence over an ssh host on collision; the reserved
-<code>git:NAME</code> / <code>ssh:HOST[:PATH]</code> prefixes disambiguate explicitly. The
-historical bare-host form (<code>push ID host</code>, no colon) still works with a
-deprecation warning — write <code>host:</code>. Omitting <code>TARGET</code> entirely uses the
-configured <code>default_remote</code> (a config field on any scope, holding any operand
-form — including a git remote name).</p>
-<p><strong>Git remotes as targets.</strong> A git remote whose URL is ssh-like and points at a
-<em>checked-out</em> repo (no bare repos, no https) is a pure project reference: its
-value is the peer <strong>checkout path</strong>. <code>pull</code> reads the peer's
-<code>.datamanifest/state.toml</code> — recorded resolved locations, nothing to resolve;
-<code>push</code> resolves the directive ladder <strong>in the remote context</strong> (preferably by
-running <code>datamanifest where</code> there over ssh; else by reading the peer's config
-files over ssh and evaluating locally, fed the remote env). An https remote
-(the typical GitHub <code>origin</code>) is rejected as a data target with a clear error.
-No new registry: git's remote table is the registry.</p>
-<ul>
-<li>An SSH target (<code>user@host:</code>) is both the transport and the host identity —
-  no remote registry.</li>
-<li>For the store form, the receiver's folders are resolved best-effort from the
-  remote's own environment (the tool probes <code>DATAMANIFEST_*</code> via
-  <code>ssh &lt;host&gt; 'source ~/.bashrc; env'</code>), then the manifest's
-  <code>[_STORAGE._HOST]</code> rules for that host, then the default. An explicit
-  <code>HOST:PATH</code> / <code>PATH</code> folder is used outright.</li>
-<li>A <strong>local / <code>$repo</code>-relative object is not syncable to a store target</strong>. The
-  default folders are machine-global, so objects are syncable out of the box;
-  an explicit-path target lifts the refusal even for repo-local objects.</li>
-<li>Sync <strong>writes no manifest</strong>. A <code>pull</code> records the received object in the
-  state file; a pushed object lands in the receiving store as an orphan
-  (present, unreferenced) and is immediately usable. Transfers are idempotent
-  (a no-op when the target already holds the object complete).</li>
-<li>A folder produced by <code>push ID PATH</code> is itself a <strong>read pool</strong> — consumers
-  can add it to <code>datasets_pools</code>.</li>
-</ul>
-<h3 id="normalize-term-dry-run-copy"><code>normalize [TERM...] [--dry-run] [--copy]</code><a class="headerlink" href="#normalize-term-dry-run-copy" title="Permanent link">&para;</a></h3>
+<h3 id="normalize-term-filters-dry-run-copy"><code>normalize [TERM...] [filters] [--dry-run] [--copy]</code><a class="headerlink" href="#normalize-term-filters-dry-run-copy" title="Permanent link">&para;</a></h3>
 <p>Make <strong>the bytes follow the directive</strong> (the pairing of <code>refresh</code>, which makes
 the state file follow the bytes): every selected tracked object whose bytes
 are not at the directive-derived path (<code>$datasets_dir/$key</code>,
 <code>$datacache_dir/&lt;cachetype&gt;[/&lt;version&gt;]/&lt;hash&gt;</code>) is re-homed there and its
-state-file record repointed.</p>
+state-file record repointed. Free-text <code>TERM</code>s and the <code>--any</code> / <code>--invert</code> /
+<code>--cached</code> / <code>--datasets</code> / <code>--format</code> / <code>--hash</code> / <code>--older-than</code> filters
+narrow the selection, as in <code>list</code>.</p>
 <table>
 <thead>
 <tr>
@@ -1923,30 +1877,93 @@ data). Preview the selection with <code>list --out-of-place</code> (recorded ≠
 deliberately distinct from <code>--outside</code>: a read-pool copy is conformant for
 <code>--outside</code> but <em>is</em> out-of-place, while user-managed exact-path data is
 "outside" but in place.</p>
-<h2 id="configure-storage">Configure storage<a class="headerlink" href="#configure-storage" title="Permanent link">&para;</a></h2>
-<h3 id="config-show-config-set-field-value-local-global-project-host-glob-config-unset-field"><code>config [show]</code> / <code>config set FIELD VALUE... [--local|--global|--project|--host GLOB]</code> / <code>config unset FIELD [...]</code><a class="headerlink" href="#config-show-config-set-field-value-local-global-project-host-glob-config-unset-field" title="Permanent link">&para;</a></h3>
-<p>Show or edit the scoped storage configuration. <code>set</code>/<code>unset</code> write to the
-checkout's git-ignored <code>.datamanifest/config.toml</code> by default (<code>--local</code>) —
-personal by default, shared deliberately: <code>--project</code> edits the committed
-manifest's <code>[_STORAGE]</code> base, <code>--host GLOB</code> its per-host table (with
-<code>--local</code>/<code>--global</code>, the <code>_HOST</code> section of that file instead), <code>--global</code> the
-user-wide <code>~/.config/datamanifest/config.toml</code>. <code>FIELD</code> is
-<code>datasets_dir</code>/<code>datacache_dir</code>, <code>project</code>, <code>default_remote</code>, a user <code>$symbol</code>,
-or a <code>datasets_pools</code>/<code>datacache_pools</code> list (several values, or none for an
-explicit empty list). <code>show</code> (the default) prints the config resolved for this
-host plus every scope's raw rules.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datacache_dir<span class="w"> </span><span class="s2">&quot;/scratch/</span><span class="nv">$USER</span><span class="s2">/cache&quot;</span><span class="w">               </span><span class="c1"># this checkout</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datasets_dir<span class="w"> </span>/pool<span class="w"> </span>--global<span class="w">                        </span><span class="c1"># this user</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datacache_dir<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$user_cache_dir</span><span class="s2">/myproj&quot;</span><span class="w"> </span>--project<span class="w">   </span><span class="c1"># committed default</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datasets_dir<span class="w"> </span>/fast/data<span class="w"> </span>--host<span class="w"> </span><span class="s2">&quot;login*.hpc.edu&quot;</span><span class="w">    </span><span class="c1"># committed, per-host</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>datamanifest<span class="w"> </span>config<span class="w">                   </span><span class="c1"># show resolved config + raw rules</span>
-</code></pre></div>
-<p><code>datamanifest storage</code> is a deprecated alias of <code>config</code> (<code>--all-hosts</code> maps to
-<code>--project</code>).</p>
-<h3 id="export-dest-term-dry-run"><code>export DEST [TERM...] [--dry-run]</code><a class="headerlink" href="#export-dest-term-dry-run" title="Permanent link">&para;</a></h3>
+<h3 id="delete-id-dry-run-batch-prune"><code>delete ID [--dry-run] [--batch] [--prune]</code><a class="headerlink" href="#delete-id-dry-run-batch-prune" title="Permanent link">&para;</a></h3>
+<p>Delete a stored object's <strong>bytes</strong> and prune its state-file record. By default
+the manifest entry stays (the recipe survives, so it can be re-fetched);
+<code>--prune</code> also drops the dataset's manifest entry (≡ <code>remove</code>; no effect on
+cached artifacts, which have no entry). Protected (user-managed / skip_download /
+lazy_access) data is skipped. The object is addressed by its machine-independent
+id: a fetched dataset by name/alias/doi, a produced artifact by
+<code>cachetype[/version]/hash</code> (full or an unambiguous hash prefix). An ambiguous id
+errors unless <code>--batch</code> (act on all matches).</p>
+<h3 id="move-id-dest-dry-run-batch"><code>move ID DEST [--dry-run] [--batch]</code><a class="headerlink" href="#move-id-dest-dry-run-batch" title="Permanent link">&para;</a></h3>
+<p>Move a stored object's <strong>bytes</strong> under DEST and repoint its state record; the
+manifest is not edited (a later re-fetch still follows <code>datasets_dir</code>). Same
+addressing as <code>delete</code>.</p>
+<h3 id="remove-name-keep-cache"><code>remove NAME [--keep-cache]</code><a class="headerlink" href="#remove-name-keep-cache" title="Permanent link">&para;</a></h3>
+<p>Delete a dataset's <strong>manifest entry</strong>; <code>--keep-cache</code> preserves its files on
+disk.</p>
+<h2 id="sync-between-machines">Sync between machines<a class="headerlink" href="#sync-between-machines" title="Permanent link">&para;</a></h2>
+<h3 id="push-id-target-dry-run-batch-pull-id-target-dry-run-batch"><code>push ID [TARGET] [--dry-run] [--batch]</code> / <code>pull ID [TARGET] [--dry-run] [--batch]</code><a class="headerlink" href="#push-id-target-dry-run-batch-pull-id-target-dry-run-batch" title="Permanent link">&para;</a></h3>
+<p>Transfer a single stored object to / from a target (rsync over ssh, or a local
+copy), same addressing as <code>delete</code>. <code>--dry-run</code> reports the selection (id,
+kind, paths, size) and transfers nothing. For bulk transfers, filter with
+<code>list</code> and use its <code>--push</code> / <code>--pull</code> actions.</p>
+<p>The <code>TARGET</code> operand follows rsync's colon rule (a colon means remote):</p>
+<table>
+<thead>
+<tr>
+<th>Operand</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>HOST:</code></td>
+<td>the remote machine's <strong>store</strong> (its folders resolved remotely)</td>
+</tr>
+<tr>
+<td><code>HOST:PATH</code></td>
+<td>an explicit folder on an ssh host</td>
+</tr>
+<tr>
+<td><code>NAME:</code></td>
+<td>a <strong>git remote</strong>'s checkout — that project's own store (see below)</td>
+</tr>
+<tr>
+<td><code>PATH</code> (no colon)</td>
+<td>a local folder, keyed layout — <code>push</code> = raw export, <code>pull</code> = adopt-by-copy</td>
+</tr>
+</tbody>
+</table>
+<p>A git-remote name takes precedence over an ssh host on collision; the reserved
+<code>git:NAME</code> / <code>ssh:HOST[:PATH]</code> prefixes disambiguate explicitly. A bare host
+with no colon (<code>push ID host</code>) is accepted but deprecated — write <code>host:</code>.
+Omitting <code>TARGET</code> entirely uses the configured <code>default_remote</code> (a config
+field on any scope, holding any operand form — including a git remote name).</p>
+<p><strong>Git remotes as targets.</strong> A git remote whose URL is ssh-like and points at a
+<em>checked-out</em> repo (no bare repos, no https) is a pure project reference: its
+value is the peer <strong>checkout path</strong>. <code>pull</code> reads the peer's
+<code>.datamanifest/state.toml</code> — recorded resolved locations, nothing to resolve;
+<code>push</code> resolves the directive ladder <strong>in the remote context</strong> (preferably by
+running <code>datamanifest where</code> there over ssh; else by reading the peer's config
+files over ssh and evaluating locally, fed the remote env). An https remote
+(the typical GitHub <code>origin</code>) is rejected as a data target with a clear error.
+No new registry: git's remote table is the registry.</p>
+<ul>
+<li>An SSH target (<code>user@host:</code>) is both the transport and the host identity —
+  no remote registry.</li>
+<li>For the store form, the receiver's folders are resolved best-effort from the
+  remote's own environment (the tool probes <code>DATAMANIFEST_*</code> via
+  <code>ssh &lt;host&gt; 'source ~/.bashrc; env'</code>), then the manifest's
+  <code>[_STORAGE._HOST]</code> rules for that host, then the default. An explicit
+  <code>HOST:PATH</code> / <code>PATH</code> folder is used outright.</li>
+<li>A <strong>local / <code>$repo</code>-relative object is not syncable to a store target</strong>. The
+  default folders are machine-global, so objects are syncable out of the box;
+  an explicit-path target lifts the refusal even for repo-local objects.</li>
+<li>Sync <strong>writes no manifest</strong>. A <code>pull</code> records the received object in the
+  state file; a pushed object lands in the receiving store as an orphan
+  (present, unreferenced) and is immediately usable. Transfers are idempotent
+  (a no-op when the target already holds the object complete).</li>
+<li>A folder produced by <code>push ID PATH</code> is itself a <strong>read pool</strong> — consumers
+  can add it to <code>datasets_pools</code>.</li>
+</ul>
+<h3 id="export-dest-term-filters-dry-run"><code>export DEST [TERM...] [filters] [--dry-run]</code><a class="headerlink" href="#export-dest-term-filters-dry-run" title="Permanent link">&para;</a></h3>
 <p>Copy the selected datasets to <code>DEST/&lt;key&gt;</code> (keyed layout), verify declared
 checksums during the copy, and write a manifest copy into <code>DEST</code> pinning
-<code>datasets_dir = "."</code>. The result is simultaneously:</p>
+<code>datasets_dir = "."</code>. Free-text <code>TERM</code>s and the <code>--any</code> / <code>--invert</code> /
+<code>--format</code> / <code>--older-than</code> filters narrow the selection, as in <code>list</code>
+(default: all present datasets). The result is simultaneously:</p>
 <ul>
 <li>a <strong>read pool</strong> — consumers add it to <code>datasets_pools</code>;</li>
 <li>a <strong>standalone datamanifest project</strong> — <code>cd</code> into it and <code>verify</code> / <code>list</code> /
@@ -1957,10 +1974,36 @@ checksums during the copy, and write a manifest copy into <code>DEST</code> pinn
 re-download is exactly what is worth bundling (<code>lazy_access</code> entries have no
 local bytes and are skipped). There is no byte-level <code>import</code> verb: consume a
 bundle via pools or as a project.</p>
+<h2 id="configure-storage">Configure storage<a class="headerlink" href="#configure-storage" title="Permanent link">&para;</a></h2>
+<h3 id="config-show-config-set-field-value-local-global-project-host-glob-config-unset-field"><code>config [show]</code> / <code>config set FIELD VALUE... [--local|--global|--project|--host GLOB]</code> / <code>config unset FIELD [...]</code><a class="headerlink" href="#config-show-config-set-field-value-local-global-project-host-glob-config-unset-field" title="Permanent link">&para;</a></h3>
+<p>Show or edit the scoped storage configuration. <code>set</code>/<code>unset</code> write to the
+checkout's git-ignored <code>.datamanifest/config.toml</code> by default (<code>--local</code>) —
+personal by default, shared deliberately: <code>--project</code> edits the committed
+manifest's <code>[_STORAGE]</code> base, <code>--host GLOB</code> its per-host table (with
+<code>--local</code>/<code>--global</code>, the <code>_HOST</code> section of that file instead), <code>--global</code> the
+user-wide <code>~/.config/datamanifest/config.toml</code>. <code>FIELD</code> is
+<code>datasets_dir</code>/<code>datacache_dir</code>, <code>project</code>, <code>default_remote</code>, a user <code>$symbol</code>,
+or a <code>datasets_pools</code>/<code>datacache_pools</code> list (several values, or none for an
+explicit empty list). <code>set</code> stores <code>canonical</code> as a TOML boolean and
+<code>lock_stale_age</code> as a TOML number (the lock-staleness age in seconds); every
+other value is written as a string (a path expression / name). <code>show</code> (the
+default) prints the config resolved for this host plus every scope's raw rules.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datacache_dir<span class="w"> </span><span class="s2">&quot;/scratch/</span><span class="nv">$USER</span><span class="s2">/cache&quot;</span><span class="w">               </span><span class="c1"># this checkout</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datasets_dir<span class="w"> </span>/pool<span class="w"> </span>--global<span class="w">                        </span><span class="c1"># this user</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datacache_dir<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$user_cache_dir</span><span class="s2">/myproj&quot;</span><span class="w"> </span>--project<span class="w">   </span><span class="c1"># committed default</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datasets_dir<span class="w"> </span>/fast/data<span class="w"> </span>--host<span class="w"> </span><span class="s2">&quot;login*.hpc.edu&quot;</span><span class="w">    </span><span class="c1"># committed, per-host</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>datamanifest<span class="w"> </span>config<span class="w">                   </span><span class="c1"># show resolved config + raw rules</span>
+</code></pre></div>
+<p><code>datamanifest storage</code> is a deprecated alias of <code>config</code> (<code>--all-hosts</code> maps to
+<code>--project</code>).</p>
 <h2 id="manifest-tools">Manifest tools<a class="headerlink" href="#manifest-tools" title="Permanent link">&para;</a></h2>
 <h3 id="format-file-i"><code>format [FILE] [-i]</code><a class="headerlink" href="#format-file-i" title="Permanent link">&para;</a></h3>
-<p>Rewrite a manifest in canonical form (stable key ordering, cross-tool
-byte-identical output). Reads stdin by default; <code>-i</code> rewrites FILE in place.</p>
+<p>Rewrite a manifest in canonical form — the cross-tool byte-identity format:
+structural <code>_*</code> tables first at the top level, then the datasets, with every
+key sorted by Unicode code point at every nesting level (array order is kept —
+element order is data). Content is never changed, only re-serialized; peer
+tools pipe their output through <code>datamanifest format</code> to obtain byte-identical
+files. Reads stdin by default; <code>-i</code> rewrites FILE in place.</p>
 <h3 id="migrate-file-dry-run-no-input"><code>migrate FILE [--dry-run] [--no-input]</code><a class="headerlink" href="#migrate-file-dry-run-no-input" title="Permanent link">&para;</a></h3>
 <p>Upgrade an older manifest to the current format <strong>without moving any data</strong>:</p>
 <ul>
@@ -1983,7 +2026,7 @@ none).</p>
 path expressions, the resolution ladder, per-dataset <code>storage_path</code>, read pools,
 and the state file — is a property of the <strong>manifest format</strong>, consumed by the
 CLI, the Python API, and peer-language tools alike. It has its own reference:
-<strong><a href="../storage/">storage.md</a></strong>. The <a href="#configure-storage"><code>storage</code></a> command above
+<strong><a href="../storage/">storage.md</a></strong>. The <a href="#configure-storage"><code>config</code></a> command above
 edits it.</p>
 
 

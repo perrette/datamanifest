@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://perrette.github.io/datamanifest/adding-datasets/">
       
       
-        <link rel="prev" href="../storage/">
+        <link rel="prev" href="../configuration/">
       
       
         <link rel="next" href="../importing/">
@@ -539,6 +539,34 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -625,10 +653,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#a-doi-or-data-repository-record-zenodo-figshare-osf-dryad" class="md-nav__link">
+  <a href="#a-zenodo-doi-or-record-url" class="md-nav__link">
     <span class="md-ellipsis">
       
-        A DOI or data-repository record — Zenodo / figshare / OSF / Dryad
+        A Zenodo DOI or record URL
       
     </span>
   </a>
@@ -664,10 +692,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#pooch-implemented" class="md-nav__link">
+  <a href="#pooch-registries" class="md-nav__link">
     <span class="md-ellipsis">
       
-        pooch (implemented)
+        pooch registries
       
     </span>
   </a>
@@ -697,10 +725,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#generic-csv-url-list-universal-escape-hatch" class="md-nav__link">
+  <a href="#generic-csv-url-list" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Generic CSV / URL list (universal escape hatch)
+        Generic CSV / URL list
       
     </span>
   </a>
@@ -1103,10 +1131,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#a-doi-or-data-repository-record-zenodo-figshare-osf-dryad" class="md-nav__link">
+  <a href="#a-zenodo-doi-or-record-url" class="md-nav__link">
     <span class="md-ellipsis">
       
-        A DOI or data-repository record — Zenodo / figshare / OSF / Dryad
+        A Zenodo DOI or record URL
       
     </span>
   </a>
@@ -1142,10 +1170,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#pooch-implemented" class="md-nav__link">
+  <a href="#pooch-registries" class="md-nav__link">
     <span class="md-ellipsis">
       
-        pooch (implemented)
+        pooch registries
       
     </span>
   </a>
@@ -1175,10 +1203,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#generic-csv-url-list-universal-escape-hatch" class="md-nav__link">
+  <a href="#generic-csv-url-list" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Generic CSV / URL list (universal escape hatch)
+        Generic CSV / URL list
       
     </span>
   </a>
@@ -1227,13 +1255,8 @@
 
 
 <h1 id="adding-datasets-from-external-sources">Adding datasets from external sources<a class="headerlink" href="#adding-datasets-from-external-sources" title="Permanent link">&para;</a></h1>
-<blockquote>
-<p>This page is the <strong>user-facing command surface</strong> for onboarding datasets. Most
-sources here are implemented: direct URLs, Zenodo/figshare/OSF/Dryad DOIs,
-PANGAEA DOIs, and the <code>import</code> catalogs (pooch, intake, DVC, CSV/URL lists). Each
-is pure <em>import</em> (declaration parsing) over an already-supported download scheme.</p>
-</blockquote>
-<p>datamanifest distinguishes two verbs by <strong>what you hand the command</strong>:</p>
+<p>datamanifest has two commands for bringing datasets into the manifest,
+distinguished by what you hand them:</p>
 <table>
 <thead>
 <tr>
@@ -1248,119 +1271,129 @@ is pure <em>import</em> (declaration parsing) over an already-supported download
 <td><code>add</code></td>
 <td>a <strong>reference to data</strong> (URL, DOI)</td>
 <td>one dataset, or all files of a record</td>
-<td>direct URL, Zenodo/figshare DOI, PANGAEA DOI</td>
+<td>direct URL, Zenodo DOI, PANGAEA DOI</td>
 </tr>
 <tr>
 <td><code>import</code></td>
-<td><strong>another tool's catalog/registry file</strong></td>
+<td><strong>another tool's catalog file</strong></td>
 <td>many datasets</td>
 <td>pooch, intake, DVC</td>
 </tr>
 </tbody>
 </table>
-<p>The test: is the argument <em>another tool's manifest</em> → <code>import</code>; is it <em>a pointer to
-data</em> → <code>add</code>.</p>
-<p>Both verbs end at the same place: standard <code>datamanifest.toml</code> entries (<code>uri</code>,
-<code>checksum</code>, optional <code>doi</code>/<code>description</code>/<code>extract</code>), plus — where a local copy
-already exists — an in-place adoption recorded in the state file so nothing is
+<p>If the argument is another tool's manifest, use <code>import</code>; if it is a pointer
+to data, use <code>add</code>.</p>
+<p>Both commands produce standard <code>datamanifest.toml</code> entries (<code>uri</code>, <code>checksum</code>,
+optional <code>doi</code>/<code>description</code>/<code>extract</code>). Where a local copy of a file already
+exists — for example in another tool's download cache — it is <strong>adopted</strong>:
+verified against its checksum and recorded in the state file (the
+machine-generated record of where each dataset lives on disk), so nothing is
 re-downloaded.</p>
-<p>A note on checksums: the <code>checksum</code> field carries its algorithm as <code>&lt;algo&gt;:&lt;hex&gt;</code>.
-Sources that publish <strong>md5</strong> (Zenodo, PANGAEA, DVC) are recorded as
-<code>checksum = "md5:…"</code> and verified in md5 on first download (or against an adopted
-local file) — not re-hashed to sha256. A source with <strong>no</strong> published digest gets
-one computed (as <code>sha256:…</code>) at that point.</p>
+<p>A note on checksums: the <code>checksum</code> field carries its algorithm as
+<code>&lt;algo&gt;:&lt;hex&gt;</code>. A digest published by the source (an md5 from a pooch
+registry, a DVC file, a Zenodo or PANGAEA file listing) is recorded as
+<code>checksum = "md5:…"</code> and verified in md5 — not re-hashed to sha256. When the
+source publishes no digest, one is computed (as <code>sha256:…</code>) on the first
+download or adoption.</p>
 <hr />
 <h2 id="add-add-datasets-from-a-reference"><code>add</code> — add dataset(s) from a reference<a class="headerlink" href="#add-add-datasets-from-a-reference" title="Permanent link">&para;</a></h2>
 <h3 id="a-direct-url">A direct URL<a class="headerlink" href="#a-direct-url" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>datamanifest<span class="w"> </span>add<span class="w"> </span>https://www.ncei.noaa.gov/woa/temperature.nc
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>datamanifest<span class="w"> </span>add<span class="w"> </span><span class="s2">&quot;https://zenodo.org/records/1234567/files/grid.zip&quot;</span><span class="w"> </span>--extract
 </code></pre></div>
-<p>One dataset; downloads and records its <code>checksum</code> (as <code>sha256:…</code>) by default (<code>--no-download</code> to defer).</p>
-<h3 id="a-doi-or-data-repository-record-zenodo-figshare-osf-dryad">A DOI or data-repository record — Zenodo / figshare / OSF / Dryad<a class="headerlink" href="#a-doi-or-data-repository-record-zenodo-figshare-osf-dryad" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>datamanifest<span class="w"> </span>add<span class="w"> </span><span class="m">10</span>.5281/zenodo.1234567<span class="w">          </span><span class="c1"># by DOI</span>
+<p>Declares one dataset and downloads it, recording its <code>checksum</code> (as
+<code>sha256:…</code>). Options:</p>
+<ul>
+<li><code>--name N</code> — name the entry instead of deriving a name from the URL.</li>
+<li><code>--extract</code> — unpack the archive after download.</li>
+<li><code>--no-download</code> — declare only.</li>
+<li><code>--lazy</code> — for an object-store URI (<code>s3://</code>, <code>gs://</code>, …): never download;
+  mark the entry <code>lazy_access</code> and open it in place through the built-in
+  fsspec loader.</li>
+</ul>
+<h3 id="a-zenodo-doi-or-record-url">A Zenodo DOI or record URL<a class="headerlink" href="#a-zenodo-doi-or-record-url" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>datamanifest<span class="w"> </span>add<span class="w"> </span><span class="m">10</span>.5281/zenodo.1234567<span class="w">               </span><span class="c1"># by DOI</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>datamanifest<span class="w"> </span>add<span class="w"> </span>https://zenodo.org/records/1234567<span class="w">   </span><span class="c1"># or by record URL</span>
 </code></pre></div>
-<p>Resolves the record through the repository's API and adds <strong>one dataset per file</strong>
-in it. Each entry gets:</p>
-<ul>
-<li><code>uri</code> — the file's direct download link,</li>
-<li><code>doi</code> — the record DOI (so the provenance is first-class, not just a label),</li>
-<li><code>description</code> — the record title,</li>
-<li><code>checksum</code> — the published md5 recorded as <code>md5:…</code> and verified on download
-  (a digest-less source is computed as <code>sha256:…</code> instead).</li>
-</ul>
+<p>Resolves the record through Zenodo's API and declares its files (declare-only —
+records can be large; run <code>datamanifest download</code> to fetch). By default the
+record becomes <strong>one dataset</strong>: a plain <code>uri</code> entry for a single file, a
+<code>uris = [...]</code> bundle for several, named after <code>--name</code> or the record title.
+Every entry carries the record DOI (<code>doi</code>) and title (<code>description</code>).</p>
 <p>Options:</p>
 <ul>
-<li><code>--name PREFIX</code> — name the datasets <code>PREFIX/&lt;filename&gt;</code> instead of bare filenames.</li>
-<li><code>--pick GLOB</code> (repeatable) — add only the files matching a glob (e.g. <code>--pick '*.nc'</code>).</li>
-<li><code>--no-download</code> — declare only.</li>
+<li><code>--split</code> — one dataset per file instead of the bundle. Each split entry
+  carries the file's published md5 as its <code>checksum</code>; a bundle's checksum is
+  computed on first download instead.</li>
+<li><code>--name N</code> — name the bundle, or (with <code>--split</code>) name the datasets
+  <code>N/&lt;filename&gt;</code>.</li>
+<li><code>--pick GLOB</code> (repeatable) — add only the files matching a glob
+  (e.g. <code>--pick '*.nc'</code>).</li>
 </ul>
-<p>Why this beats today: instead of pasting every file URL by hand and losing the DOI
-link, you hand over the record once and get all its files with checksums and
-provenance.</p>
 <h3 id="a-pangaea-doi">A PANGAEA DOI<a class="headerlink" href="#a-pangaea-doi" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>datamanifest<span class="w"> </span>add<span class="w"> </span><span class="m">10</span>.1594/PANGAEA.930590<span class="w">              </span><span class="c1"># by DOI</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>datamanifest<span class="w"> </span>add<span class="w"> </span><span class="m">10</span>.1594/PANGAEA.930590<span class="w">                          </span><span class="c1"># by DOI</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>datamanifest<span class="w"> </span>add<span class="w"> </span>https://doi.pangaea.de/10.1594/PANGAEA.930590<span class="w">   </span><span class="c1"># or by URL</span>
 </code></pre></div>
-<p>Resolves the dataset through PANGAEA's web services and classifies it from its
-metadata:</p>
+<p>Resolves the dataset through PANGAEA's web services (declare-only, like
+Zenodo) and classifies it from its metadata:</p>
 <ul>
 <li>a <strong>tabular dataset</strong> → one entry whose <code>uri</code> is the <code>?format=textfile</code>
   (tab-delimited) data;</li>
 <li>a <strong>single uploaded file</strong> → one entry pointing straight at the file on
   <code>download.pangaea.de</code>;</li>
 <li>a <strong>file collection</strong> (a dataset whose rows <em>are</em> files — NetCDF/GeoTIFF/zip
-  members) → its files, <strong>bundled into one <code>uris=</code> dataset</strong> by default. Each file
-  carries its MD5 from PANGAEA's data matrix;</li>
-<li>a <strong>publication series</strong> (a parent DOI over many child datasets) → <strong>one entry
-  per child dataset</strong>, each keeping its own DOI, enumerated through PANGAEA's
-  search service. When no children are enumerable the series zip is kept as a
-  single dataset.</li>
+  members) → its files, bundled into one <code>uris=</code> dataset by default;</li>
+<li>a <strong>publication series</strong> (a parent DOI over many child datasets) → one entry
+  per child dataset, each keeping its own DOI, enumerated through PANGAEA's
+  search service. When no children can be enumerated, the series zip is kept
+  as a single dataset.</li>
 </ul>
 <p>Options (file collections / series):</p>
 <ul>
-<li><code>--split</code> — one dataset per file instead of the default <code>uris=</code> bundle; a split
-  file keeps its MD5 as the verification checksum.</li>
-<li><code>--pick GLOB</code> (repeatable) — for a collection, add only the files matching a glob
-  (e.g. <code>--pick '*.nc'</code>).</li>
+<li><code>--split</code> — one dataset per file instead of the <code>uris=</code> bundle. Each split
+  entry carries the file's MD5 (from PANGAEA's file listing) as its
+  <code>checksum</code>; a bundle does not retain per-file digests.</li>
+<li><code>--pick GLOB</code> (repeatable) — for a collection, add only the files matching a
+  glob (e.g. <code>--pick '*.nc'</code>).</li>
 <li><code>--name</code> — names the single/tabular entry, or the bundle.</li>
 </ul>
 <p>A reference that already pins a representation — e.g.
-<code>https://doi.pangaea.de/10.1594/PANGAEA.930512?format=zip</code> — is treated as a plain
-URL (you chose that file), not re-resolved.</p>
+<code>https://doi.pangaea.de/10.1594/PANGAEA.930512?format=zip</code> — is treated as a
+plain URL (you chose that file), not re-resolved.</p>
 <hr />
 <h2 id="import-bulk-import-another-tools-catalog"><code>import</code> — bulk-import another tool's catalog<a class="headerlink" href="#import-bulk-import-another-tools-catalog" title="Permanent link">&para;</a></h2>
-<h3 id="pooch-implemented">pooch (implemented)<a class="headerlink" href="#pooch-implemented" title="Permanent link">&para;</a></h3>
+<p>All importers share <code>--cache-dir</code> (adopt already-downloaded files in place,
+checksum-verified), <code>--base-url</code> (root URL for entries without one),
+<code>--dry-run</code>, and <code>--overwrite</code>.</p>
+<h3 id="pooch-registries">pooch registries<a class="headerlink" href="#pooch-registries" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>pooch<span class="w"> </span>registry.txt<span class="w"> </span>--base-url<span class="w"> </span>URL<span class="w"> </span><span class="o">[</span>--cache-dir<span class="w"> </span>DIR<span class="o">]</span>
 </code></pre></div>
 <p>Each <code>filename [algo:]hash [url]</code> line becomes a dataset. <code>--cache-dir</code>
-(e.g. <code>pooch.os_cache('pkg')</code>) adopts already-downloaded files in place,
-checksum-verified — no re-download. See the README for full detail.</p>
+(e.g. <code>pooch.os_cache('pkg')</code>) adopts already-downloaded files in place.</p>
 <h3 id="intake-catalogs">intake catalogs<a class="headerlink" href="#intake-catalogs" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>intake<span class="w"> </span>catalog.yml<span class="w"> </span><span class="o">[</span>--driver<span class="w"> </span>csv,netcdf,...<span class="o">]</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>intake<span class="w"> </span>catalog.yml
 </code></pre></div>
-<p>An intake catalog lists several named <em>sources</em>, each with a <code>driver</code> and
-<code>args.urlpath</code>. Each source with a concrete file <code>urlpath</code> becomes a dataset
-(<code>uri = urlpath</code>). intake catalogs carry <strong>no checksums</strong>, so <code>checksum</code> is computed
-(as <code>sha256:…</code>) on first download. Sources whose driver/urlpath isn't a fetchable file (templated
-parameters, server protocols) are reported and skipped; <code>--driver</code> narrows to
-selected drivers.</p>
+<p>An intake catalog lists several named <em>sources</em>, each with a driver and an
+<code>args.urlpath</code>. Each source whose <code>urlpath</code> is a single concrete file path or
+URL becomes a dataset (<code>uri = urlpath</code>). intake catalogs carry no checksums,
+so <code>checksum</code> is computed (as <code>sha256:…</code>) on first download. Sources whose
+urlpath is a glob, a template, or a list are reported and skipped. Requires
+the <code>yaml</code> extra (<code>pip install 'datamanifest[yaml]'</code>).</p>
 <h3 id="dvc">DVC<a class="headerlink" href="#dvc" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>dvc<span class="w"> </span>&lt;path-or-dir&gt;<span class="w"> </span><span class="o">[</span>--cache-dir<span class="w"> </span>.dvc/cache<span class="o">]</span>
 </code></pre></div>
-<p>Parses <code>*.dvc</code> / <code>dvc.lock</code>. Each tracked <em>out</em> (with its <code>md5</code>/hash) becomes a
-dataset. Because DVC stores content addressed by hash under <code>.dvc/cache</code>, the
-<strong>existing cache is adopted in place</strong> by hash — the strongest reuse story after
-pooch. The download <code>uri</code> is reconstructed from the DVC <strong>remote</strong> config when
-possible (HTTP remotes, or <code>import-url</code> stages that record an explicit URL);
-outs backed by a non-URL remote (S3, gdrive, ssh) are declared with the hash but
-left for DVC/you to resolve, and reported as such.</p>
-<h3 id="generic-csv-url-list-universal-escape-hatch">Generic CSV / URL list (universal escape hatch)<a class="headerlink" href="#generic-csv-url-list-universal-escape-hatch" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>csv<span class="w"> </span>files.csv<span class="w">            </span><span class="c1"># columns: name,url,sha256 (sha256 optional)</span>
+<p>Parses <code>*.dvc</code> files and <code>dvc.lock</code>. Each tracked <em>out</em> becomes a dataset
+carrying its <code>md5</code> as the <code>checksum</code>. Because DVC stores content addressed by
+hash under <code>.dvc/cache</code>, an existing cache copy is adopted in place by hash.
+The <code>uri</code> is the URL of an <code>import-url</code> dependency when the out has one, else
+the default DVC remote's content-addressed URL (<code>s3://</code>, <code>gs://</code>, <code>https://</code>,
+…); outs with neither are reported and skipped.</p>
+<h3 id="generic-csv-url-list">Generic CSV / URL list<a class="headerlink" href="#generic-csv-url-list" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>csv<span class="w"> </span>files.csv<span class="w">            </span><span class="c1"># header row with a url column; name, sha256 optional</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>urls<span class="w"> </span>list.txt<span class="w"> </span>--base-url<span class="w"> </span>URL<span class="w">   </span><span class="c1"># one path/URL per line</span>
 </code></pre></div>
-<p>For exporting from anything. Reuses the whole pooch pipeline, including
-<code>--cache-dir</code> adoption.</p>
+<p>For exporting from anything else. These use the same pipeline as the pooch
+importer, including <code>--cache-dir</code> adoption.</p>
 <hr />
 <h2 id="what-maps-where-summary">What maps where (summary)<a class="headerlink" href="#what-maps-where-summary" title="Permanent link">&para;</a></h2>
 <table>
@@ -1382,45 +1415,45 @@ left for DVC/you to resolve, and reported as such.</p>
 <td>—</td>
 </tr>
 <tr>
-<td>Zenodo/figshare/OSF DOI</td>
+<td>Zenodo DOI</td>
 <td><code>add</code></td>
 <td>API</td>
-<td>md5 carried as <code>checksum</code></td>
+<td>md5 (with <code>--split</code>), else computed</td>
 <td>—</td>
 </tr>
 <tr>
 <td>PANGAEA DOI</td>
 <td><code>add</code></td>
 <td>web services</td>
-<td>md5 (collections) carried as <code>checksum</code></td>
+<td>md5 (with <code>--split</code>), else computed</td>
 <td>—</td>
 </tr>
 <tr>
 <td>pooch registry</td>
 <td><code>import</code></td>
-<td>base_url + filename / 3rd col</td>
-<td>sha256 (or md5)</td>
-<td><code>os_cache</code> (✓ implemented)</td>
+<td>base_url + filename / 3rd column</td>
+<td>sha256 or md5 from the registry</td>
+<td><code>--cache-dir</code> (<code>os_cache</code>)</td>
 </tr>
 <tr>
 <td>intake catalog</td>
 <td><code>import</code></td>
 <td>urlpath</td>
-<td>none</td>
-<td>—</td>
+<td>computed on download</td>
+<td><code>--cache-dir</code></td>
 </tr>
 <tr>
 <td>DVC</td>
 <td><code>import</code></td>
-<td>remote config (partial)</td>
-<td>md5/hash</td>
+<td>import-url dep / remote config</td>
+<td>md5 from the <code>.dvc</code> file</td>
 <td><code>.dvc/cache</code> (by hash)</td>
 </tr>
 <tr>
 <td>CSV / URL list</td>
 <td><code>import</code></td>
 <td>the file</td>
-<td>optional</td>
+<td>optional sha256 column</td>
 <td><code>--cache-dir</code></td>
 </tr>
 </tbody>
