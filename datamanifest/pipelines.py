@@ -528,6 +528,7 @@ from .store.materialize import (  # noqa: E402
     _pid_alive,
     _read_lock_pid,
     is_complete,
+    lock_stale_age,
     materialize,
 )
 from .store.materialize import remove_path as _remove_path  # noqa: E402
@@ -541,6 +542,7 @@ def _download_dataset(
     required_paths_by_ref=None,
     required_paths_ordered=None,
     python_includes=None,
+    stale_age=None,
 ) -> None:
     """Safely materialize *dataset* at *download_path*.
 
@@ -564,6 +566,7 @@ def _download_dataset(
             python_includes=python_includes,
         ),
         skip_if=(None if overwrite else is_complete),
+        stale_age=stale_age,
     )
 
 
@@ -835,6 +838,7 @@ def download_dataset(db, dataset, extract=None, overwrite: bool = False):
             required_paths_by_ref=req_paths_by_ref,
             required_paths_ordered=req_paths_ordered,
             python_includes=db.loaders_python_includes,
+            stale_age=lock_stale_age(db.storage_config),
         )
     else:
         logger.info("Dataset already exists at: %s", download_path)

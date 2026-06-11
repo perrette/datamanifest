@@ -22,7 +22,9 @@ once its age exceeds ``stale_age`` AND (its PID is dead on this host, or the
 age exceeds ``5 * stale_age`` — a holder that missed many consecutive
 heartbeats on another node). Reclaiming wrongly is safe by construction
 (staging + atomic rename + completion marker): worst case is duplicate work,
-never a partial entry.
+never a partial entry. The staleness age is the spec-v5.3 config field
+``lock_stale_age`` (seconds, default 30), resolved on the ordinary
+configuration ladder — see :func:`lock_stale_age`.
 
 Path helpers (``tmp_path`` / ``lock_path`` / ``marker_path``) live in
 :mod:`datamanifest.store.locations`.
@@ -43,11 +45,11 @@ __all__ = [
     "remove_path",
     "LockedError",
     "LOCK_STALE_AGE",
+    "lock_stale_age",
 ]
 
-# Default lock staleness age (seconds); ``$DATAMANIFEST_LOCK_STALE_AGE``
-# overrides (cluster tuning). With 30s: a crashed same-host holder is picked up
-# within ~30s, a cross-host frozen holder after ~2.5min (5 * stale_age).
+# Default lock staleness age (seconds). With 30s: a crashed same-host holder is
+# picked up within ~30s, a cross-host frozen holder after ~2.5min (5 * stale_age).
 LOCK_STALE_AGE = 30.0
 _STALE_GRACE_FACTOR = 5
 
@@ -56,9 +58,24 @@ class LockedError(RuntimeError):
     """Raised under ``on_locked="fail"`` when a live peer holds the lock."""
 
 
-def _lock_stale_age(env=os.environ) -> float:
+def lock_stale_age(storage_config=None, env=os.environ, host=None) -> float:
+    """The lock staleness age in seconds — the spec-v5.3 config field
+    ``lock_stale_age`` (default 30), resolved on the ordinary ladder:
+    ``DATAMANIFEST_LOCK_STALE_AGE`` env → config layers (per layer ``_HOST``
+    glob, then base). The value may be a TOML number or a numeric string; an
+    unparsable or non-positive value falls back to the default. With no
+    *storage_config*, the config-file layers (checkout-less: the user-global
+    file) are loaded — the composition roots pass their full project config.
+    """
+    if storage_config is None:
+        storage_config = locations.load_scoped_config(env=env)
+    raw = locations.config_scalar(
+        "lock_stale_age", storage_config=storage_config, env=env, host=host
+    )
+    if raw is None:
+        return LOCK_STALE_AGE
     try:
-        v = float(env.get("DATAMANIFEST_LOCK_STALE_AGE", ""))
+        v = float(raw)
     except (TypeError, ValueError):
         return LOCK_STALE_AGE
     return v if v > 0 else LOCK_STALE_AGE
@@ -149,7 +166,7 @@ def _acquire_lock(lock: str, on_locked: str = "wait", stale_age=None) -> bool:
     guarding against acting on a partial publish.
     """
     if stale_age is None:
-        stale_age = _lock_stale_age()
+        stale_age = lock_stale_age()
     poll = max(0.1, min(1.0, stale_age / 10))
     while True:
         try:
@@ -212,7 +229,7 @@ def materialize(target: str, write_fn, *, on_locked: str = "wait",
             f"got {on_locked!r}"
         )
     if stale_age is None:
-        stale_age = _lock_stale_age()
+        stale_age = lock_stale_age()
     os.makedirs(os.path.dirname(target) or ".", exist_ok=True)
     tmp = locations.tmp_path(target)
     lock = locations.lock_path(target)

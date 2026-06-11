@@ -15,11 +15,13 @@ import pytest
 
 from datamanifest.store import locations
 from datamanifest.store.materialize import (
+    LOCK_STALE_AGE,
     LockedError,
     _acquire_lock,
     _read_lock_pid,
     _stale_lock,
     is_complete,
+    lock_stale_age,
     materialize,
     remove_path,
 )
@@ -215,6 +217,27 @@ def test_materialize_proceed_under_live_holder(tmp_path):
 def test_materialize_rejects_unknown_on_locked(tmp_path):
     with pytest.raises(ValueError, match="on_locked"):
         materialize(str(tmp_path / "x"), lambda tmp: None, on_locked="bogus")
+
+
+def test_lock_stale_age_ladder(monkeypatch):
+    """spec-v5.3: the staleness age is the config field ``lock_stale_age``,
+    resolved on the ordinary ladder (env → config layers, ``_HOST``-composable);
+    TOML number or numeric string; unparsable / non-positive falls back."""
+    monkeypatch.delenv("DATAMANIFEST_LOCK_STALE_AGE", raising=False)
+    assert lock_stale_age({}) == LOCK_STALE_AGE
+    assert lock_stale_age({"lock_stale_age": 7}) == 7.0
+    assert lock_stale_age({"lock_stale_age": "8.5"}) == 8.5
+    assert lock_stale_age({"lock_stale_age": -5}) == LOCK_STALE_AGE
+    assert lock_stale_age({"lock_stale_age": "junk"}) == LOCK_STALE_AGE
+    # A _HOST glob beats the layer base.
+    sc = {
+        "_HOST": {socket.gethostname(): {"lock_stale_age": 9}},
+        "lock_stale_age": 7,
+    }
+    assert lock_stale_age(sc) == 9.0
+    # The environment beats every layer.
+    monkeypatch.setenv("DATAMANIFEST_LOCK_STALE_AGE", "3")
+    assert lock_stale_age({"lock_stale_age": 7}) == 3.0
 
 
 def test_remove_path_handles_file_dir_and_absent(tmp_path):

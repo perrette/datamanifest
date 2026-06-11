@@ -658,7 +658,8 @@ def cached(
 
             # ``cached=False`` forces a recompute: no adopt-the-peer recheck.
             materialize.materialize(
-                artifact_dir, write_fn, skip_if=hit_again if cached else None
+                artifact_dir, write_fn, skip_if=hit_again if cached else None,
+                stale_age=materialize.lock_stale_age(sconf),
             )
             if "result" in state:
                 return state["result"]

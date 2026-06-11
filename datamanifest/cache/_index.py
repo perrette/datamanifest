@@ -53,6 +53,7 @@ stdlib — never the fetch layer.
 
 import os
 import subprocess
+import threading
 
 try:
     import tomllib
@@ -625,7 +626,10 @@ class CachedIndex:
                 data.items(), key=lambda kv: (not kv[0].startswith("_"), kv[0])
             )
         }
-        tmp = f"{target}.{os.getpid()}.tmp"
+        # The staging name carries pid AND thread id: concurrent same-process
+        # writers (threads racing on the same variation) must not share it —
+        # one's replace would delete the other's staging file mid-write.
+        tmp = f"{target}.{os.getpid()}-{threading.get_ident()}.tmp"
         with open(tmp, "wb") as f:
             tomli_w.dump(ordered, f)
         os.replace(tmp, target)
