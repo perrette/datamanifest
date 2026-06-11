@@ -42,7 +42,8 @@ df = datamanifest.load_dataset("co2")   # download on first use, then load
 
 - [Use cases](use-cases.md) — the CLI workflows end to end: add, repair, store, sync.
 - [Storage model](storage.md) — where data lives on disk and how to centralize it.
-- [Adding datasets](adding-datasets.md) — direct URLs, Zenodo / PANGAEA DOIs, object stores, Git LFS.
+- [Configuration](configuration.md) — the config scopes and every setting.
+- [Adding datasets](adding-datasets.md) — direct URLs, Zenodo / PANGAEA DOIs, object stores.
 - [Importing from other tools](importing.md) — pooch, intake, DVC, CSV/URL lists.
 - [Language bindings](language-bindings.md) — one manifest across Python and Julia.
 - [Related projects](related.md) — the DataManifest family, and Python alternatives.

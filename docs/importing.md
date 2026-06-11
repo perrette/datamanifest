@@ -1,32 +1,33 @@
 # Importing from other tools
 
-`add` takes a *reference to data*; `import` ingests *another tool's catalog*.
-Both end at standard manifest entries, and already-downloaded files are adopted
-in place (checksum-verified) — no re-download:
+`add` takes a *reference to data* (a URL or DOI); `import` ingests *another
+tool's catalog file*. Both produce standard manifest entries, and
+already-downloaded files are **adopted** in place — verified against their
+checksum and recorded, with no re-download:
 
 ```bash
 datamanifest import pooch registry.txt --base-url URL --cache-dir DIR   # adopts pooch's cache
-datamanifest import csv files.csv                     # a name,url,sha256 table
+datamanifest import csv files.csv                     # a CSV with url (+ name, sha256) columns
 datamanifest import urls list.txt --base-url URL      # a plain list of URLs
 datamanifest import intake catalog.yml                # an intake catalog ([yaml] extra)
 datamanifest import dvc path-or-dir                   # *.dvc / dvc.lock (+ .dvc/cache)
 ```
 
-Per-source detail, and the `add`-side sources (direct URLs, Zenodo/figshare/OSF
-and PANGAEA DOIs, Git LFS pointers), are on the [adding datasets](adding-datasets.md) page.
+Per-source detail, and the `add`-side sources (direct URLs, Zenodo and PANGAEA
+DOIs), are on the [adding datasets](adding-datasets.md) page.
 
-## Migrating from Pooch
+## Coming from Pooch
 
-Already using [Pooch](https://www.fatiando.org/pooch/)? Convert the registry and
-adopt your downloaded files in place:
+If you use [Pooch](https://www.fatiando.org/pooch/), one command converts the
+registry and adopts your downloaded files in place:
 
 ```bash
 datamanifest import pooch registry.txt \
   --cache-dir "$(python -c 'import pooch; print(pooch.os_cache("yourpkg"))')"
 ```
 
-`datamanifest` covers the same fetch-and-verify ground and adds an explicit,
-cross-language manifest file, a full dataset-lifecycle CLI, and the
-[`@cached`](api.md#caching-computed-results) cache for your own computed
-results. See [related projects](related.md) for how it compares to Pooch,
-intake and pystow.
+`datamanifest` covers the same fetch-and-verify workflow, with an explicit,
+cross-language manifest file, a dataset-lifecycle CLI, and the
+[`@cached`](api.md#caching-computed-results) decorator for your own computed
+results. See [related projects](related.md) for a comparison with Pooch,
+intake, and pystow.

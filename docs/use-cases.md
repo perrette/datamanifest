@@ -37,16 +37,16 @@ Cached
     50f04896d3ee  grid=5x5                                           382 B
 ```
 
-`temperature` now loads from code just like `co2` —
+`temperature` loads from code just like `co2` —
 `datamanifest.load_dataset("temperature")` — and the **Cached** group lists the
 `load_anomaly(grid=…)` results from the [`@cached` example](api.md), grouped by
 function with their parameters.
 
 ## Repair: reassociate data on disk
 
-The tool records where every file actually lives (a small git-ignored
-[state file](https://github.com/perrette/datamanifest/blob/main/design/design-state-file.md)), so moving data around by hand is
-recoverable — `refresh` reconciles the records with disk, and `--scan`
+The tool records where every file actually lives in a small git-ignored
+[state file](storage.md#the-state-file) (`.datamanifest/state.toml`), so moving
+data around by hand is recoverable — `refresh` reconciles the records with disk, and `--scan`
 discovers copies elsewhere on the machine (e.g. downloaded by another project)
 and adopts them, checksum-verified, instead of re-downloading:
 
@@ -88,7 +88,8 @@ datamanifest config                                                        # sho
 
 Pointing the folders at a machine directory (instead of the repo) shares data
 across clones and projects. Path expressions, per-host rules, per-dataset
-overrides and read pools: the [storage model](storage.md).
+overrides and read pools (extra read-only folders searched for existing copies
+before downloading): the [storage model](storage.md).
 
 ## Sync between machines
 
@@ -109,9 +110,10 @@ machine-global (not repo-local) on both ends. Details:
 
 ## One manifest, several languages
 
-A dataset can carry per-language `fetcher`/`loader` bindings under `_LANG`; each
-implementation runs its own and preserves the others verbatim, so one manifest
-serves a mixed Python/Julia project:
+A dataset can carry per-language bindings under `_LANG` — a *fetcher* (how to
+retrieve the data) and a *loader* (how to turn the file into an in-memory
+object). Each implementation runs its own bindings and preserves the others
+verbatim, so one manifest serves a mixed Python/Julia project:
 
 ```toml
 [mydata]
@@ -124,8 +126,8 @@ loader = "mypkg.load:load_mydata"      # how Python loads it
 loader = "MyPkg.load_mydata"           # Julia's binding; Python never touches it
 ```
 
-A single-language project can skip the `_LANG` ceremony with bare
-`fetcher` / `loader` / `shell` fields, and `[_LOADERS]` maps formats to
-project-wide loaders. Resolution ladders, parameterized bindings
+A single-language project can write bare `fetcher` / `loader` / `shell` fields
+instead of `_LANG` tables, and `[_LOADERS]` maps formats to project-wide
+loaders. How a binding is resolved, parameterized bindings
 (`{ ref, args, kwargs }`), and fetching through another language's toolchain:
 [language bindings](language-bindings.md).

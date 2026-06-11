@@ -1,107 +1,72 @@
-# Per-language bindings (`_LANG`)
+# Language bindings
 
-Language-specific bindings live in a dedicated `_LANG` namespace, so a single
-manifest can serve multiple language implementations without conflicts. The
+A **fetcher** is a function or command that produces a dataset's bytes,
+instead of (or in addition to) downloading its `uri`. A **loader** is a
+function that reads the dataset from disk into memory, overriding the default
+loader for its `format`. Both are declared in the manifest as **bindings**: a
+binding names a function by a `module:function` reference (a **ref**, resolved
+via `importlib`) — never inline code — and may optionally carry arguments.
+
+This page covers the binding forms from the common case to the advanced ones:
+bare bindings for a single-language project, parameterized bindings,
+the per-language `_LANG` namespace for manifests shared across languages, the
+order in which fetchers and loaders are resolved, cross-language fetch, and
+the legacy fields accepted on read. The
 [use cases page](use-cases.md#one-manifest-several-languages) shows the short
-version; this page is the full behaviour: the fetch/load ladders, the bare
-(language-implicit) forms, parameterized bindings, cross-language fetch, and
-the legacy fields still accepted on read.
+version.
+
+## Bare bindings (single-language projects)
+
+In a project used from one language, bindings are written directly on the
+dataset table — a bare `fetcher` and/or `loader` — and project-wide
+`format → loader` defaults go in a top-level `[_LOADERS]` table. "Bare" means
+**language-implicit**: the reading tool interprets these as bindings in its
+own language (here, Python).
 
 ```toml
-[mydata._LANG.python]
-fetcher = "mypkg.fetch:download_mydata"   # entry-point ref; resolved via importlib
-loader  = "mypkg.load:load_mydata"
-
-[_LANG.python.loaders]                    # project-wide format → loader defaults
-csv = "pandas.io.parsers:read_csv"        # string form (a bare module:function ref)
-nc  = { ref = "myclimate.loaders:load_nc", kwargs = { decode_times = false } }  # table form
-
-[mydata._LANG.julia]
-fetcher = "MyPkg.fetch_mydata"            # preserved verbatim; Python never touches it
-```
-
-Foreign `_LANG.<other>` subtrees (e.g. `_LANG.julia`) are preserved verbatim on
-every read→write cycle; Python never modifies them. Unknown structural tables
-(any `_*` key Python does not recognise) are similarly passed through.
-
-## The ladders
-
-**Fetch ladder** (per dataset, in order):
-
-1. Own Python fetcher — explicit `_LANG.python.fetcher`, else the bare
-   `fetcher`, else legacy `python=`
-2. Bare `shell` command template (else legacy `_LANG.shell.fetcher`)
-3. Cross-language fetch — run a fetcher defined in another language
-4. Plain `uri` download
-5. Error — no source available
-
-**Load ladder** (per dataset, in order):
-
-1. Own Python loader — explicit `_LANG.python.loader`, else the bare `loader`
-2. Manifest format default — `[_LANG.python.loaders][format]`, else the bare
-   `[_LOADERS][format]` map
-3. Built-in format default (csv, parquet, nc, …)
-4. Error
-
-At every own-language rung the explicit `_LANG.python` binding wins over the
-bare one. A binding that is **present** for the running language — bare *or*
-explicit `_LANG.python` — is **fail-loud**: if it fails to resolve it is an
-error, and if it resolves and then raises the error propagates — never a silent
-fall-through to a different loader/fetcher. The ladder falls through only to
-skip rungs that are **absent** (another language's `_LANG.<other>` binding, or
-no own loader). A manifest meant for more than one language uses explicit
-`[<ds>._LANG.<lang>]` bindings (absent, and so correctly skipped, in the
-others).
-
-## Language-implicit (bare) bindings
-
-For a single-language project the `[<ds>._LANG.<lang>]` wrapper is needless
-ceremony. A dataset may instead carry a **bare** `fetcher`/`loader` directly,
-and a top-level `[_LOADERS]` table may carry a bare `format → binding` map — all
-read as bindings in the running tool's **own language** (here, Python):
-
-```toml
-[_LOADERS]                                # language-implicit format → loader defaults
+[_LOADERS]                                # format → loader defaults
 csv = "myproject.io:read_csv"
 nc  = "myproject.io:read_nc"
 
 [temperature]
 uri    = "https://example.com/temperature.csv"
 format = "csv"
-loader = "myproject.loaders:load_temperature"   # bare per-dataset loader
+loader = "myproject.loaders:load_temperature"   # per-dataset loader
 
 [derived]
 format  = "nc"
-fetcher = "myproject.build:derived"             # bare per-dataset fetcher (no uri)
+fetcher = "myproject.build:derived"             # per-dataset fetcher (no uri)
 
-[model_output]                                  # bare, language-agnostic shell fetcher
+[model_output]                                  # language-agnostic shell fetcher
 format = "nc"
 shell  = "make model_output OUTPUT=$download_path"   # same command for every tool
 ```
 
-The bare `shell` field is the **canonical, language-agnostic** shell fetcher
-(the same command for every tool — not a `_LANG` tag); the legacy
-`[<ds>._LANG.shell].fetcher` is still read and preserved as the fallback. Bare
-bindings are kept **bare** on write (never promoted into `_LANG.python`), so a
-hand-authored single-language manifest round-trips unchanged.
+The `shell` field is a separate, **language-agnostic** fetcher: a command
+template run as a subprocess, the same command for every tool. It is a fetcher
+only — a subprocess cannot return an in-memory object, so there is no shell
+loader.
+
+Bare bindings are kept bare on write (never rewritten into the `_LANG`
+namespace below), so a hand-authored single-language manifest round-trips
+unchanged.
 
 A full, runnable example manifest — bare loaders/fetchers, a parameterized
-loader, the bare `shell` fetcher — lives in the spec's
+loader, a `shell` fetcher — lives in the spec's
 [examples](https://perrette.github.io/datamanifest.toml).
 
 ## Parameterized bindings
 
-A binding (a `fetcher`, a `loader`, or an entry in the `[_LANG.python.loaders]`
-map) may be a `{ ref, args, kwargs }` table instead of a plain string, so one
-entry-point can be reused across datasets that differ only in arguments:
+A binding may be a `{ ref, args, kwargs }` table instead of a plain string, so
+one function is reused across datasets that differ only in arguments:
 
 ```toml
-[esm_5x5._LANG.python.loader]
+[esm_5x5.loader]
 ref    = "myclimate.loaders:load_esm"
 args   = ["$path"]                                     # positional, in order
 kwargs = { grid = "5x5", skip_models = ["CESM.*"] }    # keyword
 
-[esm_10x10._LANG.python.loader]
+[esm_10x10.loader]
 ref    = "myclimate.loaders:load_esm"
 args   = ["$path"]
 kwargs = { grid = "10x10" }
@@ -111,52 +76,115 @@ String values in `args` and `kwargs` undergo `$var` substitution before the
 call. Available variables: `$download_path` (fetcher), `$path` (loader),
 `$key`, `$version`, `$doi`, `$format`, `$branch`, `$uri`, `$project_root`.
 
-The two forms are interchangeable at **every** binding site — explicit
-`[<ds>._LANG.python]` `fetcher`/`loader`, the language-implicit bare
-`fetcher`/`loader`, and the project-wide `[_LANG.python.loaders]` / bare
-`[_LOADERS]` defaults. (The `shell` field is a separate command-template
-string, not a `module:function` binding, so it is always a string, never a
-table.) A bare string `"module:function"` is the alias for
+The two forms are interchangeable at every binding site — per-dataset
+`fetcher`/`loader` (bare or under `_LANG`), and every entry of the
+project-wide loaders maps. A bare string `"module:function"` is an alias for
 `{ ref = "module:function" }` and makes the conventional call (a loader gets
-the dataset path; a fetcher the standard context). Canonical writing: a binding
-with no `args`/`kwargs` is written as the **string**, one that carries them as
-the **table**.
+the dataset path; a fetcher the standard context); with `args`/`kwargs` the
+call is explicit — `ref(*args, **kwargs)`, nothing auto-injected. On write, a
+binding with no `args`/`kwargs` is the string form, one that carries them is
+the table form. (The `shell` field is a command-template string, not a
+`module:function` binding, so it is always a string.)
+
+## Per-language bindings (`_LANG`)
+
+A manifest read from more than one language writes its bindings per language,
+under a dedicated `_LANG` namespace, so each tool sees only its own:
+
+```toml
+[mydata._LANG.python]
+fetcher = "mypkg.fetch:download_mydata"
+loader  = "mypkg.load:load_mydata"
+
+[mydata._LANG.julia]
+fetcher = "MyPkg.fetch_mydata"            # preserved verbatim; Python never touches it
+
+[_LANG.python.loaders]                    # project-wide format → loader defaults
+csv = "pandas.io.parsers:read_csv"
+nc  = { ref = "myclimate.loaders:load_nc", kwargs = { decode_times = false } }
+```
+
+- `[<dataset>._LANG.<lang>]` holds the per-dataset `fetcher` / `loader` for
+  language `<lang>` (each a binding in either form).
+- `[_LANG.python.loaders]` is the per-language counterpart of `[_LOADERS]`:
+  project-wide `format → loader` defaults for Python.
+
+Foreign `_LANG.<other>` subtrees (e.g. `_LANG.julia`) are preserved verbatim
+on every read→write cycle; Python never modifies them. Unknown structural
+tables (any `_*` key Python does not recognize) are likewise passed through.
+
+## Resolution order
+
+At runtime the tool collapses these declarations to one effective fetcher and
+one effective loader per dataset, trying each rung in order and using the
+first that applies.
+
+**Fetch order** (per dataset):
+
+1. Own Python fetcher — explicit `_LANG.python.fetcher`, else the bare
+   `fetcher`, else the legacy `python=`
+2. The `shell` command template (else the legacy `_LANG.shell.fetcher`)
+3. Cross-language fetch — run a fetcher defined in another language (see
+   below)
+4. Plain `uri` download
+5. Error — no source available
+
+**Load order** (per dataset):
+
+1. Own Python loader — explicit `_LANG.python.loader`, else the bare `loader`
+2. Manifest format default — `[_LANG.python.loaders][format]`, else
+   `[_LOADERS][format]`
+3. Built-in format default (csv, parquet, nc, …)
+4. Error
+
+At every own-language rung the explicit `_LANG.python` binding wins over the
+bare one. A binding that is **present** for the running language — bare *or*
+explicit `_LANG.python` — fails loud: if it does not resolve, that is an
+error, and if it resolves and then raises, the error propagates — never a
+silent fall-through to a different loader or fetcher. The ladder only skips
+rungs that are **absent** (another language's `_LANG.<other>` binding, or no
+own loader). A manifest meant for more than one language uses explicit
+`[<ds>._LANG.<lang>]` bindings, which are absent — and so correctly skipped —
+in the other languages.
 
 ## Cross-language fetch
 
 The rare case: a dataset whose only fetcher is defined in another language
-(e.g. `[<ds>._LANG.julia].fetcher`), with no native Python fetcher, no shell
-fetcher, and no `uri`. Python materializes it by invoking the **local Julia
-`DataManifest` environment** directly —
+(e.g. `[<ds>._LANG.julia].fetcher`), with no Python fetcher, no shell fetcher,
+and no `uri`. Running a foreign fetcher on a dataset's behalf is called
+**delegation**.
+
+Python materializes such a dataset by invoking the local Julia `DataManifest`
+environment directly —
 `julia --project=<env> -e 'using DataManifest; download_dataset(Database("<datasets.toml>"), "<name>")'`
 — which writes the bytes into the shared store; Python then reads them from
-disk (load never crosses languages, only bytes do).
+disk. Loading never crosses languages; only bytes on disk do.
 
-The Julia env is discovered by walking up from the manifest directory (or
-`$JULIA_PROJECT`) for a `Project.toml` whose `[deps]` lists `DataManifest`, and
-the rung is gated on `julia` being on `PATH`. When the toolchain is absent the
-rung **logs a warning and skips**, and the ladder advances to the `uri`
-download. Cross-language fetch applies to fetched datasets only (never
-`@cached` produced datasets); it is **on by default** and probe-gated (a no-op
-unless a foreign fetcher and a usable Julia env are both present). Toggle it
-per file with `delegate = false`, or per run with the `--delegate` /
-`--no-delegate` flags on `datamanifest download`.
+The Julia environment is discovered at `$JULIA_PROJECT`, else by walking up
+from the manifest directory for a `Project.toml` whose `[deps]` lists
+`DataManifest`; the rung also requires `julia` on `PATH`. When the toolchain
+is absent or the invocation fails, the rung logs a warning and the ladder
+advances to the `uri` download. Cross-language fetch applies to fetched
+datasets only (never `@cached` produced datasets); it is on by default and a
+no-op unless a foreign fetcher and a usable Julia environment are both
+present. Turn it off per dataset with `delegate = false` in the manifest, or
+per run with the `--delegate` / `--no-delegate` flags on
+`datamanifest download`.
 
 ## Legacy fields
 
-Still accepted on read; only these are deprecated:
+Accepted on read; deprecated:
 
 - **`python=`** (or **`callable=`**) — entry-point reference (`"pkg.mod:func"`)
-  resolved via `importlib`. The callable receives keyword arguments
-  `(download_path, project_root, entry, uri, key, version, doi, format, branch,
-  requires_paths)`. No inline code execution (`exec`/`eval`) anywhere.
-  Equivalent to `[<ds>._LANG.python].fetcher`.
-- **`[<ds>._LANG.shell].fetcher`** — the legacy shell fetcher; read as the
-  fallback for the canonical bare `shell`.
+  equivalent to `[<ds>._LANG.python].fetcher`. The callable receives keyword
+  arguments `(download_path, project_root, entry, uri, key, version, doi,
+  format, branch, requires_paths)`.
+- **`[<ds>._LANG.shell].fetcher`** — read as a fallback for the canonical bare
+  `shell` field.
 - **`python_includes=`** — list of directory paths prepended to `sys.path`
-  during ref resolution (obsolete; the project root is auto-added).
+  during ref resolution (obsolete; the project root is added automatically).
 
 A single manifest can be consumed by several tools: each reads the common
-fields and ignores the other's extension keys. See
+fields and ignores the others' extension keys. See
 [conformance.md](conformance.md) for the shared manifest format and what this
 implementation supports.

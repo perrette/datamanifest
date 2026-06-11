@@ -1,79 +1,69 @@
 # Manifest format (`datamanifest.toml`)
 
-This page describes the structure of the manifest file — the fields you write by
-hand or that the CLI writes for you. It is a practical reference for this Python
-implementation. The format is shared across languages and defined normatively in
-its own specification: the
-[`datamanifest.toml` spec](https://perrette.github.io/datamanifest.toml). For the
-cross-tool details — which features this implementation supports and which spec
-version it targets — see [Conformance](conformance.md).
+The manifest is a TOML file that declares the datasets a project depends on:
+where each one comes from, what its content should be, and how to load it. This
+page is a practical reference for the Python implementation. The format itself
+is shared across languages and defined normatively in the
+[`datamanifest.toml` specification](https://perrette.github.io/datamanifest.toml);
+see [Conformance](conformance.md) for which parts this implementation supports.
 
 The canonical filename is `datamanifest.toml`; `datasets.toml` and
 `Datasets.toml` are also recognized when walking up from the working directory.
 
-## Top-level layout
+## A minimal entry
 
-A manifest is a TOML document containing:
-
-- **one table per dataset**, keyed by the dataset name — the common case;
-- **`[_LANG.python.loaders]`** — an optional `format → loader` map of project-wide
-  default loaders (see [Language bindings](language-bindings.md));
-- **`[_STORAGE]`** — optional configuration of where data lives on disk (see
-  [Storage model](storage.md));
-- **`[_META]`** — optional schema marker (`schema = 1`).
-
-Keys beginning with `_` are **structural** — they are not datasets. Unknown `_*`
-tables (and any foreign-language `_LANG.*` subtrees) are preserved verbatim on
-write, so a manifest shared with another tool round-trips losslessly.
-
-A minimal manifest is just dataset tables:
+A manifest holds **one table per dataset**, keyed by the dataset name. The
+smallest useful entry is a source and a checksum:
 
 ```toml
 [co2]
 uri      = "https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv"
 checksum = "sha256:…"
-format   = "csv"
 ```
 
-## Dataset fields
+- `uri` says where the bytes come from.
+- `checksum` is a **content digest** — `<algo>:<hex>`, e.g. `sha256:…` or
+  `md5:…` — that pins what the bytes should be. You rarely write it by hand:
+  when it is empty, the digest is computed (as `sha256:`) on the first
+  successful download and written back; on later fetches the download is
+  verified against it, in the algorithm it names. A bare hex value with no
+  `algo:` prefix is read as `sha256`.
+
+## Common fields
 
 Every field is optional. Types are TOML types; defaults are the empty
 string / empty list / `false` unless noted.
 
-| Field | Type | Default | Meaning |
-|---|---|---|---|
-| `uri` | string | `""` | Single source URI: HTTP(S), `git`/`*.git`, `ssh`/`sshfs`/`rsync`, object store (`s3://`, `gs://`, …), or `file://`. Mutually exclusive with `uris`. |
-| `uris` | array of string | `[]` | Several source URIs materialized into one dataset folder. Mutually exclusive with `uri`. |
-| `checksum` | string | `""` | Expected content digest as `<algo>:<hex>` (e.g. `sha256:…`, `md5:…`; a bare hex value is read as `sha256`). Auto-filled (as `sha256:`) on first successful fetch and verified — in the declared algorithm — at fetch time. |
-| `sha256` *(legacy)* | string | `""` | Deprecated alias for `checksum`: a bare SHA-256 hex, read as `checksum = "sha256:<hex>"` and rewritten as `checksum` on the next save. |
-| `format` | string | `""` | Format hint used to pick a loader (`csv`, `nc`, `parquet`, `json`, `zip`, `tar.gz`, …). Inferred from the URI when absent. |
-| `version` | string | `""` | Dataset version; participates in the storage key, so multiple versions coexist on disk. |
-| `branch` | string | `""` | For git sources: the branch or tag to clone. |
-| `doi` | string | `""` | DOI of the dataset; also usable as a lookup/search key. |
-| `extract` | bool | `false` | After download, unpack the archive (`zip` / `tar` / `tar.gz`) and use the extracted directory as the dataset path. |
-| `aliases` | array of string | `[]` | Alternative names the dataset can be looked up by. |
-| `description` | string | `""` | Human-readable description. |
-| `requires` | array of string | `[]` | Names of datasets fetched before this one; defines a dependency graph resolved in topological order. |
-| `skip_download` | bool | `false` | Treat the dataset as externally provided — return the `uri`/path and attempt no download. |
-| `skip_checksum` | bool | `false` | Disable checksum verification for this dataset. |
-| `storage_path` | string | `""` | Per-dataset location override (a path expression; default `$datasets_dir/$key`). See [Storage model](storage.md). |
-| `delegate` | bool | `true` | Allow cross-language fetch delegation to a peer `datamanifest` CLI. |
+| Field | Type | Meaning |
+|---|---|---|
+| `uri` | string | Single source URI: HTTP(S), `git`/`*.git`, `ssh`/`sshfs`/`rsync`, object store (`s3://`, `gs://`, …), or `file://`. Mutually exclusive with `uris`. |
+| `uris` | array of string | Several source URIs materialized into one dataset folder. Mutually exclusive with `uri`. |
+| `checksum` | string | Expected content digest as `<algo>:<hex>` (see above). |
+| `format` | string | Format hint used to pick a loader (`csv`, `nc`, `parquet`, `json`, `zip`, `tar.gz`, …). Inferred from the URI when absent. |
+| `extract` | bool | After download, unpack the archive (`zip` / `tar` / `tar.gz`) and use the extracted directory as the dataset path. |
+| `version` | string | Dataset version; participates in the storage key, so multiple versions coexist on disk. |
+| `branch` | string | For git sources: the branch or tag to clone. |
+| `doi` | string | DOI of the dataset; also usable as a lookup/search key. |
+| `aliases` | array of string | Alternative names the dataset can be looked up by. |
+| `description` | string | Human-readable description. |
+| `requires` | array of string | Names of datasets fetched before this one; defines a dependency graph resolved in topological order. |
 
-`host`, `path`, and `scheme` are **derived** from the URI; the tools omit them on
-write.
+`host`, `path`, and `scheme` are **derived** from the URI; the tools omit them
+on write.
 
-## Language bindings
+## Fetchers and loaders
 
 By default a dataset is downloaded from its `uri` and loaded by the built-in
-loader for its `format`. Both steps can be overridden with `module:function`
-references (never inline code):
+loader for its `format`. Both steps can be overridden:
 
-- **bare `fetcher`** — a Python `module:function` called to produce the bytes
+- a **fetcher** is a function or command that produces the dataset's bytes,
   instead of (or in addition to) downloading the `uri`;
-- **bare `loader`** — a Python `module:function` called to load the dataset into
-  memory, overriding the format default;
-- **bare `shell`** — a command template run to fetch the data (with `$download_path`,
-  `$uri`, `$key`, … substitutions); language-agnostic, no loader.
+- a **loader** is a function that reads the dataset from disk into memory,
+  overriding the format default.
+
+A fetcher or loader is declared as a **binding** — a `module:function`
+reference (called a **ref**), never inline code. The common single-language
+fields are written directly on the dataset table:
 
 ```toml
 [regridded]
@@ -82,9 +72,13 @@ fetcher = "mypkg.build:regrid"      # produce the bytes in Python
 loader  = "mypkg.io:open_regridded" # override the default .nc loader
 ```
 
-A binding may instead be a `{ ref, args, kwargs }` table so one function is reused
-across datasets that differ only in arguments, with `$var` substitution in string
-values:
+A `shell` field instead names a command template run to fetch the data (with
+`$download_path`, `$uri`, `$key`, … substitutions); it is language-agnostic
+and has no loader counterpart.
+
+A binding may also be a `{ ref, args, kwargs }` table, so one function is
+reused across datasets that differ only in arguments, with `$var` substitution
+in string values:
 
 ```toml
 [esm_5x5.loader]
@@ -93,19 +87,50 @@ args   = ["$path"]
 kwargs = { grid = "5x5" }
 ```
 
-Bindings can also be written per-language under `[<dataset>._LANG.<lang>]`, and
-project-wide format defaults under `[_LANG.python.loaders]`. The bare forms above
-are the common single-language case; the
-[Language bindings](language-bindings.md) page covers the full `_LANG` namespace,
-the loaders map, and the fetch/load resolution ladders.
+Bindings can also be written per language under `[<dataset>._LANG.<lang>]`,
+with project-wide format defaults under `[_LANG.python.loaders]`. The
+[Language bindings](language-bindings.md) page covers the full picture: the
+`_LANG` namespace, the loaders maps, and the order in which fetchers and
+loaders are resolved.
 
-## Storage
+## Structural tables
 
-Where data lives is configured in `[_STORAGE]` (two folder fields,
-`datasets_dir` and `datacache_dir`, machine-global by default — a shared keyed
-dataset store and a per-project cache) and per dataset
-via `storage_path`. This is its own topic — see the
-[Storage model](storage.md) page.
+Keys beginning with `_` are **structural** — they are not datasets. Unknown
+`_*` tables (and any foreign-language `_LANG.*` subtrees) are preserved
+verbatim on write, so a manifest shared with another tool round-trips
+losslessly. The defined structural tables are:
+
+- **`[_META]`** — schema marker (`schema = 1`).
+- **`[_STORAGE]`** — where data lives on disk: two folder fields
+  (`datasets_dir` for fetched datasets, `datacache_dir` for the produced
+  cache — machine-global by default), read pools, and reusable `$`-symbols.
+  This is its own topic — see the [Storage model](storage.md) page.
+- **`[_LANG]`** — per-language configuration; in particular
+  `[_LANG.python.loaders]`, a project-wide `format → loader` map (see
+  [Language bindings](language-bindings.md)).
+- **`[_LOADERS]`** — the language-implicit counterpart of
+  `[_LANG.python.loaders]`: a bare `format → binding` map read as the running
+  tool's own language.
+
+## Rare fields
+
+| Field | Type | Meaning |
+|---|---|---|
+| `skip_download` | bool | Treat the dataset as externally provided — return the `uri`/path as-is, attempt no download, and never let maintenance touch it. |
+| `skip_checksum` | bool | Disable checksum verification for this dataset. |
+| `lazy_access` | bool | **Lazy access**: open the `uri` in place (typically an object store) instead of downloading a local copy — no local bytes, no checksum. Requires a loader; in Python, `datamanifest add --lazy` sets it up with the built-in fsspec loader. |
+| `storage_path` | string | Per-dataset location override (a path expression; default `$datasets_dir/$key`). See [Storage model](storage.md). |
+| `key` | string | The dataset's **storage key** — its relative path under the datasets folder. Derived from the URI's host and path (plus `version`) when absent. |
+| `delegate` | bool | Allow **delegation** — cross-language fetch through a peer `datamanifest` implementation (see [Language bindings](language-bindings.md#cross-language-fetch)). Defaults to `true`; only `delegate = false` is written. |
+| `sha256` | string | Legacy alias for `checksum`: a bare SHA-256 hex, read as `checksum = "sha256:<hex>"` and written back as `checksum` on the next save. |
+
+## How the file is written
+
+Manifests are written in a canonical form: structural `_*` tables first at the
+top level, then the datasets — both alphabetical, with keys sorted at every
+nesting level. `datamanifest format [FILE]` re-serializes any manifest into
+that canonical byte form without changing its content, so different tools can
+emit byte-identical files.
 
 ## A full example
 
@@ -138,6 +163,6 @@ extract  = true
 ## The normative specification
 
 This page is a practical summary, not the contract. The authoritative,
-cross-language definition — the full field list, the resolution ladders, the
-preservation rules, and the conformance fixtures — lives in the
+cross-language definition — the full field list, the resolution order, the
+preservation rules, and the conformance fixtures — is the
 [`datamanifest.toml` specification](https://perrette.github.io/datamanifest.toml).

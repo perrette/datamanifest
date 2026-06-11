@@ -19,25 +19,27 @@ them, and caches your own computed results with the same machinery.
 
 <!-- intro-start -->
 - **A transparent, trackable manifest.** Every dataset a project depends on —
-  URLs, DOIs, checksums, formats — is listed in a single `datamanifest.toml` you
-  can read at a glance and version with git. The format is
-  [language-agnostic](https://perrette.github.io/datamanifest.toml) (today Python
-  and Julia) and can be edited by hand, from code, or through the CLI.
+  URLs, DOIs, checksums (content hashes used to verify each file), formats — is
+  listed in a single `datamanifest.toml` file (the *manifest*) that you can read
+  directly and version with git. The format is defined by a
+  [language-agnostic spec](https://perrette.github.io/datamanifest.toml)
+  (implemented in Python and Julia) and can be edited by hand, from code, or
+  through the CLI.
 - **Fetch from a wide range of sources.** Direct URLs, Zenodo/figshare and PANGAEA
   DOIs, git repos, object stores (`s3://`, `gs://`, …), and bulk imports from pooch, intake
   or DVC — all checksum-verified, extracted, and adopted in place when already on
   disk.
-- **Cache your own computed data too.** The same tooling backs a robust `@cached`
-  mechanism that stores your own results with PID-lock, keyed by their inputs, to speed up
-  calculations locally. It is a separate, local concern — not a remote source —
-  but shares some of the same benefits such as data management via the CLI.
-- **A powerful CLI for data download, local management and synchronization across
+- **Cache your own computed data too.** The same tooling backs a `@cached`
+  decorator that stores your own results with PID-lock, keyed by their inputs, to speed up
+  calculations locally. Caching is a separate, local concern — nothing is
+  fetched — but cached results are managed through the same CLI as datasets.
+- **A CLI for data download, local management and synchronization across
   machines.** Add and download datasets, inspect and repair what's on disk, move
   or centralize where data is stored, and push/pull datasets and cached results
   between machines over rsync+ssh — all without touching your analysis code. A
-  git-ignored `.datamanifest/state.toml` records where each object actually landed
-  on this machine, keeping local location tracking separate from the portable,
-  shareable manifest.
+  git-ignored *state file* (`.datamanifest/state.toml`) records where each object
+  actually landed on this machine, keeping local location tracking separate from
+  the portable, shareable manifest.
 <!-- intro-end -->
 
 ## Installation
@@ -90,7 +92,7 @@ Full documentation lives at **<https://perrette.github.io/datamanifest/>**:
 - [Using it from your code](https://perrette.github.io/datamanifest/api/) — `load_dataset`, `@cached`, the file-less `Database`
 - [Use cases](https://perrette.github.io/datamanifest/use-cases/) — add, repair, store, sync
 - [CLI reference](https://perrette.github.io/datamanifest/cli/)
-- [Storage model](https://perrette.github.io/datamanifest/storage/)
+- [Storage model](https://perrette.github.io/datamanifest/storage/) · [Configuration](https://perrette.github.io/datamanifest/configuration/)
 - [Adding datasets](https://perrette.github.io/datamanifest/adding-datasets/) · [Importing from other tools](https://perrette.github.io/datamanifest/importing/)
 - [Language bindings](https://perrette.github.io/datamanifest/language-bindings/) · [Related projects](https://perrette.github.io/datamanifest/related/)
 

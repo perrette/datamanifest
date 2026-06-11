@@ -41,7 +41,8 @@ and `version="v2"` to invalidate when the function's *logic* changes.
 parameters; `datamanifest list --orphan --delete` cleans up.
 
 The `@cached` cache shares the same storage and bookkeeping as fetched data — it
-lands under `datacache_dir` (`./cached/` by default) and shows up in `list`
+lands under [`datacache_dir`](storage.md) (default:
+`$user_cache_dir/datamanifest/projects/$project/cached`) and shows up in `list`
 alongside your datasets. The [design notes](https://github.com/perrette/datamanifest/blob/main/design/design-notes.md) cover how an
 artifact's identity (`cachetype`, `version`, parameter hash) is derived.
 
@@ -55,6 +56,20 @@ methods (`mydb.download_dataset("co2")`). Every `datamanifest.X(...)` is just
 `resolve_db(db).X(...)` — the method on `db`, or on the default database when
 `db` is None. See the docstrings (`help(datamanifest)`) and the
 [design notes](https://github.com/perrette/datamanifest/blob/main/design/design-notes.md).
+
+The full public surface, beyond `load_dataset` / `get_dataset_path`:
+
+- `add(...)` / `register_dataset(...)` — register a dataset (with / without
+  downloading), like the CLI's [`add`](cli.md#set-up-and-add-data);
+- `download_dataset(name)` / `download_datasets()` — fetch one / all;
+- `delete_dataset(name, keep_cache=False)` — drop a manifest entry and, unless
+  `keep_cache`, its files (the CLI's `remove`);
+- `resolve_db(db)` / `get_default_database()` — the database behind the
+  module-level functions;
+- `Database`, `DatasetEntry` — the underlying classes;
+- `validate_loader` / `validate_loaders` — resolve one / every loader binding
+  to its callable, raising on failure, without loading any data;
+- `datamanifest.cache.cached` — the [caching decorator](#caching-computed-results).
 
 ## A file-less database (no manifest)
 

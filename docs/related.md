@@ -1,5 +1,21 @@
 # Related projects
 
+## The DataManifest family
+
+The `datamanifest.toml` manifest format is defined by a shared,
+language-agnostic spec,
+[github.com/perrette/datamanifest.toml](https://github.com/perrette/datamanifest.toml),
+with two implementations:
+
+- **`datamanifest`** (this package, Python);
+- [**`DataManifest.jl`**](https://github.com/awi-esc/DataManifest.jl) (Julia),
+  by the same author.
+
+Both read and write the same manifest, so one file can serve a mixed
+Python/Julia project — see [language bindings](language-bindings.md).
+
+## From the same author
+
 A few other open-source tools I maintain.
 
 **Scientific writing & data**

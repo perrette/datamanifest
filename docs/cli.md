@@ -26,14 +26,17 @@ Register and (by default) download a dataset. `--name` sets the entry name,
 
 Two independent special forms:
 
-1. **Zenodo** — a DOI / record URL bundles the record's files into one `uris=`
-   dataset (plain HTTPS; declare-only). `--pick GLOB` filters files (repeatable),
-   `--split` makes one dataset per file instead, `--name` becomes a name *prefix*.
+1. **Zenodo / PANGAEA** — a DOI / record URL bundles the record's files into
+   one `uris=` dataset (plain HTTPS; declare-only). A PANGAEA *series* expands
+   to one entry per child dataset. `--pick GLOB` filters files (repeatable),
+   `--split` makes one dataset per file instead, `--name` becomes a name
+   *prefix* for a record / a split collection.
 2. **`--lazy`** — register an **object-store** URI (`s3://`, `gs://`, …) for lazy
    access *instead of* downloading: it sets `lazy_access` (a language-neutral
    marker) and a built-in Python fsspec loader, so `load()` opens it in place.
 
-The two are unrelated (Zenodo serves HTTPS files; `--lazy` is for object stores).
+The two are unrelated (Zenodo and PANGAEA serve HTTPS files; `--lazy` is for
+object stores).
 
 ### `import {pooch|csv|urls|intake|dvc} SOURCE [--base-url URL] [--cache-dir DIR] [--overwrite] [--dry-run]`
 
@@ -52,9 +55,31 @@ With `--cache-dir` already-downloaded files are **adopted in place,
 checksum-verified — no re-download**. See
 [adding-datasets.md](adding-datasets.md) for the full per-source detail.
 
+## Fetch and verify
+
+### `download [NAME ...] [--all] [--overwrite] [--delegate|--no-delegate]`
+
+Download specific datasets or `--all` of them; `--overwrite` re-downloads.
+`--no-delegate` disables the cross-language fetch rung for the run (`--delegate`
+forces it on); see [language-bindings.md](language-bindings.md#cross-language-fetch).
+
+### `verify [NAME ...]`
+
+Re-check checksums in each dataset's declared algorithm (default: all present
+datasets); exits nonzero on any mismatch.
+
+### `update-checksums [NAME ...] [--dry-run]`
+
+Recompute stored checksums from what's on disk (e.g. after regenerating data).
+
 ## Inspect
 
-### `list [SEARCH ...] [filters] [output style] [--delete ... | --move DEST ... | --push SSH_HOST ... | --pull SSH_HOST ...]`
+### `path NAME`
+
+Print the resolved on-disk path (composable in shell:
+`python analysis.py --data "$(datamanifest path foo)"`).
+
+### `list [SEARCH ...] [filters] [output style] [--delete ... | --move DEST ... | --push TARGET ... | --pull TARGET ...]`
 
 List fetched datasets and the cached artifacts this project's state file roots,
 each with its state↔disk status. Free-text `SEARCH` terms match
@@ -70,7 +95,10 @@ Filters (narrow the selection; never change the output style):
 - `--dirty` — only objects whose state-file record disagrees with disk
   (`missing` / `relocated` / `untracked`).
 - `--outside` — only tracked objects stored outside `datasets_dir` /
-  `datacache_dir` and the read pools.
+  `datacache_dir` and the [read pools](storage.md).
+- `--out-of-place` — only present objects whose bytes are not at the
+  directive-derived path (recorded ≠ derived) — the `normalize` selection;
+  read-pool copies count, user-managed exact paths do not.
 - `--hash PREFIX ...` — produced artifacts by hash prefix(es).
 - `--format FMT` — only objects in this serialization format.
 - `--older-than AGE` — only objects last accessed more than AGE ago
@@ -92,15 +120,15 @@ previews):
   irrelevant here — the selection is already explicit — and is ignored.)
 - `--move DEST [--dry-run]` — move them under DEST and repoint their state
   records (the manifest is not edited). The tail starts with `DEST`.
-- `--push SSH_HOST [--dry-run]` / `--pull SSH_HOST [--dry-run]` — bulk
+- `--push TARGET [--dry-run]` / `--pull TARGET [--dry-run]` — bulk
   cross-machine sync of the selection (rsync over ssh). The tail starts with
-  `SSH_HOST`.
+  `TARGET` (`HOST:` store / `HOST:PATH` / local `PATH`).
 
 ```
 datamanifest list --cached --orphan --delete --dry-run --prune
 datamanifest list --datasets --older-than 30d --move /archive --dry-run
-datamanifest list --outside --push user@hpc
-datamanifest list --datasets --pull user@hpc --dry-run
+datamanifest list --outside --push user@hpc:
+datamanifest list --datasets --pull user@hpc: --dry-run
 ```
 
 Maintenance never touches **user-managed data** — a `skip_download` entry, or a
@@ -110,11 +138,6 @@ fixed `storage_path` with no `$key` — which the tool didn't place.
 
 Print full entry detail in TOML style.
 
-### `path NAME`
-
-Print the resolved on-disk path (composable in shell:
-`python analysis.py --data "$(datamanifest path foo)"`).
-
 ### `where [--manifest|--state-file|--datasets-dir|--datacache-dir] [--scan]`
 
 Show the active manifest, state file, and the `datasets_dir` / `datacache_dir`
@@ -123,23 +146,6 @@ objects live outside those folders (`list --outside` to inspect). A single
 selector flag prints just that one bare path (scriptable). `--scan` probes the
 read pools for datasets present there but not local — the report twin of
 `refresh --scan`.
-
-## Fetch and verify
-
-### `download [NAME ...] [--all] [--overwrite] [--delegate|--no-delegate]`
-
-Download specific datasets or `--all` of them; `--overwrite` re-downloads.
-`--no-delegate` disables the cross-language fetch rung for the run (`--delegate`
-forces it on); see [language-bindings.md](language-bindings.md#cross-language-fetch).
-
-### `verify [NAME ...]`
-
-Re-check checksums in each dataset's declared algorithm (default: all present
-datasets); exits nonzero on any mismatch.
-
-### `update-checksums [NAME ...] [--dry-run]`
-
-Recompute stored checksums from what's on disk (e.g. after regenerating data).
 
 ## Maintain
 
@@ -154,6 +160,31 @@ would change first.
 `--scan` also probes the read pools (including the well-known legacy locations)
 and adopts datasets present there but not local yet (checksum-gated; no
 downloads or copies) — the active twin of `where --scan`.
+
+### `normalize [TERM...] [filters] [--dry-run] [--copy]`
+
+Make **the bytes follow the directive** (the pairing of `refresh`, which makes
+the state file follow the bytes): every selected tracked object whose bytes
+are not at the directive-derived path (`$datasets_dir/$key`,
+`$datacache_dir/<cachetype>[/<version>]/<hash>`) is re-homed there and its
+state-file record repointed. Free-text `TERM`s and the `--any` / `--invert` /
+`--cached` / `--datasets` / `--format` / `--hash` / `--older-than` filters
+narrow the selection, as in `list`.
+
+| Bytes found | Action |
+|---|---|
+| at the derived path | no-op |
+| in a read pool | **copy** (pools are shared — never drained) |
+| anywhere else | **move** |
+| user-managed / `skip_download` / `lazy_access` | skipped, reported |
+
+`--copy` forces copy everywhere. Declared checksums are verified on the way;
+the copy/move lands (staging sibling + atomic rename) before any record
+changes. `normalize` never downloads (`download` is the verb for missing
+data). Preview the selection with `list --out-of-place` (recorded ≠ derived) —
+deliberately distinct from `--outside`: a read-pool copy is conformant for
+`--outside` but *is* out-of-place, while user-managed exact-path data is
+"outside" but in place.
 
 ### `delete ID [--dry-run] [--batch] [--prune]`
 
@@ -179,12 +210,12 @@ disk.
 
 ## Sync between machines
 
-### `push ID SSH_HOST [--dry-run] [--batch]` / `pull ID SSH_HOST [--dry-run] [--batch]`
+### `push ID [TARGET] [--dry-run] [--batch]` / `pull ID [TARGET] [--dry-run] [--batch]`
 
-Transfer a single stored object to / from an SSH host (rsync over ssh), same
-addressing as `delete`. `--dry-run` reports the selection (id, kind, paths,
-size) and transfers nothing. For bulk transfers, filter with `list` and use its
-`--push` / `--pull` actions.
+Transfer a single stored object to / from a target (rsync over ssh, or a local
+copy), same addressing as `delete`. `--dry-run` reports the selection (id,
+kind, paths, size) and transfers nothing. For bulk transfers, filter with
+`list` and use its `--push` / `--pull` actions.
 
 The `TARGET` operand follows rsync's colon rule (a colon means remote):
 
@@ -196,11 +227,10 @@ The `TARGET` operand follows rsync's colon rule (a colon means remote):
 | `PATH` (no colon) | a local folder, keyed layout — `push` = raw export, `pull` = adopt-by-copy |
 
 A git-remote name takes precedence over an ssh host on collision; the reserved
-`git:NAME` / `ssh:HOST[:PATH]` prefixes disambiguate explicitly. The
-historical bare-host form (`push ID host`, no colon) still works with a
-deprecation warning — write `host:`. Omitting `TARGET` entirely uses the
-configured `default_remote` (a config field on any scope, holding any operand
-form — including a git remote name).
+`git:NAME` / `ssh:HOST[:PATH]` prefixes disambiguate explicitly. A bare host
+with no colon (`push ID host`) is accepted but deprecated — write `host:`.
+Omitting `TARGET` entirely uses the configured `default_remote` (a config
+field on any scope, holding any operand form — including a git remote name).
 
 **Git remotes as targets.** A git remote whose URL is ssh-like and points at a
 *checked-out* repo (no bare repos, no https) is a pure project reference: its
@@ -229,28 +259,23 @@ No new registry: git's remote table is the registry.
 - A folder produced by `push ID PATH` is itself a **read pool** — consumers
   can add it to `datasets_pools`.
 
-### `normalize [TERM...] [--dry-run] [--copy]`
+### `export DEST [TERM...] [filters] [--dry-run]`
 
-Make **the bytes follow the directive** (the pairing of `refresh`, which makes
-the state file follow the bytes): every selected tracked object whose bytes
-are not at the directive-derived path (`$datasets_dir/$key`,
-`$datacache_dir/<cachetype>[/<version>]/<hash>`) is re-homed there and its
-state-file record repointed.
+Copy the selected datasets to `DEST/<key>` (keyed layout), verify declared
+checksums during the copy, and write a manifest copy into `DEST` pinning
+`datasets_dir = "."`. Free-text `TERM`s and the `--any` / `--invert` /
+`--format` / `--older-than` filters narrow the selection, as in `list`
+(default: all present datasets). The result is simultaneously:
 
-| Bytes found | Action |
-|---|---|
-| at the derived path | no-op |
-| in a read pool | **copy** (pools are shared — never drained) |
-| anywhere else | **move** |
-| user-managed / `skip_download` / `lazy_access` | skipped, reported |
+- a **read pool** — consumers add it to `datasets_pools`;
+- a **standalone datamanifest project** — `cd` into it and `verify` / `list` /
+  `path` work as-is.
 
-`--copy` forces copy everywhere. Declared checksums are verified on the way;
-the copy/move lands (staging sibling + atomic rename) before any record
-changes. `normalize` never downloads (`download` is the verb for missing
-data). Preview the selection with `list --out-of-place` (recorded ≠ derived) —
-deliberately distinct from `--outside`: a read-pool copy is conformant for
-`--outside` but *is* out-of-place, while user-managed exact-path data is
-"outside" but in place.
+Export is read-only on the source, so it *includes* user-managed and
+`skip_download` datasets — the manually-obtained data a fresh clone cannot
+re-download is exactly what is worth bundling (`lazy_access` entries have no
+local bytes and are skipped). There is no byte-level `import` verb: consume a
+bundle via pools or as a project.
 
 ## Configure storage
 
@@ -264,8 +289,10 @@ manifest's `[_STORAGE]` base, `--host GLOB` its per-host table (with
 user-wide `~/.config/datamanifest/config.toml`. `FIELD` is
 `datasets_dir`/`datacache_dir`, `project`, `default_remote`, a user `$symbol`,
 or a `datasets_pools`/`datacache_pools` list (several values, or none for an
-explicit empty list). `show` (the default) prints the config resolved for this
-host plus every scope's raw rules.
+explicit empty list). `set` stores `canonical` as a TOML boolean and
+`lock_stale_age` as a TOML number (the lock-staleness age in seconds); every
+other value is written as a string (a path expression / name). `show` (the
+default) prints the config resolved for this host plus every scope's raw rules.
 
 ```bash
 datamanifest config set datacache_dir "/scratch/$USER/cache"               # this checkout
@@ -278,28 +305,16 @@ datamanifest config                   # show resolved config + raw rules
 `datamanifest storage` is a deprecated alias of `config` (`--all-hosts` maps to
 `--project`).
 
-### `export DEST [TERM...] [--dry-run]`
-
-Copy the selected datasets to `DEST/<key>` (keyed layout), verify declared
-checksums during the copy, and write a manifest copy into `DEST` pinning
-`datasets_dir = "."`. The result is simultaneously:
-
-- a **read pool** — consumers add it to `datasets_pools`;
-- a **standalone datamanifest project** — `cd` into it and `verify` / `list` /
-  `path` work as-is.
-
-Export is read-only on the source, so it *includes* user-managed and
-`skip_download` datasets — the manually-obtained data a fresh clone cannot
-re-download is exactly what is worth bundling (`lazy_access` entries have no
-local bytes and are skipped). There is no byte-level `import` verb: consume a
-bundle via pools or as a project.
-
 ## Manifest tools
 
 ### `format [FILE] [-i]`
 
-Rewrite a manifest in canonical form (stable key ordering, cross-tool
-byte-identical output). Reads stdin by default; `-i` rewrites FILE in place.
+Rewrite a manifest in canonical form — the cross-tool byte-identity format:
+structural `_*` tables first at the top level, then the datasets, with every
+key sorted by Unicode code point at every nesting level (array order is kept —
+element order is data). Content is never changed, only re-serialized; peer
+tools pipe their output through `datamanifest format` to obtain byte-identical
+files. Reads stdin by default; `-i` rewrites FILE in place.
 
 ### `migrate FILE [--dry-run] [--no-input]`
 
@@ -326,5 +341,5 @@ Where data lives on disk — the two `[_STORAGE]` folder fields, `$`-symbols and
 path expressions, the resolution ladder, per-dataset `storage_path`, read pools,
 and the state file — is a property of the **manifest format**, consumed by the
 CLI, the Python API, and peer-language tools alike. It has its own reference:
-**[storage.md](storage.md)**. The [`storage`](#configure-storage) command above
+**[storage.md](storage.md)**. The [`config`](#configure-storage) command above
 edits it.

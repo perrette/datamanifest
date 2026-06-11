@@ -70,6 +70,7 @@ nav:
       - Using it from your code: api.md
       - Use cases: use-cases.md
       - Storage model: storage.md
+      - Configuration: configuration.md
       - Adding datasets: adding-datasets.md
       - Importing from other tools: importing.md
       - Language bindings: language-bindings.md
