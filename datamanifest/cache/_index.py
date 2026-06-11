@@ -61,7 +61,7 @@ except ModuleNotFoundError:  # Python < 3.11
 import tomli_w
 
 from ..store import sort_recursive
-from ..store.locations import PRIVATE_DIR_NAME, ensure_ignored_dir
+from ..store.locations import PRIVATE_DIR_NAME, _main_checkout_dir, ensure_ignored_dir
 
 __all__ = [
     "CachedIndex",
@@ -84,41 +84,6 @@ CACHED_INDEX_NAME = STATE_FILE_NAME
 # project carrying the previous ``.datamanifest-state.toml`` / ``cached.toml``
 # keeps resolving; the next write relocates it to the canonical path).
 _LEGACY_INDEX_NAMES = (".datamanifest-state.toml", "cached.toml")
-
-def _main_checkout_dir(d: str) -> str:
-    """The directory in the **main checkout** corresponding to *d* when *d* lives
-    inside a linked ``git worktree``; ``""`` when *d* is the main checkout itself,
-    is not in a git repository, the main repository is bare, the mapped directory
-    does not exist, or ``git`` is unavailable (spec-v5.1). Resolved by asking the
-    ``git`` executable — the on-disk worktree layout is git internal — so any
-    failure simply disables the fallback."""
-    d = os.path.abspath(d)
-    if not os.path.isdir(d):
-        return ""
-    try:
-        out = subprocess.run(
-            ["git", "-C", d, "rev-parse",
-             "--git-dir", "--git-common-dir", "--show-toplevel"],
-            capture_output=True, text=True, check=True,
-        ).stdout
-    except (OSError, subprocess.SubprocessError):
-        return ""
-    lines = out.strip().splitlines()
-    if len(lines) != 3:
-        return ""
-    # Relative outputs are relative to *d* (the ``git -C`` working directory).
-    gitdir, commondir, toplevel = (
-        os.path.normpath(p if os.path.isabs(p) else os.path.join(d, p))
-        for p in lines
-    )
-    if gitdir == commondir:  # main checkout (not a linked worktree)
-        return ""
-    if os.path.basename(commondir) != ".git":  # bare main repository
-        return ""
-    mapped = os.path.normpath(
-        os.path.join(os.path.dirname(commondir), os.path.relpath(d, toplevel)))
-    return mapped if os.path.isdir(mapped) else ""
-
 
 def _project_dir_of(path: str) -> str:
     """The project directory a state path belongs to: the grandparent for a

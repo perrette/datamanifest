@@ -131,6 +131,44 @@ def test_load_scoped_config_reads_both_files(tmp_path, monkeypatch):
         == "/from-user"
 
 
+def test_load_scoped_config_worktree_falls_back_to_main_checkout(tmp_path, monkeypatch):
+    """A linked git worktree without a ``.datamanifest/config.toml`` of its own
+    reads the main checkout's (the same rationale as the spec-v5.1 state-file
+    fallback); a worktree-local config file always wins."""
+    import shutil
+    import subprocess
+
+    if not shutil.which("git"):
+        import pytest
+
+        pytest.skip("git not available")
+
+    def _git(*args):
+        subprocess.run(["git", *args], check=True,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    main = tmp_path / "main"
+    main.mkdir()
+    (main / "README").write_text("x\n")
+    _git("-C", str(main), "init", "-q")
+    _git("-C", str(main), "add", "-A")
+    _git("-C", str(main), "-c", "user.name=t", "-c", "user.email=t@t",
+         "commit", "-q", "-m", "init")
+    (main / ".datamanifest").mkdir()
+    (main / ".datamanifest" / "config.toml").write_text('datasets_dir = "/from-main"\n')
+    wt = tmp_path / "wt"
+    _git("-C", str(main), "worktree", "add", "-q", str(wt))
+
+    cfg = locations.load_scoped_config(project_root=str(wt))
+    assert cfg.local == {"datasets_dir": "/from-main"}
+
+    (wt / ".datamanifest").mkdir()
+    (wt / ".datamanifest" / "config.toml").write_text('datasets_dir = "/from-wt"\n')
+    cfg = locations.load_scoped_config(project_root=str(wt))
+    assert cfg.local == {"datasets_dir": "/from-wt"}
+
+
 def test_pools_resolve_from_any_layer(tmp_path):
     cfg = locations.ScopedConfig(user={"datasets_pools": ["/pool-from-user"]})
     assert locations.datasets_pools(project_root=str(tmp_path),

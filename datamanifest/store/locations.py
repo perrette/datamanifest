@@ -60,6 +60,7 @@ import fnmatch
 import os
 import re
 import socket
+import subprocess
 
 import platformdirs
 
@@ -241,12 +242,66 @@ def read_config_file(path):
         return {}
 
 
+def _main_checkout_dir(d):
+    """The directory in the **main checkout** corresponding to *d* when *d* lives
+    inside a linked ``git worktree``; ``""`` when *d* is the main checkout itself,
+    is not in a git repository, the main repository is bare, the mapped directory
+    does not exist, or ``git`` is unavailable (spec-v5.1). Resolved by asking the
+    ``git`` executable — the on-disk worktree layout is git internal — so any
+    failure simply disables the fallback."""
+    d = os.path.abspath(d)
+    if not os.path.isdir(d):
+        return ""
+    try:
+        out = subprocess.run(
+            ["git", "-C", d, "rev-parse",
+             "--git-dir", "--git-common-dir", "--show-toplevel"],
+            capture_output=True, text=True, check=True,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    lines = out.strip().splitlines()
+    if len(lines) != 3:
+        return ""
+    # Relative outputs are relative to *d* (the ``git -C`` working directory).
+    gitdir, commondir, toplevel = (
+        os.path.normpath(p if os.path.isabs(p) else os.path.join(d, p))
+        for p in lines
+    )
+    if gitdir == commondir:  # main checkout (not a linked worktree)
+        return ""
+    if os.path.basename(commondir) != ".git":  # bare main repository
+        return ""
+    mapped = os.path.normpath(
+        os.path.join(os.path.dirname(commondir), os.path.relpath(d, toplevel)))
+    return mapped if os.path.isdir(mapped) else ""
+
+
+def _locate_local_config(project_root):
+    """The checkout-config file to read for *project_root*: the project's own
+    ``.datamanifest/config.toml`` when present; in a linked ``git worktree``
+    without one, the corresponding file in the **main checkout** (a worktree
+    starts without the git-ignored ``.datamanifest/`` directory, so worktrees
+    share the per-checkout scope — the same rationale as the spec-v5.1
+    state-file fallback). A config file present in the worktree itself always
+    wins."""
+    path = local_config_path(project_root)
+    if not path or os.path.isfile(path):
+        return path
+    main = _main_checkout_dir(os.path.abspath(project_root))
+    if not main:
+        return path
+    mainpath = local_config_path(main)
+    return mainpath if os.path.isfile(mainpath) else path
+
+
 def load_scoped_config(project_root="", manifest_config=None, env=os.environ):
     """Build the full :class:`ScopedConfig` ladder for a project: the checkout's
-    ``.datamanifest/config.toml``, the manifest's ``[_STORAGE]`` table
-    (*manifest_config*), and the user-global config file."""
+    ``.datamanifest/config.toml`` (in a linked git worktree without one, the main
+    checkout's — see :func:`_locate_local_config`), the manifest's ``[_STORAGE]``
+    table (*manifest_config*), and the user-global config file."""
     return ScopedConfig(
-        local=read_config_file(local_config_path(project_root)),
+        local=read_config_file(_locate_local_config(project_root)),
         manifest=manifest_config,
         user=read_config_file(user_config_path(env)),
     )
