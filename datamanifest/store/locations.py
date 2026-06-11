@@ -191,12 +191,17 @@ class ScopedConfig:
     wins over the base value.
     """
 
-    __slots__ = ("local", "manifest", "user")
+    __slots__ = ("local", "manifest", "user", "env", "host")
 
-    def __init__(self, local=None, manifest=None, user=None):
+    def __init__(self, local=None, manifest=None, user=None, env=None, host=None):
         self.local = dict(local) if local else {}
         self.manifest = dict(manifest) if manifest else {}
         self.user = dict(user) if user else {}
+        # A FROZEN config also captures the environment and host it is resolved
+        # against (set by ``load_scoped_config(freeze=True)`` at Database
+        # materialization); ``None`` => the resolvers use their live defaults.
+        self.env = dict(env) if env is not None else None
+        self.host = host
 
     @property
     def layers(self):
@@ -210,6 +215,21 @@ class ScopedConfig:
     def __repr__(self):
         return (f"ScopedConfig(local={self.local!r}, manifest={self.manifest!r}, "
                 f"user={self.user!r})")
+
+
+def _frozen_env_host(storage_config, env, host):
+    """A frozen :class:`ScopedConfig` (env/host captured at Database
+    materialization) replaces the resolver's *defaults*, so a default ladder
+    lookup against it — environment rung included — is deterministic for its
+    lifetime. An explicitly passed *env*/*host* still wins: a caller resolving
+    in a foreign context (e.g. :func:`sync.remote_root` with a remote machine's
+    probed environment) overrides the snapshot."""
+    if isinstance(storage_config, ScopedConfig) and storage_config.env is not None:
+        if env is os.environ:
+            env = storage_config.env
+        if host is None:
+            host = storage_config.host
+    return env, (host if host is not None else socket.gethostname())
 
 
 def local_config_path(project_root):
@@ -296,15 +316,23 @@ def _locate_local_config(project_root):
     return mainpath if os.path.isfile(mainpath) else path
 
 
-def load_scoped_config(project_root="", manifest_config=None, env=os.environ):
+def load_scoped_config(project_root="", manifest_config=None, env=os.environ,
+                       freeze=False):
     """Build the full :class:`ScopedConfig` ladder for a project: the checkout's
     ``.datamanifest/config.toml`` (in a linked git worktree without one, the main
     checkout's — see :func:`_locate_local_config`), the manifest's ``[_STORAGE]``
-    table (*manifest_config*), and the user-global config file."""
+    table (*manifest_config*), and the user-global config file.
+
+    With *freeze* the returned config is a **snapshot**: it also captures *env*
+    and the host, which every resolver then uses in place of its live defaults —
+    the whole ladder, environment rung included, is evaluated against load-time
+    state (Database materialization)."""
     return ScopedConfig(
         local=read_config_file(_locate_local_config(project_root)),
         manifest=manifest_config,
         user=read_config_file(user_config_path(env)),
+        env=env if freeze else None,
+        host=socket.gethostname() if freeze else None,
     )
 
 
@@ -325,8 +353,7 @@ def config_value(name, *, storage_config=None, env=os.environ, host=None):
 
     For non-path fields like ``default_remote`` (a push/pull target operand),
     where interpolation / anchoring would be wrong."""
-    if host is None:
-        host = socket.gethostname()
+    env, host = _frozen_env_host(storage_config, env, host)
     raw = _symbol_raw(name, storage_config or {}, env, host)
     return raw if isinstance(raw, str) else ""
 
@@ -340,8 +367,7 @@ def config_scalar(name, *, storage_config=None, env=os.environ, host=None):
     The scalar sibling of :func:`config_value`, whose string-only contract fits
     path expressions but would drop a TOML number (e.g. ``lock_stale_age = 30``).
     """
-    if host is None:
-        host = socket.gethostname()
+    env, host = _frozen_env_host(storage_config, env, host)
     raw = env.get(f"DATAMANIFEST_{name.upper()}")
     if raw is not None:
         return raw
@@ -419,8 +445,7 @@ def resolve_symbol(name, *, key="", project_root="", storage_config=None,
         raise ValueError("resolve_symbol requires a non-empty symbol name")
     if storage_config is None:
         storage_config = {}
-    if host is None:
-        host = socket.gethostname()
+    env, host = _frozen_env_host(storage_config, env, host)
 
     if name in _resolving:
         cycle = " -> ".join((*_resolving, name))
@@ -453,8 +478,7 @@ def interpolate(expr, *, key="", project_root="", storage_config=None,
     *NAME*, else left verbatim. Does **not** anchor a relative result."""
     if storage_config is None:
         storage_config = {}
-    if host is None:
-        host = socket.gethostname()
+    env, host = _frozen_env_host(storage_config, env, host)
     with _patched_environ(env):
         expr = os.path.expanduser(expr)
 
@@ -576,8 +600,7 @@ def _resolve_pools(field, defaults, *, project_root, storage_config, env, host):
     is a path expression."""
     if storage_config is None:
         storage_config = {}
-    if host is None:
-        host = socket.gethostname()
+    env, host = _frozen_env_host(storage_config, env, host)
     raw = _pools_raw(field, storage_config, env, host)
     exprs = list(defaults) if raw is None else raw
     return resolve_pool_exprs(

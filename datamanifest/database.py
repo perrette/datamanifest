@@ -1372,7 +1372,7 @@ class Database:
         # The layered scoped config (checkout > manifest [_STORAGE] > user);
         # rebuilt with the manifest layer when a manifest is read.
         self.storage_config = storage.load_scoped_config(
-            project_root=self.get_project_root(),
+            project_root=self.get_project_root(), freeze=True,
         )
         self.schema_version = None
         if datasets_toml and os.path.isfile(datasets_toml):
@@ -1635,7 +1635,7 @@ class Database:
         # .datamanifest/config.toml and the user-global config file.
         self.storage_config = storage.load_scoped_config(
             project_root=self.get_project_root(),
-            manifest_config=dict(self.extra.get("_STORAGE", {})),
+            manifest_config=dict(self.extra.get("_STORAGE", {})), freeze=True,
         )
 
         names = [k for k in datasets if not k.startswith("_")]

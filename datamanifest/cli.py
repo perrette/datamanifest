@@ -1966,6 +1966,25 @@ def _cmd_where(args):
 _STORAGE_LIST_FIELDS = ("datasets_pools", "datacache_pools")
 
 
+def _coerce_config_scalar(field, value):
+    """Native TOML types for the known scalar directives — ``canonical``
+    (boolean) and ``lock_stale_age`` (number). Every other field is a path
+    expression / name and stays a string."""
+    if field == "canonical":
+        v = value.strip().lower()
+        if v in ("1", "true", "yes", "on"):
+            return True
+        if v in ("0", "false", "no", "off"):
+            return False
+    elif field == "lock_stale_age":
+        try:
+            f = float(value)
+            return int(f) if f.is_integer() else f
+        except ValueError:
+            pass
+    return value
+
+
 def _valid_storage_field(field: str) -> bool:
     """Whether *field* is a settable config key — a folder field (``datasets_dir``
     / ``datacache_dir``), ``project`` / ``default_remote``, a user ``$symbol``
@@ -2064,7 +2083,7 @@ def _cmd_config_set(args):
     if args.field in _STORAGE_LIST_FIELDS:
         value = list(args.value)
     elif len(args.value) == 1:
-        value = args.value[0]
+        value = _coerce_config_scalar(args.field, args.value[0])
     else:
         print(f"Error: {args.field} takes exactly one VALUE (got {len(args.value)}).",
               file=sys.stderr)

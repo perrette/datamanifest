@@ -703,6 +703,21 @@ def test_config_set_defaults_to_local(tmp_path):
     assert (tmp_path / ".datamanifest" / ".gitignore").read_text().strip() == "*"
 
 
+def test_config_set_coerces_scalar_directives(tmp_path):
+    # `canonical` lands as a TOML boolean, `lock_stale_age` as a number; path
+    # fields stay strings.
+    toml = _storage_project(tmp_path)
+    for raw, expected in (("true", True), ("off", False)):
+        r = _run("config", "set", "canonical", raw, env=_env_with_toml(toml))
+        assert r.returncode == 0, r.stderr
+        local = tmp_path / ".datamanifest" / "config.toml"
+        assert _load_toml(local)["canonical"] is expected
+    r = _run("config", "set", "lock_stale_age", "45", env=_env_with_toml(toml))
+    assert r.returncode == 0, r.stderr
+    local = tmp_path / ".datamanifest" / "config.toml"
+    assert _load_toml(local)["lock_stale_age"] == 45
+
+
 def test_config_set_project_writes_manifest_base(tmp_path):
     toml = _storage_project(tmp_path)
     r = _run("config", "set", "datacache_dir", "cached", "--project",

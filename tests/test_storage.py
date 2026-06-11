@@ -169,6 +169,26 @@ def test_load_scoped_config_worktree_falls_back_to_main_checkout(tmp_path, monke
     assert cfg.local == {"datasets_dir": "/from-wt"}
 
 
+def test_frozen_scoped_config_carries_env_and_host(tmp_path, monkeypatch):
+    """A frozen ScopedConfig (Database materialization) captures env + host;
+    resolvers use them in place of their live defaults, so later env changes do
+    not affect an existing snapshot."""
+    cfg = locations.ScopedConfig(env={"DATAMANIFEST_CANONICAL": "1"}, host="h")
+    assert locations.config_scalar("canonical", storage_config=cfg) == "1"
+    # An explicitly passed env still wins over the snapshot (foreign-context
+    # resolution, e.g. sync.remote_root with a remote machine's probed env).
+    assert locations.config_scalar("canonical", storage_config=cfg, env={}) is None
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setenv("DATAMANIFEST_CANONICAL", "yes")
+    frozen = locations.load_scoped_config(project_root=str(tmp_path), freeze=True)
+    monkeypatch.setenv("DATAMANIFEST_CANONICAL", "no")
+    assert locations.config_scalar("canonical", storage_config=frozen) == "yes"
+    # An unfrozen config keeps reading the live environment.
+    live = locations.load_scoped_config(project_root=str(tmp_path))
+    assert locations.config_scalar("canonical", storage_config=live) == "no"
+
+
 def test_pools_resolve_from_any_layer(tmp_path):
     cfg = locations.ScopedConfig(user={"datasets_pools": ["/pool-from-user"]})
     assert locations.datasets_pools(project_root=str(tmp_path),
