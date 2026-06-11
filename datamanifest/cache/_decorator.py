@@ -620,9 +620,12 @@ def cached(
                         )
                         return _load_value(dpath, fmt)
 
-            # Miss → produce at the derived (current-config) location.
+            # Miss → produce at the derived (current-config) location. The compute
+            # runs inside the locked region: under contention the default is to
+            # WAIT for the peer producing this same variation, and once the lock
+            # is acquired the artifact is rechecked (spec-v5.2) — a waiter then
+            # loads what its peer just published instead of recomputing it.
             artifact_dir = derived_dir
-            result = fn(**kwargs)
             write_value = _default_writer(fmt)
 
             # Register the produced variation in the project's cached.toml (the
@@ -633,7 +636,17 @@ def cached(
                 format=fmt, storage_path=sp_record, version=version,
             )
 
+            state = {}
+
+            def hit_again(adir: str) -> bool:
+                return (
+                    materialize.is_complete(adir)
+                    and config_is_valid(adir)
+                    and os.path.exists(os.path.join(adir, data_filename))
+                )
+
             def write_fn(tmp: str) -> None:
+                state["result"] = result = fn(**kwargs)
                 os.makedirs(tmp, exist_ok=True)
                 write_value(os.path.join(tmp, data_filename), result)
                 write_config(tmp, ct, hash_, key_table, version=version)
@@ -643,8 +656,14 @@ def cached(
                     origin={"cached_toml": written_index},
                 )
 
-            materialize.materialize(artifact_dir, write_fn)
-            return result
+            # ``cached=False`` forces a recompute: no adopt-the-peer recheck.
+            materialize.materialize(
+                artifact_dir, write_fn, skip_if=hit_again if cached else None,
+                stale_age=materialize.lock_stale_age(sconf),
+            )
+            if "result" in state:
+                return state["result"]
+            return _load_value(os.path.join(artifact_dir, data_filename), fmt)
 
         # Record the recipe at decoration time (no disk writes) and enforce
         # cachetype uniqueness, then expose it on the wrapper as ``.recipe``.

@@ -91,6 +91,7 @@ __all__ = [
     "load_scoped_config",
     "override_fields",
     "config_value",
+    "config_scalar",
     "read_config_file",
     "local_config_path",
     "user_config_path",
@@ -328,6 +329,31 @@ def config_value(name, *, storage_config=None, env=os.environ, host=None):
         host = socket.gethostname()
     raw = _symbol_raw(name, storage_config or {}, env, host)
     return raw if isinstance(raw, str) else ""
+
+
+def config_scalar(name, *, storage_config=None, env=os.environ, host=None):
+    """The raw ladder value of config field *name* accepting any TOML scalar
+    (str / int / float / bool) — ``DATAMANIFEST_<NAME>`` env var (a string)
+    first, then per layer ``_HOST`` glob / base — or ``None`` when nowhere
+    defined.
+
+    The scalar sibling of :func:`config_value`, whose string-only contract fits
+    path expressions but would drop a TOML number (e.g. ``lock_stale_age = 30``).
+    """
+    if host is None:
+        host = socket.gethostname()
+    raw = env.get(f"DATAMANIFEST_{name.upper()}")
+    if raw is not None:
+        return raw
+    scalar = (str, int, float, bool)
+    for layer in _layers(storage_config):
+        for pattern, mapping in layer.get("_HOST", {}).items():
+            if isinstance(mapping, dict) and fnmatch.fnmatch(host, pattern) \
+                    and isinstance(mapping.get(name), scalar):
+                return mapping[name]
+        if isinstance(layer.get(name), scalar):
+            return layer[name]
+    return None
 
 
 def override_fields(storage_config, **fields):

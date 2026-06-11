@@ -7,14 +7,21 @@ Offline, stdlib only.
 """
 
 import os
+import socket
+import threading
+import time
 
 import pytest
 
 from datamanifest.store import locations
 from datamanifest.store.materialize import (
+    LOCK_STALE_AGE,
+    LockedError,
     _acquire_lock,
     _read_lock_pid,
+    _stale_lock,
     is_complete,
+    lock_stale_age,
     materialize,
     remove_path,
 )
@@ -80,27 +87,157 @@ def test_is_complete_false_without_marker(tmp_path):
     assert not is_complete(target)  # present but unmarked == not complete
 
 
-def test_acquire_lock_reclaims_dead_holder(tmp_path, monkeypatch):
+def test_acquire_lock_reclaims_stale_dead_holder(tmp_path, monkeypatch):
     lock = str(tmp_path / "x.lock")
     with open(lock, "w") as f:
-        f.write("999999")
+        f.write(f"999999 {socket.gethostname()}")
+    past = time.time() - 60                     # past stale_age, no heartbeat
+    os.utime(lock, (past, past))
     monkeypatch.setattr(
         "datamanifest.store.materialize._pid_alive", lambda pid: False
     )
-    assert _acquire_lock(lock) is True          # dead holder reclaimed
-    assert _read_lock_pid(lock) == os.getpid()  # now owned by us
+    assert _acquire_lock(lock, "fail", 30.0) is True   # stale dead holder reclaimed
+    assert _read_lock_pid(lock) == os.getpid()         # now owned by us
     os.remove(lock)
 
 
-def test_acquire_lock_yields_to_live_holder(tmp_path, monkeypatch):
+def test_acquire_lock_proceed_yields_to_live_holder(tmp_path, monkeypatch):
     lock = str(tmp_path / "x.lock")
     with open(lock, "w") as f:
-        f.write("4242")
+        f.write("4242")                         # legacy bare-PID form parses too
     monkeypatch.setattr(
         "datamanifest.store.materialize._pid_alive", lambda pid: True
     )
-    assert _acquire_lock(lock) is False         # a live holder keeps the lock
-    assert _read_lock_pid(lock) == 4242         # left untouched
+    assert _acquire_lock(lock, "proceed", 30.0) is False  # live holder keeps it
+    assert _read_lock_pid(lock) == 4242                   # left untouched
+
+
+def test_acquire_lock_fail_raises_on_live_holder(tmp_path, monkeypatch):
+    lock = str(tmp_path / "x.lock")
+    with open(lock, "w") as f:
+        f.write(f"4242 {socket.gethostname()}")
+    monkeypatch.setattr(
+        "datamanifest.store.materialize._pid_alive", lambda pid: True
+    )
+    with pytest.raises(LockedError, match="locked by another process"):
+        _acquire_lock(lock, "fail", 30.0)
+
+
+def test_stale_lock_rules(tmp_path):
+    lock = str(tmp_path / "x.lock")
+    with open(lock, "w") as f:
+        f.write("12345 some-other-host")
+    assert _stale_lock(lock, 30.0) is False     # fresh: never stale
+    past = time.time() - 60
+    os.utime(lock, (past, past))
+    assert _stale_lock(lock, 30.0) is False     # remote host, within the 5x grace
+    past = time.time() - 200
+    os.utime(lock, (past, past))
+    assert _stale_lock(lock, 30.0) is True      # missed-heartbeat grace exceeded
+
+
+def test_wait_then_adopt_peer_publish(tmp_path):
+    """A contender blocks on the holder's lock (on_locked="wait", the default),
+    then the skip_if recheck adopts what the holder published — the contender's
+    write never runs (spec-v5.2 compute-once)."""
+    target = str(tmp_path / "obj.bin")
+    ran = []
+
+    def slow_write(tmp):
+        ran.append("holder")
+        time.sleep(1.0)
+        with open(tmp, "w") as f:
+            f.write("holder")
+
+    holder = threading.Thread(target=materialize, args=(target, slow_write))
+    holder.start()
+    deadline = time.time() + 5
+    while not os.path.exists(locations.lock_path(target)):
+        assert time.time() < deadline, "holder never took the lock"
+        time.sleep(0.01)
+
+    def contender_write(tmp):
+        ran.append("contender")
+        with open(tmp, "w") as f:
+            f.write("contender")
+
+    start = time.time()
+    materialize(target, contender_write, skip_if=is_complete)
+    waited = time.time() - start
+    holder.join()
+
+    assert waited > 0.5                     # actually blocked on the lock
+    assert ran == ["holder"]                # contender skipped after the recheck
+    assert open(target).read() == "holder"
+    assert not os.path.exists(locations.lock_path(target))
+
+
+def test_heartbeat_keeps_long_write_fresh(tmp_path):
+    """A write running far past 5 * stale_age never goes stale: the heartbeat
+    refreshes the lock's mtime, so a contender still sees a live holder."""
+    target = str(tmp_path / "obj.bin")
+    lock = locations.lock_path(target)
+
+    def slow_write(tmp):
+        time.sleep(1.5)                     # >> 5 * stale_age = 1.0
+        with open(tmp, "w") as f:
+            f.write("x")
+
+    holder = threading.Thread(
+        target=materialize, args=(target, slow_write), kwargs={"stale_age": 0.2}
+    )
+    holder.start()
+    deadline = time.time() + 5
+    while not os.path.exists(lock):
+        assert time.time() < deadline, "holder never took the lock"
+        time.sleep(0.01)
+    time.sleep(1.2)                         # well past the no-heartbeat grace
+    with pytest.raises(LockedError):
+        materialize(target, lambda tmp: None, on_locked="fail", stale_age=0.2)
+    holder.join()
+    assert is_complete(target)
+
+
+def test_materialize_proceed_under_live_holder(tmp_path):
+    """on_locked="proceed" publishes via process-private staging and leaves the
+    foreign holder's lock untouched."""
+    target = str(tmp_path / "obj.bin")
+    lock = locations.lock_path(target)
+    with open(lock, "w") as f:
+        f.write("1 " + socket.gethostname())  # pid 1: alive, foreign, fresh
+
+    materialize(target, lambda tmp: open(tmp, "w").write("z"), on_locked="proceed")
+
+    assert open(target).read() == "z"
+    assert is_complete(target)
+    assert os.path.exists(lock)             # not ours to remove
+    os.remove(lock)
+
+
+def test_materialize_rejects_unknown_on_locked(tmp_path):
+    with pytest.raises(ValueError, match="on_locked"):
+        materialize(str(tmp_path / "x"), lambda tmp: None, on_locked="bogus")
+
+
+def test_lock_stale_age_ladder(monkeypatch):
+    """spec-v5.3: the staleness age is the config field ``lock_stale_age``,
+    resolved on the ordinary ladder (env → config layers, ``_HOST``-composable);
+    TOML number or numeric string; unparsable / non-positive falls back."""
+    monkeypatch.delenv("DATAMANIFEST_LOCK_STALE_AGE", raising=False)
+    assert lock_stale_age({}) == LOCK_STALE_AGE
+    assert lock_stale_age({"lock_stale_age": 7}) == 7.0
+    assert lock_stale_age({"lock_stale_age": "8.5"}) == 8.5
+    assert lock_stale_age({"lock_stale_age": -5}) == LOCK_STALE_AGE
+    assert lock_stale_age({"lock_stale_age": "junk"}) == LOCK_STALE_AGE
+    # A _HOST glob beats the layer base.
+    sc = {
+        "_HOST": {socket.gethostname(): {"lock_stale_age": 9}},
+        "lock_stale_age": 7,
+    }
+    assert lock_stale_age(sc) == 9.0
+    # The environment beats every layer.
+    monkeypatch.setenv("DATAMANIFEST_LOCK_STALE_AGE", "3")
+    assert lock_stale_age({"lock_stale_age": 7}) == 3.0
 
 
 def test_remove_path_handles_file_dir_and_absent(tmp_path):
