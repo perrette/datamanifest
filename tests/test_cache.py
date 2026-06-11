@@ -206,6 +206,36 @@ def test_cached_key_selector_narrows_table(cache_root):
     assert config_key_table(read_config(str(artifact_dir))) == {"name": "n"}
 
 
+def test_cached_concurrent_callers_compute_once(cache_root):
+    """spec-v5.2: concurrent callers of the same variation serialize on the
+    artifact lock — one computes, the waiters re-check after acquiring the lock
+    and load what the producer just published. The body runs exactly once."""
+    import threading
+    import time
+
+    calls = {"n": 0}
+
+    @cached(cachetype="concurrent", format="json")
+    def produce(*, n):
+        calls["n"] += 1
+        time.sleep(0.8)
+        return {"value": n * 2}
+
+    results = [None] * 3
+
+    def run(i):
+        results[i] = produce(n=21)
+
+    threads = [threading.Thread(target=run, args=(i,)) for i in range(3)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert results == [{"value": 42}] * 3
+    assert calls["n"] == 1
+
+
 # ----- spec-v4 path composition: <datacache_dir>/<cachetype>/<hash> ----------
 
 def test_cached_produce_lands_directly_under_datacache_dir(cache_root):

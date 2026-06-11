@@ -548,7 +548,9 @@ def _download_dataset(
     ``<download_path>.tmp`` staging path, which :func:`materialize` then
     atomically publishes and marks complete under a pidfile lock. A killed or
     failed fetch therefore leaves no ``.complete`` marker and no partial final
-    entry.
+    entry. On lock contention the fetch waits for the peer materializing this
+    same target and — unless an explicit overwrite was requested — adopts what
+    it published instead of re-fetching (spec-v5.2).
     """
     materialize(
         download_path,
@@ -561,6 +563,7 @@ def _download_dataset(
             required_paths_ordered=required_paths_ordered,
             python_includes=python_includes,
         ),
+        skip_if=(None if overwrite else is_complete),
     )
 
 
