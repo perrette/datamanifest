@@ -174,3 +174,14 @@ sibling names (`.datamanifest-state.toml`, `cached.toml`) are still read; the
 first write relocates them. `list --dirty`, `refresh`, and the maintenance
 actions all operate on it; the full design is in
 [design-state-file.md](https://github.com/perrette/datamanifest/blob/main/design/design-state-file.md).
+
+Linked `git worktree`s share the main checkout's state file (spec-v5.1). A
+worktree starts without the git-ignored `.datamanifest/` directory; when the
+project directory has no state file of its own and sits inside a linked
+worktree (`git worktree add`), lookups fall through to the corresponding
+directory in the main checkout — reads consult its inventory and writes update
+it, so all worktrees of a repository maintain one shared inventory. A state
+file present in the worktree itself always takes precedence (create one there
+to opt a worktree out). The main checkout is resolved by asking the `git`
+executable; when `git` is not installed, the main repository is bare, or the
+directory is not inside a worktree, lookups stay local.

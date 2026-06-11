@@ -52,6 +52,7 @@ stdlib — never the fetch layer.
 """
 
 import os
+import subprocess
 
 try:
     import tomllib
@@ -83,6 +84,50 @@ CACHED_INDEX_NAME = STATE_FILE_NAME
 # project carrying the previous ``.datamanifest-state.toml`` / ``cached.toml``
 # keeps resolving; the next write relocates it to the canonical path).
 _LEGACY_INDEX_NAMES = (".datamanifest-state.toml", "cached.toml")
+
+def _main_checkout_dir(d: str) -> str:
+    """The directory in the **main checkout** corresponding to *d* when *d* lives
+    inside a linked ``git worktree``; ``""`` when *d* is the main checkout itself,
+    is not in a git repository, the main repository is bare, the mapped directory
+    does not exist, or ``git`` is unavailable (spec-v5.1). Resolved by asking the
+    ``git`` executable — the on-disk worktree layout is git internal — so any
+    failure simply disables the fallback."""
+    d = os.path.abspath(d)
+    if not os.path.isdir(d):
+        return ""
+    try:
+        out = subprocess.run(
+            ["git", "-C", d, "rev-parse",
+             "--git-dir", "--git-common-dir", "--show-toplevel"],
+            capture_output=True, text=True, check=True,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    lines = out.strip().splitlines()
+    if len(lines) != 3:
+        return ""
+    # Relative outputs are relative to *d* (the ``git -C`` working directory).
+    gitdir, commondir, toplevel = (
+        os.path.normpath(p if os.path.isabs(p) else os.path.join(d, p))
+        for p in lines
+    )
+    if gitdir == commondir:  # main checkout (not a linked worktree)
+        return ""
+    if os.path.basename(commondir) != ".git":  # bare main repository
+        return ""
+    mapped = os.path.normpath(
+        os.path.join(os.path.dirname(commondir), os.path.relpath(d, toplevel)))
+    return mapped if os.path.isdir(mapped) else ""
+
+
+def _project_dir_of(path: str) -> str:
+    """The project directory a state path belongs to: the grandparent for a
+    ``<root>/.datamanifest/state.toml`` path, else the dirname."""
+    d = os.path.dirname(path) or "."
+    if os.path.basename(d) == PRIVATE_DIR_NAME:
+        return os.path.dirname(d) or "."
+    return d
+
 
 # Produced-recipe fields (one per (cachetype, version)); each instance is a
 # ``hash -> storage_path`` entry. Fetched-dataset entries carry the fields below.
@@ -170,6 +215,19 @@ class CachedIndex:
         return path
 
     @classmethod
+    def _existing_state_in(cls, d: str):
+        """The existing state file under directory *d* (canonical or a legacy
+        name), or ``None``."""
+        canonical = cls._dir_state_path(d)
+        if os.path.isfile(canonical):
+            return canonical
+        for legacy in _LEGACY_INDEX_NAMES:
+            p = os.path.join(d, legacy)
+            if os.path.isfile(p):
+                return p
+        return None
+
+    @classmethod
     def locate(cls, base: str) -> str:
         """The state file to **read** at *base* (a directory or a file path): the
         canonical ``.datamanifest/state.toml`` when present, else a legacy
@@ -178,19 +236,25 @@ class CachedIndex:
 
         Lets callers find an existing inventory under either name without first
         knowing which is on disk.
+
+        Linked ``git worktree``s share one inventory (spec-v5.1): when the
+        project directory has no state file of its own and sits inside a linked
+        worktree, the lookup falls through to the corresponding directory in the
+        **main checkout** — for reads and (via :meth:`read_or_empty` /
+        :meth:`write`) as the write target. A state file present in the worktree
+        itself always wins.
         """
         base = os.fspath(base)
         if os.path.isfile(base):
             return base
         d = base if os.path.isdir(base) else (os.path.dirname(base) or ".")
-        canonical = cls._dir_state_path(d)
-        if os.path.isfile(canonical):
-            return canonical
-        for legacy in _LEGACY_INDEX_NAMES:
-            p = os.path.join(d, legacy)
-            if os.path.isfile(p):
-                return p
-        return canonical
+        found = cls._existing_state_in(d)
+        if found:
+            return found
+        main = _main_checkout_dir(d)
+        if main:
+            return cls._existing_state_in(main) or cls._dir_state_path(main)
+        return cls._dir_state_path(d)
 
     # ----- reading -----
     @classmethod
@@ -327,11 +391,21 @@ class CachedIndex:
         empty one bound to the canonical path when none exists. A legacy-named
         file stays bound to its own path, so the next :meth:`write` relocates it
         to the canonical ``.datamanifest/state.toml`` (and removes the legacy
-        file)."""
+        file). In a linked ``git worktree`` without a state file of its own,
+        :meth:`locate` redirects to the main checkout — the empty index is then
+        bound there, so the first write lands in the shared inventory
+        (spec-v5.1)."""
         target = cls.locate(path)
         if os.path.isfile(target):
             return cls.read(target)
-        return cls(path=cls._canonical_path(path))
+        canonical = cls._canonical_path(path)
+        # A redirected target (linked worktree) belongs to a different project
+        # directory than *path* — bind the empty index there rather than to the
+        # local canonical path.
+        if os.path.abspath(_project_dir_of(canonical)) != \
+           os.path.abspath(_project_dir_of(target)):
+            canonical = target
+        return cls(path=canonical)
 
     # ----- produced recipes -----
     def register(

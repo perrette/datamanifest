@@ -108,3 +108,73 @@ def test_no_state_file_written_without_a_manifest(tmp_path, monkeypatch):
     db.register_dataset(f"file://{src / 'a.csv'}", name="a", persist=False)
     download_dataset(db, "a")
     assert not (tmp_path / ".datamanifest" / "state.toml").exists()
+
+
+def _git(*args):
+    import subprocess
+
+    subprocess.run(
+        ["git", *args], check=True,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+
+
+def test_git_worktree_shares_main_checkout_state_file(tmp_path):
+    """spec-v5.1: a linked worktree without a state file of its own reads and
+    writes the main checkout's — one shared inventory per repository; a
+    worktree-local state file always wins."""
+    import shutil as _shutil
+
+    if not _shutil.which("git"):
+        import pytest
+
+        pytest.skip("git not available")
+
+    from datamanifest.cache._index import _main_checkout_dir
+
+    main = tmp_path / "main"
+    (main / "sub").mkdir(parents=True)
+    (main / "README").write_text("x\n")
+    (main / "sub" / "file").write_text("x\n")
+    _git("-C", str(main), "init", "-q")
+    _git("-C", str(main), "add", "-A")
+    _git("-C", str(main), "-c", "user.name=t", "-c", "user.email=t@t",
+         "commit", "-q", "-m", "init")
+    wt = tmp_path / "wt"
+    _git("-C", str(main), "worktree", "add", "-q", str(wt))
+
+    # The main checkout is never redirected; the worktree maps onto it
+    # (subdirectories included).
+    assert _main_checkout_dir(str(main)) == ""
+    assert os.path.realpath(_main_checkout_dir(str(wt))) == os.path.realpath(str(main))
+    assert os.path.realpath(_main_checkout_dir(str(wt / "sub"))) == \
+        os.path.realpath(str(main / "sub"))
+
+    # No state file anywhere: lookups in the worktree bind to the MAIN
+    # checkout's canonical path, so the first write lands in the shared
+    # inventory.
+    located = CachedIndex.locate(str(wt))
+    assert os.path.realpath(os.path.dirname(os.path.dirname(located))) == \
+        os.path.realpath(str(main))
+    idx = CachedIndex.read_or_empty(str(wt))
+    assert idx.path == located
+    target = idx.write()
+    assert os.path.realpath(target) == \
+        os.path.realpath(str(main / ".datamanifest" / "state.toml"))
+    assert not (wt / ".datamanifest").exists()
+
+    # The shared inventory is read back from the worktree.
+    (main / ".datamanifest" / "state.toml").write_text(
+        '[_META]\nschema = 5\n'
+        '[datasets."ex.com/foo.nc"]\n'
+        'storage_path = "datasets/ex.com/foo.nc"\n'
+        'sha256 = "abc"\n'
+    )
+    idx = CachedIndex.read_or_empty(str(wt))
+    assert idx.datasets["ex.com/foo.nc"]["storage_path"] == "datasets/ex.com/foo.nc"
+
+    # A state file in the worktree itself always wins.
+    (wt / ".datamanifest").mkdir()
+    local = wt / ".datamanifest" / "state.toml"
+    local.write_text("[_META]\nschema = 5\n")
+    assert CachedIndex.locate(str(wt)) == str(local)
