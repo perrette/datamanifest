@@ -218,17 +218,14 @@ class ScopedConfig:
 
 
 def _frozen_env_host(storage_config, env, host):
-    """A frozen :class:`ScopedConfig` (env/host captured at Database
-    materialization) replaces the resolver's *defaults*, so a default ladder
-    lookup against it — environment rung included — is deterministic for its
-    lifetime. An explicitly passed *env*/*host* still wins: a caller resolving
-    in a foreign context (e.g. :func:`sync.remote_root` with a remote machine's
-    probed environment) overrides the snapshot."""
+    """A frozen :class:`ScopedConfig` is **authoritative**: its captured
+    env/host replace the resolver inputs, so every ladder lookup against it —
+    environment rung included — is deterministic for its lifetime. Resolving in
+    another context (e.g. a remote machine — :func:`sync.remote_root`) means
+    building that context's own frozen config, not overriding pieces of this
+    one."""
     if isinstance(storage_config, ScopedConfig) and storage_config.env is not None:
-        if env is os.environ:
-            env = storage_config.env
-        if host is None:
-            host = storage_config.host
+        return storage_config.env, (storage_config.host or socket.gethostname())
     return env, (host if host is not None else socket.gethostname())
 
 

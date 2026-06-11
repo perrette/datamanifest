@@ -175,9 +175,9 @@ def test_frozen_scoped_config_carries_env_and_host(tmp_path, monkeypatch):
     not affect an existing snapshot."""
     cfg = locations.ScopedConfig(env={"DATAMANIFEST_CANONICAL": "1"}, host="h")
     assert locations.config_scalar("canonical", storage_config=cfg) == "1"
-    # An explicitly passed env still wins over the snapshot (foreign-context
-    # resolution, e.g. sync.remote_root with a remote machine's probed env).
-    assert locations.config_scalar("canonical", storage_config=cfg, env={}) is None
+    # The snapshot is authoritative — a passed env is ignored; another context
+    # (e.g. a remote machine) gets its own frozen config instead.
+    assert locations.config_scalar("canonical", storage_config=cfg, env={}) == "1"
 
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     monkeypatch.setenv("DATAMANIFEST_CANONICAL", "yes")

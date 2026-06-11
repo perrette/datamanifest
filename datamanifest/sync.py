@@ -617,24 +617,25 @@ def remote_root(obj, host, *, db, project_root, runner=None):
     """Resolve the **remote** root folder for *obj* on *host* — the remote's
     ``datasets_dir`` (fetched) or ``datacache_dir`` (produced).
 
-    Precedence (all via the existing field resolver — we only pick its ``env`` /
-    ``host`` inputs):
+    Precedence:
 
     1. best-effort remote-env probe (``remote_env`` → ``DATAMANIFEST_*`` rung);
     2. ``[_STORAGE._HOST.<glob>]`` overrides for *host* (the deterministic
        cross-machine config);
     3. the shared default.
 
-    The remote *hostname* used for ``_HOST`` matching is the host part of the ssh
-    target (``user@host`` → ``host``).
+    The remote context is its **own frozen config**: the committed manifest
+    layer (shared across checkouts) plus the probed remote environment and the
+    remote hostname (the host part of the ssh target, ``user@host`` →
+    ``host``). The local checkout / user-global layers are this machine's
+    personal configuration and do not apply to the remote.
     """
     env = remote_env(host, runner=runner)
     match_host = host.split("@", 1)[1] if "@" in host else host
+    cfg = store.locations.ScopedConfig(
+        manifest=db.storage_config.manifest, env=env, host=match_host)
     resolver = store.datacache_dir if obj.kind == "cached" else store.datasets_dir
-    return resolver(
-        project_root=project_root,
-        storage_config=db.storage_config, env=env, host=match_host,
-    )
+    return resolver(project_root=project_root, storage_config=cfg)
 
 
 # ---------------------------------------------------------------------------
@@ -756,17 +757,20 @@ def git_remote_root(obj, target, *, runner=None):
     user_cfg = _ssh_read_toml(
         target.host, "~/.config/datamanifest/config.toml", runner)
     env = remote_env(target.host, runner=runner)
+    match_host = target.host.split("@", 1)[1] if "@" in target.host \
+        else target.host
+    # The remote checkout's own frozen config: its three config layers (read
+    # over ssh) plus its probed environment and hostname.
     cfg = store.locations.ScopedConfig(
         local=local_cfg,
         manifest=manifest.get("_STORAGE", {}),
         user=user_cfg,
+        env=env,
+        host=match_host,
     )
     resolver = (store.datacache_dir if obj.kind == "cached"
                 else store.datasets_dir)
-    match_host = target.host.split("@", 1)[1] if "@" in target.host \
-        else target.host
-    return resolver(project_root=target.path, storage_config=cfg, env=env,
-                    host=match_host)
+    return resolver(project_root=target.path, storage_config=cfg)
 
 
 def remote_abs(obj, target, *, db, project_root, runner=None):
