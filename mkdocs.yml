@@ -75,6 +75,7 @@ nav:
       - Using it from code: api.md
       - Use cases: use-cases.md
       - Storage model: storage.md
+      - Moving data: moving-data.md
       - Configuration: configuration.md
       - Importing from other tools: importing.md
       - Language bindings: language-bindings.md

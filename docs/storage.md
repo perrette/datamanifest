@@ -268,10 +268,17 @@ stored bytes:
 
 - `datamanifest list --dirty` — show objects whose state-file record disagrees
   with what is on disk.
-- `datamanifest refresh` — make the bytes follow the current settings: move
-  objects whose recorded location disagrees with the resolved directives.
-  `--dry-run` previews; `--scan` also probes the read pools.
+- `datamanifest refresh` — make the state file follow the bytes: re-point
+  stale records to where the data actually is, drop records whose bytes are
+  gone, adopt present-but-untracked data. No bytes are touched. `--dry-run`
+  previews; `--scan` also probes the read pools.
+- `datamanifest normalize` — the other direction: make the bytes follow the
+  current settings, re-homing objects whose location disagrees with the
+  resolved directives.
 - `datamanifest where` — print the resolved manifest, state-file, and folder
   paths; `--scan` reports what the read pools could supply.
 - `datamanifest delete ID` / `datamanifest move ID DEST` — remove or relocate
   a single stored object by id.
+
+How these fit together when relocating data — within a machine or across
+machines — is walked through in [Moving data](moving-data.md).

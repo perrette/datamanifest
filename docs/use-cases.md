@@ -148,7 +148,9 @@ datamanifest list --cached --push user@hpc # bulk: push a filtered selection
 
 Sync is bytes-only and idempotent; it needs the data folders to be
 machine-global (not repo-local) on both ends. Details:
-[CLI reference → Sync between machines](cli.md#sync-between-machines).
+[CLI reference → Sync between machines](cli.md#sync-between-machines); the
+[Moving data](moving-data.md) guide covers the whole topic, local moves
+included.
 
 ## One manifest, several languages
 
