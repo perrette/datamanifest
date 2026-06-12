@@ -870,12 +870,14 @@ def get_dataset_path(
     ``$datasets_dir/$key``) resolved via
     :func:`datamanifest.store.locations.dataset_path`: ``$``-symbols,
     ``$key``, ``$USER``/env and ``~`` are interpolated, and a relative result is
-    anchored to *project_root*. ``skip_download`` (the uri is an existing local
-    file) and ``lazy_access`` (the uri is opened in place, not downloaded) both
-    return ``entry.uri`` directly. An explicit *datasets_folder* overrides
+    anchored to *project_root*. ``lazy_access`` (the uri is opened in place,
+    not downloaded) returns ``entry.uri`` directly; so does ``skip_download``
+    (a passive, externally-managed dependency) **unless** the entry carries an
+    explicit ``storage_path``, which is resolved like any other — the same rule
+    as the Julia tool. An explicit *datasets_folder* overrides
     ``[_STORAGE].datasets_dir`` (the ``$datasets_dir`` symbol) for this call.
     """
-    if entry.skip_download or entry.lazy_access:
+    if entry.lazy_access or (entry.skip_download and not entry.storage_path):
         return entry.uri
     if datasets_folder:
         storage_config = storage.override_fields(

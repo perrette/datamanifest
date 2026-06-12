@@ -200,11 +200,9 @@ click-through agreements, manual logins), pair the entry with
 `skip_download = true`: it makes the user-managed nature explicit and
 prevents any download attempt. `skip_download = true` without a
 `storage_path` makes the dataset's local path the `uri` value, returned
-verbatim — useful when the URI already *is* a local path. (One divergence to
-be aware of: on a `skip_download` entry, DataManifest.jl resolves an explicit
-`storage_path` as the location, while the Python tool always returns the
-`uri` — so when both tools read the manifest, keep the `uri` pointing at the
-actual file.)
+verbatim — useful when the URI already *is* a local path. With an explicit
+`storage_path`, the path is resolved like any other; both tools follow the
+same rule.
 
 ## Read pools
 

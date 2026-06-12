@@ -1324,6 +1324,23 @@ def test_get_dataset_path_storage_path_absolute(tmp_path):
     assert path == "/abs/path/to/data.csv"
 
 
+def test_skip_download_with_storage_path_resolves_it(tmp_path):
+    """skip_download + an explicit storage_path resolves the path (the uri is
+    returned verbatim only when there is no explicit path) - the rule shared
+    with the Julia tool."""
+    from datamanifest.database import get_dataset_path, init_dataset_entry
+
+    entry = init_dataset_entry(
+        uri="https://example.com/big.zip", key="example.com/big.zip",
+        skip_download=True, storage_path="vendor/big.zip")
+    path = get_dataset_path(entry, project_root=str(tmp_path))
+    assert path == str(tmp_path / "vendor" / "big.zip")
+
+    bare = init_dataset_entry(
+        uri="/data/local/big.zip", key="big.zip", skip_download=True)
+    assert get_dataset_path(bare, project_root=str(tmp_path)) == "/data/local/big.zip"
+
+
 def test_get_dataset_path_storage_path_relative(tmp_path):
     """A relative storage_path is anchored to project_root when available."""
     from datamanifest.database import get_dataset_path, init_dataset_entry
