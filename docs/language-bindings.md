@@ -183,7 +183,7 @@ shared store what the peer wrote there.
     Python materializes a dataset whose only fetcher is
     `[<ds>._LANG.julia].fetcher` by invoking the local Julia `DataManifest`
     environment directly —
-    `julia --project=<env> -e 'using DataManifest; download_dataset(Database("<datasets.toml>"), "<name>")'`.
+    `julia --project=<env> -e 'using DataManifest; download_dataset(Database("<manifest path>"), "<name>")'`.
     The Julia environment is discovered at `$JULIA_PROJECT`, else by walking
     up from the manifest directory for a `Project.toml` whose `[deps]` lists
     `DataManifest`; the rung also requires `julia` on `PATH`. When the

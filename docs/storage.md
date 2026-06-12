@@ -3,7 +3,7 @@
 How `datamanifest` decides where data lives on disk. This is a property of the
 manifest format — the same model is shared by the CLI, the Python API, and
 peer-language implementations such as
-[DataManifest.jl](https://github.com/perrette/DataManifest.jl).
+[DataManifest.jl](https://github.com/awi-esc/DataManifest.jl).
 
 The repository itself holds only the manifest (`datamanifest.toml`) and the
 git-ignored `.datamanifest/` directory. The data lives elsewhere, governed by

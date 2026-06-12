@@ -44,8 +44,8 @@ all follow from that entry.
     ```
 
 In every client, `add` writes the entry and downloads right away. Pass
-`--no-download` (CLI) or `skip_download=true` (Python / Julia) to only
-declare it — the download then happens on first use
+`--no-download` (CLI), `skip_download=True` (Python) or `skip_download=true`
+(Julia) to only declare it — the download then happens on first use
 (`load_dataset` / `download_dataset`) or with `datamanifest download`.
 
 The `checksum` carries its algorithm. A digest published by the source (an md5
@@ -85,7 +85,7 @@ Object-store URIs — `s3://`, `gs://`/`gcs://`, `az://`/`abfs://`/`abfss://`,
 the core HTTP downloader:
 
 - **Python / CLI** can fetch them through [fsspec](https://filesystem-spec.readthedocs.io/),
-  an *optional* dependency (`pip install 'datamanifest[fsspec]'` plus the
+  an *optional* dependency (`pip install 'datamanifestpy[fsspec]'` plus the
   scheme's backend, e.g. `s3fs` / `gcsfs` / `adlfs`). A single object or a
   whole prefix (e.g. a zarr store) is mirrored, then verified by sha256 like
   any download. Credentials follow fsspec's normal resolution (environment
@@ -282,7 +282,7 @@ An intake catalog lists several named *sources*, each with a driver and an
 URL becomes a dataset (`uri = urlpath`). intake catalogs carry no checksums,
 so `checksum` is computed (as `sha256:…`) on first download. Sources whose
 urlpath is a glob, a template, or a list are reported and skipped. Requires
-the `yaml` extra (`pip install 'datamanifest[yaml]'`).
+the `yaml` extra (`pip install 'datamanifestpy[yaml]'`).
 
 ### DVC
 

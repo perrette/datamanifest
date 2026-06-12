@@ -88,7 +88,7 @@ existing session.
 | `datacache_pools` | list of path expressions | none | Same, for `@cached` results. |
 | `project` | name | basename of the project root | The project's name — the `$project` symbol, which namespaces the default cache folder. |
 | `default_remote` | transfer target | unset | The target `push`/`pull` use when none is given on the command line. Takes any [target form](cli.md#sync-between-machines): `HOST:` (a remote store), `HOST:PATH`, a git remote name, or a local path. Used verbatim — no `$`-symbol interpolation. |
-| `canonical` | boolean | `false` | Whether manifest writes must go through `datamanifest format` to produce the cross-tool reference form. This tool's writer already emits that form, so the setting does not change its output; it is consumed by peer tools such as [DataManifest.jl](https://github.com/perrette/DataManifest.jl), which pipe their writes through `datamanifest format` when it is set. |
+| `canonical` | boolean | `false` | Whether manifest writes must go through `datamanifest format` to produce the cross-tool reference form. This tool's writer already emits that form, so the setting does not change its output; it is consumed by peer tools such as [DataManifest.jl](https://github.com/awi-esc/DataManifest.jl), which pipe their writes through `datamanifest format` when it is set. |
 | `lock_stale_age` | seconds | `30` | How old a materialization lock may grow (its holder refreshes it every `lock_stale_age / 2` as a heartbeat) before a waiting process may reclaim it. A non-positive or unparsable value falls back to the default. |
 
 The environment-variable form is always `DATAMANIFEST_` + the upper-cased

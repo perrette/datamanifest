@@ -7,8 +7,9 @@ is shared across languages and defined normatively in the
 [`datamanifest.toml` specification](https://perrette.github.io/datamanifest.toml);
 see [Conformance](conformance.md) for which parts this implementation supports.
 
-The canonical filename is `datamanifest.toml`; `datasets.toml` and
-`Datasets.toml` are also recognized when walking up from the working directory.
+The canonical filename is `datamanifest.toml`; `DataManifest.toml`,
+`datasets.toml` and `Datasets.toml` are also recognized, in that order, when
+walking up from the working directory.
 
 ## A minimal entry
 

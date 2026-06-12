@@ -1,7 +1,7 @@
 # Conformance & the shared manifest format
 
 `datamanifest` reads and writes a manifest format that is **shared across languages** —
-the same `datasets.toml` can be consumed by sibling implementations (the Julia
+the same `datamanifest.toml` can be consumed by sibling implementations (the Julia
 [`DataManifest.jl`](https://github.com/awi-esc/DataManifest.jl)) without conflict, because
 each tool reads the common fields plus its own `_LANG`-namespaced bindings and preserves
 the rest verbatim. The format is defined in its own specification,

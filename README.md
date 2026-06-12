@@ -72,8 +72,9 @@ Then load it from your code:
 ```python
 import datamanifest
 
-df = datamanifest.load_dataset("co2")          # download on first use, then load
-path = datamanifest.get_dataset_path("co2")    # just the on-disk path
+db = datamanifest.Database("datamanifest.toml")
+df = db.load_dataset("co2")          # download on first use, then load
+path = db.get_dataset_path("co2")    # just the on-disk path
 ```
 
 **Commit `datamanifest.toml`** — the recipe of what to fetch and how. The data

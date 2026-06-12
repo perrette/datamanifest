@@ -134,7 +134,7 @@ in-memory object (the CLI stops at the path — loading is a library concern):
 
     ```julia
     tbl = load_dataset(db, "co2")   # needs a loader declared for the dataset or
-                                    # its format, e.g. csv = "CSV:read"
+                                    # its format, e.g. csv = "CSV:File"
     ```
 
     How loaders are declared in the manifest is covered in

@@ -165,7 +165,7 @@ uri = "https://example.com/mydata.csv"
 loader = "mypkg.load:load_mydata"      # how Python loads it
 
 [mydata._LANG.julia]
-loader = "MyPkg.load_mydata"           # Julia's binding; Python never touches it
+loader = "MyPkg:load_mydata"           # Julia's binding; Python never touches it
 ```
 
 A single-language project can write bare `fetcher` / `loader` / `shell` fields
