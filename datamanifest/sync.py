@@ -673,7 +673,8 @@ def _ssh_read_toml(host, path, runner=None):
 
 
 # Manifest filenames probed in a peer checkout (canonical + legacy aliases).
-_MANIFEST_NAMES = ("datamanifest.toml", "datasets.toml", "Datasets.toml")
+_MANIFEST_NAMES = ("datamanifest.toml", "DataManifest.toml", "datasets.toml",
+                   "Datasets.toml")
 # State-file paths probed in a peer checkout (canonical + legacy siblings).
 _STATE_SUBPATHS = (".datamanifest/state.toml", ".datamanifest-state.toml",
                    "cached.toml")

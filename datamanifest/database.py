@@ -1523,9 +1523,23 @@ class Database:
     # module-level (default-db) wrappers. `db.X(...)` == "this db"; the module
     # `datamanifest.X(...)` == "the default db". -----
 
-    def add(self, uri: str = "", name: str = "", **kwargs):
-        """Register a dataset (alias for :meth:`register_dataset`)."""
-        return self.register_dataset(uri=uri, name=name, **kwargs)
+    def add(self, uri: str = "", name: str = "", skip_download: bool = False,
+            **kwargs):
+        """Register a dataset and download it.
+
+        Same registration as :meth:`register_dataset`, followed by a download
+        (the same path the CLI's ``add`` command uses). Pass
+        ``skip_download=True`` to register only. Entries that are never
+        fetched (``lazy_access=True``, or a ``skip_download=true`` entry
+        field) are registered and left in place — the download step resolves
+        their path without transferring anything.
+
+        Returns ``(name, entry)``.
+        """
+        name, entry = self.register_dataset(uri=uri, name=name, **kwargs)
+        if not skip_download:
+            self.download_dataset(name)
+        return (name, entry)
 
     def download_dataset(self, name, **kwargs):
         """Download a dataset declared in this database; return its path."""

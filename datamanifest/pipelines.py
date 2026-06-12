@@ -982,7 +982,8 @@ def _module_register_dataset(*args, db=None, **kwargs):
 
 
 def _module_add(*args, db=None, **kwargs):
-    """Register a dataset — alias for register_dataset (default db unless ``db=``)."""
+    """Register a dataset and download it (``skip_download=True`` registers
+    only) — default db unless ``db=``."""
     return resolve_db(db).add(*args, **kwargs)
 
 

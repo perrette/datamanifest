@@ -304,6 +304,40 @@ def test_database_convenience_methods(tmp_path):
     assert "x" not in db.datasets
 
 
+def test_add_downloads_by_default(tmp_path):
+    """`add` registers and downloads (like the CLI and the Julia tool);
+    `skip_download=True` registers only; `register_dataset` never downloads."""
+    import json
+    import os
+
+    from datamanifest import Database
+
+    # Distinct source files so each entry resolves to its own local path.
+    srcs = {}
+    for stem in ("dl", "nodl", "reg"):
+        srcs[stem] = tmp_path / f"{stem}.json"
+        srcs[stem].write_text(json.dumps({"k": stem}))
+    db = Database(datasets_folder=str(tmp_path / "data"), persist=False)
+
+    # add: registered AND downloaded.
+    name, _ = db.add(f"file://{srcs['dl']}", name="dl")
+    assert name == "dl"
+    assert os.path.exists(db.get_dataset_path("dl"))
+
+    # add(skip_download=True): registered only.
+    name, _ = db.add(f"file://{srcs['nodl']}", name="nodl", skip_download=True)
+    assert "nodl" in db.datasets
+    assert not os.path.exists(db.get_dataset_path("nodl"))
+    # the entry field is untouched — skip_download here only opts out of the
+    # immediate download (matching the Julia tool's `add`).
+    assert db.datasets["nodl"].skip_download is False
+
+    # register_dataset: registered only (unchanged semantics).
+    db.register_dataset(f"file://{srcs['reg']}", name="reg", persist=False)
+    assert "reg" in db.datasets
+    assert not os.path.exists(db.get_dataset_path("reg"))
+
+
 def test_module_functions_accept_db_keyword(tmp_path):
     """`datamanifest.X(..., db=mydb)` routes to that db's method; without `db=` it
     uses the auto-discovered default database."""
@@ -1444,6 +1478,22 @@ def test_find_default_toml_discovery(tmp_path):
     proj.mkdir()
     (proj / "pyproject.toml").write_text("[project]\nname = 'x'\n")
     assert _find_default_toml(str(proj)) == str(proj / "datamanifest.toml")
+
+
+def test_find_default_toml_precedence(tmp_path):
+    """Discovery order shared with the Julia tool: datamanifest.toml >
+    DataManifest.toml > datasets.toml > Datasets.toml (first existing wins)."""
+    from datamanifest.config import TOML_FILENAMES, _find_default_toml
+
+    assert TOML_FILENAMES == ["datamanifest.toml", "DataManifest.toml",
+                              "datasets.toml", "Datasets.toml"]
+
+    (tmp_path / "datasets.toml").write_text("[datasets]\n")
+    (tmp_path / "DataManifest.toml").write_text("[datasets]\n")
+    assert _find_default_toml(str(tmp_path)) == str(tmp_path / "DataManifest.toml")
+
+    (tmp_path / "datamanifest.toml").write_text("[datasets]\n")
+    assert _find_default_toml(str(tmp_path)) == str(tmp_path / "datamanifest.toml")
 
 
 def test_find_default_toml_none(tmp_path):

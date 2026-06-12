@@ -76,9 +76,12 @@ def project_root_from_paths(datasets_toml_path: str, current_project_path=None) 
     return ""
 
 
-# The canonical manifest name is ``datamanifest.toml``; ``datasets.toml`` /
-# ``Datasets.toml`` are recognized legacy aliases (read when present).
-TOML_FILENAMES = ["datamanifest.toml", "datasets.toml", "Datasets.toml"]
+# The canonical manifest name is ``datamanifest.toml``; ``DataManifest.toml``,
+# ``datasets.toml`` and ``Datasets.toml`` are recognized legacy aliases (read
+# when present). The discovery order is shared with the Julia tool: the first
+# existing name wins.
+TOML_FILENAMES = ["datamanifest.toml", "DataManifest.toml", "datasets.toml",
+                  "Datasets.toml"]
 
 
 def _find_default_toml(start: str) -> str:

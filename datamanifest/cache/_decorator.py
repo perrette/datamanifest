@@ -300,7 +300,8 @@ def _discover_manifest(project_root):
     placement and storage configuration.
 
     An explicit *project_root* is honored; the manifest is then the nearest
-    ``datasets.toml`` / ``Datasets.toml`` / ``datamanifest.toml`` at or above it.
+    ``datamanifest.toml`` / ``DataManifest.toml`` / ``datasets.toml`` /
+    ``Datasets.toml`` at or above it.
     Otherwise both are discovered by walking up from the current directory
     (:func:`datamanifest.config._find_default_toml`) — the same resolution the
     rest of the tool uses, so the scope resolves to the project's
