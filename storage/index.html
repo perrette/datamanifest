@@ -16,7 +16,7 @@
         <link rel="prev" href="../use-cases/">
       
       
-        <link rel="next" href="../configuration/">
+        <link rel="next" href="../moving-data/">
       
       
         
@@ -744,6 +744,34 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../moving-data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Moving data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -1551,14 +1579,20 @@ stored bytes:</p>
 <ul>
 <li><code>datamanifest list --dirty</code> — show objects whose state-file record disagrees
   with what is on disk.</li>
-<li><code>datamanifest refresh</code> — make the bytes follow the current settings: move
-  objects whose recorded location disagrees with the resolved directives.
-  <code>--dry-run</code> previews; <code>--scan</code> also probes the read pools.</li>
+<li><code>datamanifest refresh</code> — make the state file follow the bytes: re-point
+  stale records to where the data actually is, drop records whose bytes are
+  gone, adopt present-but-untracked data. No bytes are touched. <code>--dry-run</code>
+  previews; <code>--scan</code> also probes the read pools.</li>
+<li><code>datamanifest normalize</code> — the other direction: make the bytes follow the
+  current settings, re-homing objects whose location disagrees with the
+  resolved directives.</li>
 <li><code>datamanifest where</code> — print the resolved manifest, state-file, and folder
   paths; <code>--scan</code> reports what the read pools could supply.</li>
 <li><code>datamanifest delete ID</code> / <code>datamanifest move ID DEST</code> — remove or relocate
   a single stored object by id.</li>
 </ul>
+<p>How these fit together when relocating data — within a machine or across
+machines — is walked through in <a href="../moving-data/">Moving data</a>.</p>
 
 
 
