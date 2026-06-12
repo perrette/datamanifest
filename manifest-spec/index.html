@@ -2394,7 +2394,7 @@ Types are TOML types (<code>string</code>, <code>array of string</code>, <code>b
 <td><code>skip_download</code></td>
 <td>bool</td>
 <td><code>false</code></td>
-<td><strong>Management mode</strong> — treat the dataset as a <em>passive, externally-managed dependency</em>: it is <strong>not</strong> downloaded, <strong>not</strong> checksum-verified, and <strong>never</strong> moved or deleted by maintenance; the documented <code>uri</code>/path is returned as-is. For data the user provides and maintains (e.g. a large shared archive that should not be fetched over the network). Distinct from <code>lazy_access</code> — this is about <em>who manages the bytes</em>, not <em>how they are read</em>.</td>
+<td><strong>Management mode</strong> — treat the dataset as a <em>passive, externally-managed dependency</em>: it is <strong>not</strong> downloaded, <strong>not</strong> checksum-verified, and <strong>never</strong> moved or deleted by maintenance. An explicit <code>storage_path</code> is resolved like any other; without one, the documented <code>uri</code> is returned as-is. For data the user provides and maintains (e.g. a large shared archive that should not be fetched over the network). Distinct from <code>lazy_access</code> — this is about <em>who manages the bytes</em>, not <em>how they are read</em>.</td>
 </tr>
 <tr>
 <td><code>lazy_access</code></td>

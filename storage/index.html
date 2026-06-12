@@ -1491,11 +1491,9 @@ click-through agreements, manual logins), pair the entry with
 <code>skip_download = true</code>: it makes the user-managed nature explicit and
 prevents any download attempt. <code>skip_download = true</code> without a
 <code>storage_path</code> makes the dataset's local path the <code>uri</code> value, returned
-verbatim — useful when the URI already <em>is</em> a local path. (One divergence to
-be aware of: on a <code>skip_download</code> entry, DataManifest.jl resolves an explicit
-<code>storage_path</code> as the location, while the Python tool always returns the
-<code>uri</code> — so when both tools read the manifest, keep the <code>uri</code> pointing at the
-actual file.)</p>
+verbatim — useful when the URI already <em>is</em> a local path. With an explicit
+<code>storage_path</code>, the path is resolved like any other; both tools follow the
+same rule.</p>
 <h2 id="read-pools">Read pools<a class="headerlink" href="#read-pools" title="Permanent link">&para;</a></h2>
 <p>If a dataset (or a <code>@cached</code> result) already exists somewhere else on your
 machine — say another project downloaded it — <code>datamanifest</code> can reuse that
