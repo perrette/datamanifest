@@ -13,10 +13,10 @@
         <link rel="canonical" href="https://perrette.github.io/datamanifest/adding-datasets/">
       
       
-        <link rel="prev" href="../configuration/">
+        <link rel="prev" href="../quickstart/">
       
       
-        <link rel="next" href="../importing/">
+        <link rel="next" href="../api/">
       
       
         
@@ -53,6 +53,8 @@
       
     
     
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
     <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -78,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#adding-datasets-from-external-sources" class="md-skip">
+        <a href="#adding-datasets" class="md-skip">
           Skip to content
         </a>
       
@@ -455,6 +457,336 @@
                 
   
   
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adding datasets
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adding datasets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#a-dataset-is-a-uri-plus-a-checksum" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A dataset is a URI plus a checksum
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#supported-sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported sources
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Supported sources">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#direct-downloads-https-http" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Direct downloads (https / http)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dois" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DOIs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#object-stores" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Object stores
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#local-ssh-and-git-sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local, SSH and git sources
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#other-tools-catalogs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other tools' catalogs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-can-get-in-the-way" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What can get in the way
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What can get in the way">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#hosts-behind-bot-protection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hosts behind bot protection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#services-that-require-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Services that require authentication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rate-limits-and-very-large-datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate limits and very large datasets
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reference-add-sources-in-detail" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference: add sources in detail
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reference: add sources in detail">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-direct-url" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A direct URL
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-zenodo-doi-or-record-url" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A Zenodo DOI or record URL
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-pangaea-doi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A PANGAEA DOI
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reference-import-another-tools-catalog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference: import — another tool's catalog
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reference: import — another tool&#39;s catalog">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pooch-registries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pooch registries
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#intake-catalogs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        intake catalogs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dvc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DVC
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generic-csv-url-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generic CSV / URL list
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
   
   
     <li class="md-nav__item">
@@ -465,7 +797,7 @@
   <span class="md-ellipsis">
     
   
-    Using it from your code
+    Using it from code
   
 
     
@@ -558,203 +890,6 @@
   
 
       </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-    
-  
-  
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Adding datasets
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Adding datasets
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#add-add-datasets-from-a-reference" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        add — add dataset(s) from a reference
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="add — add dataset(s) from a reference">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#a-direct-url" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        A direct URL
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#a-zenodo-doi-or-record-url" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        A Zenodo DOI or record URL
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#a-pangaea-doi" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        A PANGAEA DOI
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#import-bulk-import-another-tools-catalog" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        import — bulk-import another tool's catalog
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="import — bulk-import another tool&#39;s catalog">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#pooch-registries" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        pooch registries
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#intake-catalogs" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        intake catalogs
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#dvc" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        DVC
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#generic-csv-url-list" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Generic CSV / URL list
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-maps-where-summary" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What maps where (summary)
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -959,6 +1094,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../python-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1108,15 +1271,159 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#add-add-datasets-from-a-reference" class="md-nav__link">
+  <a href="#a-dataset-is-a-uri-plus-a-checksum" class="md-nav__link">
     <span class="md-ellipsis">
       
-        add — add dataset(s) from a reference
+        A dataset is a URI plus a checksum
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="add — add dataset(s) from a reference">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#supported-sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported sources
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Supported sources">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#direct-downloads-https-http" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Direct downloads (https / http)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dois" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DOIs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#object-stores" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Object stores
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#local-ssh-and-git-sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local, SSH and git sources
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#other-tools-catalogs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other tools' catalogs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-can-get-in-the-way" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What can get in the way
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What can get in the way">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#hosts-behind-bot-protection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hosts behind bot protection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#services-that-require-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Services that require authentication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rate-limits-and-very-large-datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate limits and very large datasets
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reference-add-sources-in-detail" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference: add sources in detail
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reference: add sources in detail">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1158,15 +1465,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#import-bulk-import-another-tools-catalog" class="md-nav__link">
+  <a href="#reference-import-another-tools-catalog" class="md-nav__link">
     <span class="md-ellipsis">
       
-        import — bulk-import another tool's catalog
+        Reference: import — another tool's catalog
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="import — bulk-import another tool&#39;s catalog">
+    <nav class="md-nav" aria-label="Reference: import — another tool&#39;s catalog">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1218,17 +1525,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#what-maps-where-summary" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What maps where (summary)
-      
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -1254,52 +1550,226 @@
   
 
 
-<h1 id="adding-datasets-from-external-sources">Adding datasets from external sources<a class="headerlink" href="#adding-datasets-from-external-sources" title="Permanent link">&para;</a></h1>
-<p>datamanifest has two commands for bringing datasets into the manifest,
-distinguished by what you hand them:</p>
+<h1 id="adding-datasets">Adding datasets<a class="headerlink" href="#adding-datasets" title="Permanent link">&para;</a></h1>
+<p>This page covers how datasets get into the manifest: the principle, which
+sources are supported (and which are not), and the per-source detail for the
+<code>add</code> and <code>import</code> commands.</p>
+<h2 id="a-dataset-is-a-uri-plus-a-checksum">A dataset is a URI plus a checksum<a class="headerlink" href="#a-dataset-is-a-uri-plus-a-checksum" title="Permanent link">&para;</a></h2>
+<p>A dataset is declared by a <strong>URI</strong> — where the bytes live — and verified by a
+<strong>checksum</strong> — a content hash, written as <code>&lt;algo&gt;:&lt;hex&gt;</code>. Adding a dataset
+means writing one entry to the manifest; download, verification and sharing
+all follow from that entry.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:4"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">CLI</label><label for="__tabbed_1_2">Python</label><label for="__tabbed_1_3">Julia</label><label for="__tabbed_1_4">Manifest</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>datamanifest<span class="w"> </span>add<span class="w"> </span>https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv<span class="w"> </span>--name<span class="w"> </span>co2
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">datamanifest</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">db</span> <span class="o">=</span> <span class="n">datamanifest</span><span class="o">.</span><span class="n">Database</span><span class="p">(</span><span class="s2">&quot;datamanifest.toml&quot;</span><span class="p">)</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">db</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s2">&quot;https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">using</span><span class="w"> </span><span class="n">DataManifest</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">db</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Database</span><span class="p">(</span><span class="s">&quot;datamanifest.toml&quot;</span><span class="p">)</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">add</span><span class="p">(</span><span class="n">db</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv&quot;</span><span class="p">;</span><span class="w"> </span><span class="n">name</span><span class="o">=</span><span class="s">&quot;co2&quot;</span><span class="p">)</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[co2]</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">checksum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;sha256:0058b3788040b5c27b2b5c1dd6d26226b7e4deef85e34c153e64806c37df7c75&quot;</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">uri</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv&quot;</span>
+</code></pre></div>
+</div>
+</div>
+</div>
+<p>When the download happens differs slightly per client: the CLI downloads right
+away (pass <code>--no-download</code> to only declare), Julia's <code>add</code> does too (pass
+<code>skip_download=true</code>), while Python's <code>db.add</code> only writes the entry — the
+download happens on first use (<code>db.load_dataset</code> / <code>db.download_dataset</code>).
+Without an explicit <code>db</code>, the module-level <code>datamanifest.add(...)</code> /
+<code>DataManifest.add(...)</code> write to the default database.</p>
+<p>The <code>checksum</code> carries its algorithm. A digest published by the source (an md5
+from a Zenodo or PANGAEA file listing, a pooch registry, a DVC file) is
+recorded as <code>checksum = "md5:…"</code> and verified in md5 — never re-hashed to
+sha256. When the source publishes no digest, one is computed (as <code>sha256:…</code>)
+on the first download or adoption and written back to the manifest.</p>
+<p>Since the manifest is plain TOML, you can also write the entry by hand —
+<code>[name]</code> plus <code>uri = "…"</code> — and let the checksum fill in on first download.</p>
+<h2 id="supported-sources">Supported sources<a class="headerlink" href="#supported-sources" title="Permanent link">&para;</a></h2>
+<h3 id="direct-downloads-https-http">Direct downloads (https / http)<a class="headerlink" href="#direct-downloads-https-http" title="Permanent link">&para;</a></h3>
+<p>Any plain <code>https://</code> or <code>http://</code> URL works out of the box. Downloads are
+streamed with a standard HTTP client, redirects are followed, and an
+interrupted download resumes from the partial file.</p>
+<h3 id="dois">DOIs<a class="headerlink" href="#dois" title="Permanent link">&para;</a></h3>
+<p>Two repositories have fine-tuned importers behind <code>add</code>: <strong>Zenodo</strong>
+(<code>10.5281/zenodo.&lt;id&gt;</code> or a <code>zenodo.org/records/&lt;id&gt;</code> URL) and <strong>PANGAEA</strong>
+(<code>10.1594/PANGAEA.&lt;id&gt;</code> or a <code>doi.pangaea.de</code> URL). Both resolve the record
+through the repository's API, declare its files (one bundled dataset by
+default, one dataset per file with <code>--split</code>), and attach the DOI and title to
+each entry. See the <a href="#a-zenodo-doi-or-record-url">reference below</a> for the
+options.</p>
+<p>Any other DOI is <strong>not</strong> auto-resolved. Follow the DOI yourself and <code>add</code> the
+direct file URL it leads to.</p>
+<h3 id="object-stores">Object stores<a class="headerlink" href="#object-stores" title="Permanent link">&para;</a></h3>
+<p>Object-store URIs — <code>s3://</code>, <code>gs://</code>/<code>gcs://</code>, <code>az://</code>/<code>abfs://</code>/<code>abfss://</code>,
+<code>adl://</code>, <code>gdrive://</code> — are valid dataset URIs, but they are not handled by
+the core HTTP downloader:</p>
+<ul>
+<li><strong>Python / CLI</strong> can fetch them through <a href="https://filesystem-spec.readthedocs.io/">fsspec</a>,
+  an <em>optional</em> dependency (<code>pip install 'datamanifest[fsspec]'</code> plus the
+  scheme's backend, e.g. <code>s3fs</code> / <code>gcsfs</code> / <code>adlfs</code>). A single object or a
+  whole prefix (e.g. a zarr store) is mirrored, then verified by sha256 like
+  any download. Credentials follow fsspec's normal resolution (environment
+  variables, config files, instance metadata).</li>
+<li><strong><code>add --lazy</code></strong> never downloads: it marks the entry <code>lazy_access = true</code>
+  and binds the built-in fsspec loader (a Python-only binding), so the URI is
+  opened in place. No local copy means no checksum.</li>
+<li><strong>Julia</strong> has no native object-store fetcher: a <code>lazy_access</code> entry with a
+  scheme-aware loader works, or the fetch is
+  <a href="../language-bindings/">delegated</a> to a peer datamanifest tool that
+  implements the scheme.</li>
+</ul>
+<h3 id="local-ssh-and-git-sources">Local, SSH and git sources<a class="headerlink" href="#local-ssh-and-git-sources" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>file:///path/to/data</code> — a local file or folder, copied into the store.</li>
+<li><code>ssh://host/path</code> — fetched with <code>rsync</code>; when <code>host</code> is the local machine
+  it is treated as a local file.</li>
+<li><code>git://</code>, <code>ssh+git://</code>, or an <code>https://…/*.git</code> URL — the repository is
+  cloned. Folders (clones, extracted archives) get a checksum computed over
+  the whole tree.</li>
+</ul>
+<h3 id="other-tools-catalogs">Other tools' catalogs<a class="headerlink" href="#other-tools-catalogs" title="Permanent link">&para;</a></h3>
+<p>When the datasets are already listed in another tool's catalog file — a pooch
+registry, an intake catalog, DVC metadata, or a plain CSV/URL list — <code>import</code>
+converts the whole catalog to manifest entries in one go, adopting
+already-downloaded files in place. See the
+<a href="#reference-import-another-tools-catalog">reference below</a> and
+<a href="../importing/">importing from other tools</a>.</p>
+<h3 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>
-<th>Verb</th>
-<th>You give it…</th>
-<th>Yields</th>
-<th>Examples</th>
+<th>Source type</th>
+<th>Example</th>
+<th>How it's added</th>
+<th>Checksum</th>
+<th>Notes</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>add</code></td>
-<td>a <strong>reference to data</strong> (URL, DOI)</td>
-<td>one dataset, or all files of a record</td>
-<td>direct URL, Zenodo DOI, PANGAEA DOI</td>
+<td>Direct URL</td>
+<td><code>https://host/file.nc</code></td>
+<td><code>add URL</code></td>
+<td>computed (<code>sha256:…</code>) on first download</td>
+<td>redirects followed; interrupted downloads resume</td>
 </tr>
 <tr>
-<td><code>import</code></td>
-<td><strong>another tool's catalog file</strong></td>
-<td>many datasets</td>
-<td>pooch, intake, DVC</td>
+<td>Zenodo record</td>
+<td><code>10.5281/zenodo.1234567</code></td>
+<td><code>add DOI</code> (declare-only)</td>
+<td>published md5 per file with <code>--split</code>, else computed</td>
+<td>one bundle by default; <code>--split</code>, <code>--pick</code></td>
+</tr>
+<tr>
+<td>PANGAEA dataset</td>
+<td><code>10.1594/PANGAEA.930590</code></td>
+<td><code>add DOI</code> (declare-only)</td>
+<td>published md5 per file with <code>--split</code>, else computed</td>
+<td>tabular / file / collection / series detected</td>
+</tr>
+<tr>
+<td>Other DOI</td>
+<td><code>10.1029/…</code></td>
+<td>not auto-resolved — <code>add</code> the file URL it leads to</td>
+<td>computed on first download</td>
+<td>only Zenodo and PANGAEA resolvers are built in</td>
+</tr>
+<tr>
+<td>Object store</td>
+<td><code>s3://bucket/key</code></td>
+<td><code>add s3://…</code> (needs the <code>fsspec</code> extra) or <code>add --lazy</code></td>
+<td>sha256 after fetch; none when lazy</td>
+<td>lazy entries open in place; Julia needs a loader or delegation</td>
+</tr>
+<tr>
+<td>Local file / folder</td>
+<td><code>file:///data/file.nc</code></td>
+<td><code>add file://…</code></td>
+<td>computed on adoption</td>
+<td>copied into the store</td>
+</tr>
+<tr>
+<td>SSH host</td>
+<td><code>ssh://host/path</code></td>
+<td><code>add ssh://…</code></td>
+<td>computed on fetch</td>
+<td>rsync; the local hostname resolves to <code>file</code></td>
+</tr>
+<tr>
+<td>Git repository</td>
+<td><code>https://host/repo.git</code></td>
+<td><code>add URL</code></td>
+<td>computed over the cloned tree</td>
+<td>folder checksums can be disabled (<code>skip_checksum_folders</code>)</td>
+</tr>
+<tr>
+<td>Another tool's catalog</td>
+<td><code>registry.txt</code>, <code>catalog.yml</code>, <code>*.dvc</code></td>
+<td><code>import pooch/intake/dvc/csv/urls</code></td>
+<td>taken from the catalog when it publishes one</td>
+<td>adopts existing download caches</td>
 </tr>
 </tbody>
 </table>
-<p>If the argument is another tool's manifest, use <code>import</code>; if it is a pointer
-to data, use <code>add</code>.</p>
-<p>Both commands produce standard <code>datamanifest.toml</code> entries (<code>uri</code>, <code>checksum</code>,
-optional <code>doi</code>/<code>description</code>/<code>extract</code>). Where a local copy of a file already
-exists — for example in another tool's download cache — it is <strong>adopted</strong>:
-verified against its checksum and recorded in the state file (the
-machine-generated record of where each dataset lives on disk), so nothing is
-re-downloaded.</p>
-<p>A note on checksums: the <code>checksum</code> field carries its algorithm as
-<code>&lt;algo&gt;:&lt;hex&gt;</code>. A digest published by the source (an md5 from a pooch
-registry, a DVC file, a Zenodo or PANGAEA file listing) is recorded as
-<code>checksum = "md5:…"</code> and verified in md5 — not re-hashed to sha256. When the
-source publishes no digest, one is computed (as <code>sha256:…</code>) on the first
-download or adoption.</p>
-<hr />
-<h2 id="add-add-datasets-from-a-reference"><code>add</code> — add dataset(s) from a reference<a class="headerlink" href="#add-add-datasets-from-a-reference" title="Permanent link">&para;</a></h2>
+<h2 id="what-can-get-in-the-way">What can get in the way<a class="headerlink" href="#what-can-get-in-the-way" title="Permanent link">&para;</a></h2>
+<p>Some sources cannot be fetched by a generic downloader. The manifest can still
+<em>declare</em> them — the limits below are about who produces the bytes.</p>
+<h3 id="hosts-behind-bot-protection">Hosts behind bot protection<a class="headerlink" href="#hosts-behind-bot-protection" title="Permanent link">&para;</a></h3>
+<p>Downloads use a plain HTTP client. A host behind Cloudflare or similar
+bot protection may answer it with a challenge page or an outright refusal,
+even though the same URL works in a browser. The dataset can still be
+recorded:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>datamanifest<span class="w"> </span>add<span class="w"> </span>https://protected.example.org/data.csv<span class="w"> </span>--name<span class="w"> </span>data<span class="w"> </span>--no-download
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>datamanifest<span class="w"> </span>path<span class="w"> </span>data<span class="w">        </span><span class="c1"># where the file is expected</span>
+</code></pre></div>
+<p>Fetch the file yourself (browser, <code>wget</code> with cookies, …) and place it at
+that path — the next <code>datamanifest download</code> adopts the existing copy and
+records its checksum instead of re-fetching. Alternatively, bind a
+<a href="../language-bindings/">fetcher</a> that knows how to talk to the host, and
+<code>download</code> runs it.</p>
+<h3 id="services-that-require-authentication">Services that require authentication<a class="headerlink" href="#services-that-require-authentication" title="Permanent link">&para;</a></h3>
+<p>Credentials are never stored in the manifest; you provision them on each
+machine. Two patterns:</p>
+<ul>
+<li><strong>Object stores</strong> — credentials resolve through fsspec's normal chain
+  (environment variables, config files, instance metadata); nothing
+  datamanifest-specific.</li>
+<li><strong>API-gated services</strong> — wrap the service's own client in a <strong>fetcher
+  binding</strong>: a function that produces the dataset's bytes, declared in the
+  manifest in place of a downloadable <code>uri</code>. For example, Copernicus CDS data
+  needs an account key in <code>~/.cdsapirc</code>; a small function calling the
+  <code>cdsapi</code> client, bound as the dataset's fetcher, makes the dataset
+  reproducible for anyone who has their own key. Any API client can be
+  wrapped this way — see <a href="../language-bindings/">language bindings</a>.</li>
+</ul>
+<h3 id="rate-limits-and-very-large-datasets">Rate limits and very large datasets<a class="headerlink" href="#rate-limits-and-very-large-datasets" title="Permanent link">&para;</a></h3>
+<p>Zenodo and PANGAEA records are declared without downloading for a reason:
+records can hold many gigabytes, and repositories rate-limit bulk access. Use
+<code>--pick</code> to declare only the files you need, and run <code>datamanifest download</code>
+when you actually want the bytes — HTTP downloads stream to disk and resume
+from a partial file after an interruption. An object-store prefix (e.g. a
+zarr store) is mirrored recursively: mind its total size before fetching
+rather than using <code>--lazy</code>.</p>
+<h2 id="reference-add-sources-in-detail">Reference: <code>add</code> sources in detail<a class="headerlink" href="#reference-add-sources-in-detail" title="Permanent link">&para;</a></h2>
 <h3 id="a-direct-url">A direct URL<a class="headerlink" href="#a-direct-url" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>datamanifest<span class="w"> </span>add<span class="w"> </span>https://www.ncei.noaa.gov/woa/temperature.nc
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>datamanifest<span class="w"> </span>add<span class="w"> </span><span class="s2">&quot;https://zenodo.org/records/1234567/files/grid.zip&quot;</span><span class="w"> </span>--extract
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>datamanifest<span class="w"> </span>add<span class="w"> </span>https://www.ncei.noaa.gov/woa/temperature.nc
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>datamanifest<span class="w"> </span>add<span class="w"> </span><span class="s2">&quot;https://zenodo.org/records/1234567/files/grid.zip&quot;</span><span class="w"> </span>--extract
 </code></pre></div>
 <p>Declares one dataset and downloads it, recording its <code>checksum</code> (as
 <code>sha256:…</code>). Options:</p>
@@ -1312,8 +1782,8 @@ download or adoption.</p>
   fsspec loader.</li>
 </ul>
 <h3 id="a-zenodo-doi-or-record-url">A Zenodo DOI or record URL<a class="headerlink" href="#a-zenodo-doi-or-record-url" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>datamanifest<span class="w"> </span>add<span class="w"> </span><span class="m">10</span>.5281/zenodo.1234567<span class="w">               </span><span class="c1"># by DOI</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>datamanifest<span class="w"> </span>add<span class="w"> </span>https://zenodo.org/records/1234567<span class="w">   </span><span class="c1"># or by record URL</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>datamanifest<span class="w"> </span>add<span class="w"> </span><span class="m">10</span>.5281/zenodo.1234567<span class="w">               </span><span class="c1"># by DOI</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>datamanifest<span class="w"> </span>add<span class="w"> </span>https://zenodo.org/records/1234567<span class="w">   </span><span class="c1"># or by record URL</span>
 </code></pre></div>
 <p>Resolves the record through Zenodo's API and declares its files (declare-only —
 records can be large; run <code>datamanifest download</code> to fetch). By default the
@@ -1331,8 +1801,8 @@ Every entry carries the record DOI (<code>doi</code>) and title (<code>descripti
   (e.g. <code>--pick '*.nc'</code>).</li>
 </ul>
 <h3 id="a-pangaea-doi">A PANGAEA DOI<a class="headerlink" href="#a-pangaea-doi" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>datamanifest<span class="w"> </span>add<span class="w"> </span><span class="m">10</span>.1594/PANGAEA.930590<span class="w">                          </span><span class="c1"># by DOI</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>datamanifest<span class="w"> </span>add<span class="w"> </span>https://doi.pangaea.de/10.1594/PANGAEA.930590<span class="w">   </span><span class="c1"># or by URL</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>datamanifest<span class="w"> </span>add<span class="w"> </span><span class="m">10</span>.1594/PANGAEA.930590<span class="w">                          </span><span class="c1"># by DOI</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>datamanifest<span class="w"> </span>add<span class="w"> </span>https://doi.pangaea.de/10.1594/PANGAEA.930590<span class="w">   </span><span class="c1"># or by URL</span>
 </code></pre></div>
 <p>Resolves the dataset through PANGAEA's web services (declare-only, like
 Zenodo) and classifies it from its metadata:</p>
@@ -1360,18 +1830,18 @@ Zenodo) and classifies it from its metadata:</p>
 <p>A reference that already pins a representation — e.g.
 <code>https://doi.pangaea.de/10.1594/PANGAEA.930512?format=zip</code> — is treated as a
 plain URL (you chose that file), not re-resolved.</p>
-<hr />
-<h2 id="import-bulk-import-another-tools-catalog"><code>import</code> — bulk-import another tool's catalog<a class="headerlink" href="#import-bulk-import-another-tools-catalog" title="Permanent link">&para;</a></h2>
-<p>All importers share <code>--cache-dir</code> (adopt already-downloaded files in place,
-checksum-verified), <code>--base-url</code> (root URL for entries without one),
-<code>--dry-run</code>, and <code>--overwrite</code>.</p>
+<h2 id="reference-import-another-tools-catalog">Reference: <code>import</code> — another tool's catalog<a class="headerlink" href="#reference-import-another-tools-catalog" title="Permanent link">&para;</a></h2>
+<p>Where <code>add</code> takes a pointer to data, <code>import</code> takes <strong>another tool's catalog
+file</strong> and converts every entry. All importers share <code>--cache-dir</code> (adopt
+already-downloaded files in place, checksum-verified), <code>--base-url</code> (root URL
+for entries without one), <code>--dry-run</code>, and <code>--overwrite</code>.</p>
 <h3 id="pooch-registries">pooch registries<a class="headerlink" href="#pooch-registries" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>pooch<span class="w"> </span>registry.txt<span class="w"> </span>--base-url<span class="w"> </span>URL<span class="w"> </span><span class="o">[</span>--cache-dir<span class="w"> </span>DIR<span class="o">]</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>pooch<span class="w"> </span>registry.txt<span class="w"> </span>--base-url<span class="w"> </span>URL<span class="w"> </span><span class="o">[</span>--cache-dir<span class="w"> </span>DIR<span class="o">]</span>
 </code></pre></div>
 <p>Each <code>filename [algo:]hash [url]</code> line becomes a dataset. <code>--cache-dir</code>
 (e.g. <code>pooch.os_cache('pkg')</code>) adopts already-downloaded files in place.</p>
 <h3 id="intake-catalogs">intake catalogs<a class="headerlink" href="#intake-catalogs" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>intake<span class="w"> </span>catalog.yml
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>intake<span class="w"> </span>catalog.yml
 </code></pre></div>
 <p>An intake catalog lists several named <em>sources</em>, each with a driver and an
 <code>args.urlpath</code>. Each source whose <code>urlpath</code> is a single concrete file path or
@@ -1380,7 +1850,7 @@ so <code>checksum</code> is computed (as <code>sha256:…</code>) on first downl
 urlpath is a glob, a template, or a list are reported and skipped. Requires
 the <code>yaml</code> extra (<code>pip install 'datamanifest[yaml]'</code>).</p>
 <h3 id="dvc">DVC<a class="headerlink" href="#dvc" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>dvc<span class="w"> </span>&lt;path-or-dir&gt;<span class="w"> </span><span class="o">[</span>--cache-dir<span class="w"> </span>.dvc/cache<span class="o">]</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>dvc<span class="w"> </span>&lt;path-or-dir&gt;<span class="w"> </span><span class="o">[</span>--cache-dir<span class="w"> </span>.dvc/cache<span class="o">]</span>
 </code></pre></div>
 <p>Parses <code>*.dvc</code> files and <code>dvc.lock</code>. Each tracked <em>out</em> becomes a dataset
 carrying its <code>md5</code> as the <code>checksum</code>. Because DVC stores content addressed by
@@ -1389,75 +1859,11 @@ The <code>uri</code> is the URL of an <code>import-url</code> dependency when th
 the default DVC remote's content-addressed URL (<code>s3://</code>, <code>gs://</code>, <code>https://</code>,
 …); outs with neither are reported and skipped.</p>
 <h3 id="generic-csv-url-list">Generic CSV / URL list<a class="headerlink" href="#generic-csv-url-list" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>csv<span class="w"> </span>files.csv<span class="w">            </span><span class="c1"># header row with a url column; name, sha256 optional</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>urls<span class="w"> </span>list.txt<span class="w"> </span>--base-url<span class="w"> </span>URL<span class="w">   </span><span class="c1"># one path/URL per line</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>csv<span class="w"> </span>files.csv<span class="w">            </span><span class="c1"># header row with a url column; name, sha256 optional</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>urls<span class="w"> </span>list.txt<span class="w"> </span>--base-url<span class="w"> </span>URL<span class="w">   </span><span class="c1"># one path/URL per line</span>
 </code></pre></div>
 <p>For exporting from anything else. These use the same pipeline as the pooch
 importer, including <code>--cache-dir</code> adoption.</p>
-<hr />
-<h2 id="what-maps-where-summary">What maps where (summary)<a class="headerlink" href="#what-maps-where-summary" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Source</th>
-<th>Verb</th>
-<th>URL</th>
-<th>Checksum</th>
-<th>Adopt local cache</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>direct URL</td>
-<td><code>add</code></td>
-<td>given</td>
-<td>computed on download</td>
-<td>—</td>
-</tr>
-<tr>
-<td>Zenodo DOI</td>
-<td><code>add</code></td>
-<td>API</td>
-<td>md5 (with <code>--split</code>), else computed</td>
-<td>—</td>
-</tr>
-<tr>
-<td>PANGAEA DOI</td>
-<td><code>add</code></td>
-<td>web services</td>
-<td>md5 (with <code>--split</code>), else computed</td>
-<td>—</td>
-</tr>
-<tr>
-<td>pooch registry</td>
-<td><code>import</code></td>
-<td>base_url + filename / 3rd column</td>
-<td>sha256 or md5 from the registry</td>
-<td><code>--cache-dir</code> (<code>os_cache</code>)</td>
-</tr>
-<tr>
-<td>intake catalog</td>
-<td><code>import</code></td>
-<td>urlpath</td>
-<td>computed on download</td>
-<td><code>--cache-dir</code></td>
-</tr>
-<tr>
-<td>DVC</td>
-<td><code>import</code></td>
-<td>import-url dep / remote config</td>
-<td>md5 from the <code>.dvc</code> file</td>
-<td><code>.dvc/cache</code> (by hash)</td>
-</tr>
-<tr>
-<td>CSV / URL list</td>
-<td><code>import</code></td>
-<td>the file</td>
-<td>optional sha256 column</td>
-<td><code>--cache-dir</code></td>
-</tr>
-</tbody>
-</table>
 
 
 
@@ -1475,6 +1881,8 @@ importer, including <code>--cache-dir</code> adoption.</p>
             </div>
           
           
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
 <script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
         </div>
         
@@ -1513,7 +1921,7 @@ importer, including <code>--cache-dir</code> adoption.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link", "content.action.edit"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
       <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>

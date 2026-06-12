@@ -53,6 +53,8 @@
       
     
     
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
     <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -458,6 +460,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../adding-datasets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adding datasets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../api/" class="md-nav__link">
         
   
@@ -465,7 +495,7 @@
   <span class="md-ellipsis">
     
   
-    Using it from your code
+    Using it from code
   
 
     
@@ -550,34 +580,6 @@
     
   
     Configuration
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../adding-datasets/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Adding datasets
   
 
     
@@ -903,6 +905,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../python-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1149,6 +1179,12 @@ function that reads the dataset from disk into memory, overriding the default
 loader for its <code>format</code>. Both are declared in the manifest as <strong>bindings</strong>: a
 binding names a function by a <code>module:function</code> reference (a <strong>ref</strong>, resolved
 via <code>importlib</code>) — never inline code — and may optionally carry arguments.</p>
+<p>The same manifest drives both tools: the Python <code>datamanifest</code> package and
+Julia's <a href="https://awi-esc.github.io/DataManifest.jl/">DataManifest.jl</a> read one
+file, each running only the bindings written for its own language. This page
+describes how the Python tool reads bindings; the Julia-side rules and API are
+on the
+<a href="https://awi-esc.github.io/DataManifest.jl/language-bindings/">Julia documentation site</a>.</p>
 <p>This page covers the binding forms from the common case to the advanced ones:
 bare bindings for a single-language project, parameterized bindings,
 the per-language <code>_LANG</code> namespace for manifests shared across languages, the
@@ -1222,7 +1258,7 @@ under a dedicated <code>_LANG</code> namespace, so each tool sees only its own:<
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">loader</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;mypkg.load:load_mydata&quot;</span>
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
 <a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="k">[mydata._LANG.julia]</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">fetcher</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;MyPkg.fetch_mydata&quot;</span><span class="w">            </span><span class="c1"># preserved verbatim; Python never touches it</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">fetcher</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;MyPkg:fetch_mydata&quot;</span><span class="w">            </span><span class="c1"># preserved verbatim; Python never touches it</span>
 <a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
 <a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="k">[_LANG.python.loaders]</span><span class="w">                    </span><span class="c1"># project-wide format → loader defaults</span>
 <a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">csv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;pandas.io.parsers:read_csv&quot;</span>
@@ -1234,6 +1270,23 @@ under a dedicated <code>_LANG</code> namespace, so each tool sees only its own:<
 <li><code>[_LANG.python.loaders]</code> is the per-language counterpart of <code>[_LOADERS]</code>:
   project-wide <code>format → loader</code> defaults for Python.</li>
 </ul>
+<p>Each language has its own ref flavor; a ref is only ever resolved by the tool
+whose <code>_LANG</code> subtree it sits in:</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Python</label><label for="__tabbed_1_2">Julia</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p>A ref names an importable function, <code>"package.module:function"</code>, resolved
+via <code>importlib</code>. The project root is added to <code>sys.path</code>, so a module file
+next to the manifest works as well as an installed package.</p>
+</div>
+<div class="tabbed-block">
+<p>A ref is <code>"Module:function"</code>, resolved by <code>using Module</code> followed by a
+function lookup — no <code>eval</code> of manifest content. The project root is added
+to the load path, so a module file next to the manifest works as well as a
+package dependency.</p>
+</div>
+</div>
+</div>
 <p>Foreign <code>_LANG.&lt;other&gt;</code> subtrees (e.g. <code>_LANG.julia</code>) are preserved verbatim
 on every read→write cycle; Python never modifies them. Unknown structural
 tables (any <code>_*</code> key Python does not recognize) are likewise passed through.</p>
@@ -1269,22 +1322,38 @@ own loader). A manifest meant for more than one language uses explicit
 <code>[&lt;ds&gt;._LANG.&lt;lang&gt;]</code> bindings, which are absent — and so correctly skipped —
 in the other languages.</p>
 <h2 id="cross-language-fetch">Cross-language fetch<a class="headerlink" href="#cross-language-fetch" title="Permanent link">&para;</a></h2>
-<p>The rare case: a dataset whose only fetcher is defined in another language
-(e.g. <code>[&lt;ds&gt;._LANG.julia].fetcher</code>), with no Python fetcher, no shell fetcher,
-and no <code>uri</code>. Running a foreign fetcher on a dataset's behalf is called
-<strong>delegation</strong>.</p>
-<p>Python materializes such a dataset by invoking the local Julia <code>DataManifest</code>
+<p>The rare case: a dataset whose only fetcher is defined in another language,
+with no own-language fetcher, no shell fetcher, and no <code>uri</code>. Running a
+foreign fetcher on a dataset's behalf is called <strong>delegation</strong>. Loading never
+crosses languages; only bytes on disk do — the delegating tool reads from the
+shared store what the peer wrote there.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Python</label><label for="__tabbed_2_2">Julia</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p>Python materializes a dataset whose only fetcher is
+<code>[&lt;ds&gt;._LANG.julia].fetcher</code> by invoking the local Julia <code>DataManifest</code>
 environment directly —
-<code>julia --project=&lt;env&gt; -e 'using DataManifest; download_dataset(Database("&lt;datasets.toml&gt;"), "&lt;name&gt;")'</code>
-— which writes the bytes into the shared store; Python then reads them from
-disk. Loading never crosses languages; only bytes on disk do.</p>
-<p>The Julia environment is discovered at <code>$JULIA_PROJECT</code>, else by walking up
-from the manifest directory for a <code>Project.toml</code> whose <code>[deps]</code> lists
-<code>DataManifest</code>; the rung also requires <code>julia</code> on <code>PATH</code>. When the toolchain
-is absent or the invocation fails, the rung logs a warning and the ladder
-advances to the <code>uri</code> download. Cross-language fetch applies to fetched
+<code>julia --project=&lt;env&gt; -e 'using DataManifest; download_dataset(Database("&lt;datasets.toml&gt;"), "&lt;name&gt;")'</code>.
+The Julia environment is discovered at <code>$JULIA_PROJECT</code>, else by walking
+up from the manifest directory for a <code>Project.toml</code> whose <code>[deps]</code> lists
+<code>DataManifest</code>; the rung also requires <code>julia</code> on <code>PATH</code>. When the
+toolchain is absent or the invocation fails, the rung logs a warning and
+the ladder advances to the <code>uri</code> download.</p>
+</div>
+<div class="tabbed-block">
+<p>DataManifest.jl delegates the opposite direction: a dataset whose only
+fetcher is <code>[&lt;ds&gt;._LANG.python].fetcher</code> is fetched by running
+<code>datamanifest download &lt;name&gt;</code> — the Python CLI, when it is on <code>PATH</code> —
+with <code>DATAMANIFEST_TOML</code> pointing at the same manifest. When the CLI is
+absent, disabled, or fails, the fetch ends in the ordinary "no fetcher"
+error. See the
+<a href="https://awi-esc.github.io/DataManifest.jl/language-bindings/">Julia documentation</a>.</p>
+</div>
+</div>
+</div>
+<p>Cross-language fetch applies to fetched
 datasets only (never <code>@cached</code> produced datasets); it is on by default and a
-no-op unless a foreign fetcher and a usable Julia environment are both
+no-op unless a foreign fetcher and a usable peer toolchain are both
 present. Turn it off per dataset with <code>delegate = false</code> in the manifest, or
 per run with the <code>--delegate</code> / <code>--no-delegate</code> flags on
 <code>datamanifest download</code>.</p>
@@ -1301,7 +1370,10 @@ per run with the <code>--delegate</code> / <code>--no-delegate</code> flags on
   during ref resolution (obsolete; the project root is added automatically).</li>
 </ul>
 <p>A single manifest can be consumed by several tools: each reads the common
-fields and ignores the others' extension keys. See
+fields and ignores the others' extension keys. The Julia-side API —
+<code>load_dataset</code>, <code>download_dataset</code>, and the rest of DataManifest.jl — is
+documented on the
+<a href="https://awi-esc.github.io/DataManifest.jl/">Julia documentation site</a>. See
 <a href="../conformance/">conformance.md</a> for the shared manifest format and what this
 implementation supports.</p>
 
@@ -1321,6 +1393,8 @@ implementation supports.</p>
             </div>
           
           
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
 <script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
         </div>
         
@@ -1359,7 +1433,7 @@ implementation supports.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link", "content.action.edit"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
       <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>

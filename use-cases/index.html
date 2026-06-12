@@ -53,6 +53,8 @@
       
     
     
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
     <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -458,6 +460,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../adding-datasets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adding datasets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../api/" class="md-nav__link">
         
   
@@ -465,7 +495,7 @@
   <span class="md-ellipsis">
     
   
-    Using it from your code
+    Using it from code
   
 
     
@@ -546,10 +576,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#manage-datasets-from-the-cli" class="md-nav__link">
+  <a href="#manage-datasets" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Manage datasets from the CLI
+        Manage datasets
       
     </span>
   </a>
@@ -652,34 +682,6 @@
     
   
     Configuration
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../adding-datasets/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Adding datasets
   
 
     
@@ -892,6 +894,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../python-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1041,10 +1071,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#manage-datasets-from-the-cli" class="md-nav__link">
+  <a href="#manage-datasets" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Manage datasets from the CLI
+        Manage datasets
       
     </span>
   </a>
@@ -1121,9 +1151,14 @@
 
 
 <h1 id="use-cases">Use cases<a class="headerlink" href="#use-cases" title="Permanent link">&para;</a></h1>
-<p>A tour of what the CLI does day to day. Each section links to the reference page
-with the full flag set; the <a href="../cli/">CLI reference</a> has them all in one place.</p>
-<h2 id="manage-datasets-from-the-cli">Manage datasets from the CLI<a class="headerlink" href="#manage-datasets-from-the-cli" title="Permanent link">&para;</a></h2>
+<p>A tour of day-to-day use. Most of it is CLI commands; where the Python or
+Julia API has an equivalent, it is shown in a tab. Each section links to the
+reference page with the full flag set; the <a href="../cli/">CLI reference</a> has them
+all in one place.</p>
+<h2 id="manage-datasets">Manage datasets<a class="headerlink" href="#manage-datasets" title="Permanent link">&para;</a></h2>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">CLI</label><label for="__tabbed_1_2">Python</label><label for="__tabbed_1_3">Julia</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>datamanifest<span class="w"> </span>add<span class="w"> </span>https://host/path/file.nc<span class="w">                     </span><span class="c1"># a direct URL</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>datamanifest<span class="w"> </span>add<span class="w"> </span><span class="m">10</span>.5281/zenodo.1234567<span class="w"> </span>--pick<span class="w"> </span><span class="s2">&quot;*.csv&quot;</span><span class="w">         </span><span class="c1"># a Zenodo record&#39;s files</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>datamanifest<span class="w"> </span>add<span class="w"> </span><span class="s2">&quot;https://github.com/u/repo/archive/v2.1.zip&quot;</span><span class="w"> </span>--extract
@@ -1138,18 +1173,45 @@ with the full flag set; the <a href="../cli/">CLI reference</a> has them all in 
 <a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
 <a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>python<span class="w"> </span>analysis.py<span class="w"> </span>--data<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>datamanifest<span class="w"> </span>path<span class="w"> </span>co2<span class="k">)</span><span class="s2">&quot;</span><span class="w">   </span><span class="c1"># composable in shell</span>
 </code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">datamanifest</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">dm</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">dm</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s2">&quot;https://host/path/file.nc&quot;</span><span class="p">)</span>     <span class="c1"># register in the manifest</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">dm</span><span class="o">.</span><span class="n">download_datasets</span><span class="p">()</span>                  <span class="c1"># fetch everything not yet present</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">data</span> <span class="o">=</span> <span class="n">dm</span><span class="o">.</span><span class="n">load_dataset</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>           <span class="c1"># download if needed, then load</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">path</span> <span class="o">=</span> <span class="n">dm</span><span class="o">.</span><span class="n">get_dataset_path</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>       <span class="c1"># just the on-disk path</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">dm</span><span class="o">.</span><span class="n">delete_dataset</span><span class="p">(</span><span class="s2">&quot;old_entry&quot;</span><span class="p">)</span>          <span class="c1"># drop an entry</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">using</span><span class="w"> </span><span class="n">DataManifest</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">add</span><span class="p">(</span><span class="s">&quot;https://host/path/file.nc&quot;</span><span class="p">)</span><span class="w">        </span><span class="c"># register in the manifest + download</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">load_dataset</span><span class="p">(</span><span class="s">&quot;co2&quot;</span><span class="p">)</span><span class="w">              </span><span class="c"># download if needed, then load</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">path</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">get_dataset_path</span><span class="p">(</span><span class="s">&quot;co2&quot;</span><span class="p">)</span><span class="w">          </span><span class="c"># just the on-disk path</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">delete_dataset</span><span class="p">(</span><span class="s">&quot;old_entry&quot;</span><span class="p">)</span><span class="w">             </span><span class="c"># drop an entry</span>
+</code></pre></div>
+</div>
+</div>
+</div>
+<p>The CLI-only commands (<code>list</code>, <code>show</code>, <code>verify</code>, <code>update-checksums</code>, …) manage
+the project's data; the libraries consume it from code (see the
+<a href="../quickstart/#the-cli-library-split">CLI / library split</a>).</p>
 <p>A concrete run — continuing from the <a href="../quickstart/">quickstart</a>'s CO₂ record,
 add the HadCRUT5 global temperature series next to it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="gp">$ </span>datamanifest<span class="w"> </span>add<span class="w"> </span><span class="s2">&quot;https://www.metoffice.gov.uk/hadobs/hadcrut5/data/HadCRUT.5.0.2.0/analysis/diagnostics/HadCRUT.5.0.2.0.analysis.summary_series.global.annual.csv&quot;</span><span class="w"> </span>--name<span class="w"> </span>temperature
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="gp">$ </span>datamanifest<span class="w"> </span>list
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="go">Datasets</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="go">● co2          csv         3.1 KiB  …webdata/ccgg/trends/co2/co2_annmean_mlo.csv</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="go">● temperature  csv         6.9 KiB  …0.analysis.summary_series.global.annual.csv</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="go">Cached</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="go">◆ myproj.load_anomaly  pickle  2×  768 B</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="go">    40384c4db019  grid=10x10                                         386 B</span>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="go">    50f04896d3ee  grid=5x5                                           382 B</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="gp">$ </span>datamanifest<span class="w"> </span>add<span class="w"> </span><span class="s2">&quot;https://www.metoffice.gov.uk/hadobs/hadcrut5/data/HadCRUT.5.0.2.0/analysis/diagnostics/HadCRUT.5.0.2.0.analysis.summary_series.global.annual.csv&quot;</span><span class="w"> </span>--name<span class="w"> </span>temperature
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="gp">$ </span>datamanifest<span class="w"> </span>list
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="go">Datasets</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="go">● co2          csv         3.1 KiB  …webdata/ccgg/trends/co2/co2_annmean_mlo.csv</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="go">● temperature  csv         6.9 KiB  …0.analysis.summary_series.global.annual.csv</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="go">Cached</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="go">◆ myproj.load_anomaly  pickle  2×  768 B</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="go">    40384c4db019  grid=10x10                                         386 B</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="go">    50f04896d3ee  grid=5x5                                           382 B</span>
 </code></pre></div>
 <p><code>temperature</code> loads from code just like <code>co2</code> —
 <code>datamanifest.load_dataset("temperature")</code> — and the <strong>Cached</strong> group lists the
@@ -1161,11 +1223,11 @@ function with their parameters.</p>
 data around by hand is recoverable — <code>refresh</code> reconciles the records with disk, and <code>--scan</code>
 discovers copies elsewhere on the machine (e.g. downloaded by another project)
 and adopts them, checksum-verified, instead of re-downloading:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>datamanifest<span class="w"> </span>list<span class="w"> </span>--dirty<span class="w">       </span><span class="c1"># preview: records that disagree with disk</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>datamanifest<span class="w"> </span>refresh<span class="w">            </span><span class="c1"># repoint moved files, drop deleted, adopt untracked</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>datamanifest<span class="w"> </span>refresh<span class="w"> </span>--scan<span class="w">     </span><span class="c1"># also discover &amp; adopt copies found elsewhere</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>datamanifest<span class="w"> </span>refresh<span class="w"> </span>--scan<span class="w"> </span>--datasets-pools<span class="w"> </span>~/other-project/datasets<span class="w"> </span>/shared/data<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">                            </span>--datacache-pools<span class="w"> </span>/shared/cache<span class="w">   </span><span class="c1"># extend the scan to extra folders</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>datamanifest<span class="w"> </span>list<span class="w"> </span>--dirty<span class="w">       </span><span class="c1"># preview: records that disagree with disk</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>datamanifest<span class="w"> </span>refresh<span class="w">            </span><span class="c1"># repoint moved files, drop deleted, adopt untracked</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>datamanifest<span class="w"> </span>refresh<span class="w"> </span>--scan<span class="w">     </span><span class="c1"># also discover &amp; adopt copies found elsewhere</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>datamanifest<span class="w"> </span>refresh<span class="w"> </span>--scan<span class="w"> </span>--datasets-pools<span class="w"> </span>~/other-project/datasets<span class="w"> </span>/shared/data<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">                            </span>--datacache-pools<span class="w"> </span>/shared/cache<span class="w">   </span><span class="c1"># extend the scan to extra folders</span>
 </code></pre></div>
 <p><code>refresh</code> only edits local state — never your data, never the manifest. To act
 on the bytes themselves, filter with <code>list</code> and apply an action flag. Each flag
@@ -1173,10 +1235,10 @@ runs the matching standalone command (<code>delete</code> / <code>move</code> / 
 the selection and <strong>forwards the rest of the line to that command's own
 options</strong> — filters first, then the action flag and its tail (<code>--dry-run</code>
 previews):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>datamanifest<span class="w"> </span>list<span class="w"> </span>--cached<span class="w"> </span>--orphan<span class="w"> </span>--delete<span class="w">                 </span><span class="c1"># clean up orphaned cached artifacts</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>datamanifest<span class="w"> </span>list<span class="w"> </span>--older-than<span class="w"> </span>30d<span class="w"> </span>--delete<span class="w"> </span>--dry-run<span class="w">        </span><span class="c1"># preview; --dry-run goes to delete</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>datamanifest<span class="w"> </span>list<span class="w"> </span>--datasets<span class="w"> </span>stale<span class="w"> </span>--delete<span class="w"> </span>--prune<span class="w">          </span><span class="c1"># also drop the manifest entry</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>datamanifest<span class="w"> </span>list<span class="w"> </span>--older-than<span class="w"> </span>90d<span class="w"> </span>--move<span class="w"> </span>/archive<span class="w"> </span>--dry-run<span class="w"> </span><span class="c1"># DEST then options</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>datamanifest<span class="w"> </span>list<span class="w"> </span>--cached<span class="w"> </span>--orphan<span class="w"> </span>--delete<span class="w">                 </span><span class="c1"># clean up orphaned cached artifacts</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>datamanifest<span class="w"> </span>list<span class="w"> </span>--older-than<span class="w"> </span>30d<span class="w"> </span>--delete<span class="w"> </span>--dry-run<span class="w">        </span><span class="c1"># preview; --dry-run goes to delete</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>datamanifest<span class="w"> </span>list<span class="w"> </span>--datasets<span class="w"> </span>stale<span class="w"> </span>--delete<span class="w"> </span>--prune<span class="w">          </span><span class="c1"># also drop the manifest entry</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>datamanifest<span class="w"> </span>list<span class="w"> </span>--older-than<span class="w"> </span>90d<span class="w"> </span>--move<span class="w"> </span>/archive<span class="w"> </span>--dry-run<span class="w"> </span><span class="c1"># DEST then options</span>
 </code></pre></div>
 <h2 id="put-data-where-you-want-it">Put data where you want it<a class="headerlink" href="#put-data-where-you-want-it" title="Permanent link">&para;</a></h2>
 <p>Storage is two folders — <code>datasets_dir</code> (fetched data, default: a machine-wide
@@ -1184,10 +1246,13 @@ shared store deduplicated by dataset key) and <code>datacache_dir</code> (<code>
 results, default: a per-project folder under your OS cache dir).
 <code>datamanifest config</code> edits them at the scope you want — this checkout (the
 default, git-ignored), this user, or the committed project:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datasets_dir<span class="w"> </span><span class="s2">&quot;/scratch/</span><span class="nv">$USER</span><span class="s2">/data&quot;</span><span class="w">                 </span><span class="c1"># this checkout</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datacache_dir<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$user_cache_dir</span><span class="s2">/myproj&quot;</span><span class="w"> </span>--project<span class="w">   </span><span class="c1"># committed default</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>datamanifest<span class="w"> </span>config<span class="w">                                                        </span><span class="c1"># show resolved config</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datasets_dir<span class="w"> </span><span class="s2">&quot;/scratch/</span><span class="nv">$USER</span><span class="s2">/data&quot;</span><span class="w">                 </span><span class="c1"># this checkout</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datacache_dir<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$user_cache_dir</span><span class="s2">/myproj&quot;</span><span class="w"> </span>--project<span class="w">   </span><span class="c1"># committed default</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>datamanifest<span class="w"> </span>config<span class="w">                                                        </span><span class="c1"># show resolved config</span>
 </code></pre></div>
+<p><code>config set</code> writes plain TOML files that can also be edited by hand; every
+implementation (including DataManifest.jl) reads the same files — see
+<a href="../configuration/">Configuration</a>.</p>
 <p>Pointing the folders at a machine directory (instead of the repo) shares data
 across clones and projects. Path expressions, per-host rules, per-dataset
 overrides and read pools (extra read-only folders searched for existing copies
@@ -1196,10 +1261,10 @@ before downloading): the <a href="../storage/">storage model</a>.</p>
 <p>Move a stored object between machines instead of re-downloading or recomputing
 it. Objects are addressed machine-independently — a dataset by name, a cached
 artifact by <code>function/hash</code> — and land in the receiver's own folders:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>datamanifest<span class="w"> </span>push<span class="w"> </span>foo<span class="w"> </span>user@hpc<span class="w">             </span><span class="c1"># copy dataset `foo` to the host (rsync over ssh)</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>datamanifest<span class="w"> </span>pull<span class="w"> </span>esm_anomaly/83425a3<span class="w"> </span>hpc<span class="w">  </span><span class="c1"># pull a cached artifact by hash prefix</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>datamanifest<span class="w"> </span>push<span class="w"> </span>foo<span class="w"> </span>user@hpc<span class="w"> </span>--dry-run<span class="w">   </span><span class="c1"># preview resolved paths + size</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>datamanifest<span class="w"> </span>list<span class="w"> </span>--cached<span class="w"> </span>--push<span class="w"> </span>user@hpc<span class="w"> </span><span class="c1"># bulk: push a filtered selection</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>datamanifest<span class="w"> </span>push<span class="w"> </span>foo<span class="w"> </span>user@hpc<span class="w">             </span><span class="c1"># copy dataset `foo` to the host (rsync over ssh)</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>datamanifest<span class="w"> </span>pull<span class="w"> </span>esm_anomaly/83425a3<span class="w"> </span>hpc<span class="w">  </span><span class="c1"># pull a cached artifact by hash prefix</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>datamanifest<span class="w"> </span>push<span class="w"> </span>foo<span class="w"> </span>user@hpc<span class="w"> </span>--dry-run<span class="w">   </span><span class="c1"># preview resolved paths + size</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>datamanifest<span class="w"> </span>list<span class="w"> </span>--cached<span class="w"> </span>--push<span class="w"> </span>user@hpc<span class="w"> </span><span class="c1"># bulk: push a filtered selection</span>
 </code></pre></div>
 <p>Sync is bytes-only and idempotent; it needs the data folders to be
 machine-global (not repo-local) on both ends. Details:
@@ -1209,14 +1274,14 @@ machine-global (not repo-local) on both ends. Details:
 retrieve the data) and a <em>loader</em> (how to turn the file into an in-memory
 object). Each implementation runs its own bindings and preserves the others
 verbatim, so one manifest serves a mixed Python/Julia project:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[mydata]</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">uri</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://example.com/mydata.csv&quot;</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="k">[mydata._LANG.python]</span>
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">loader</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;mypkg.load:load_mydata&quot;</span><span class="w">      </span><span class="c1"># how Python loads it</span>
-<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
-<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="k">[mydata._LANG.julia]</span>
-<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="n">loader</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;MyPkg.load_mydata&quot;</span><span class="w">           </span><span class="c1"># Julia&#39;s binding; Python never touches it</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="k">[mydata]</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">uri</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://example.com/mydata.csv&quot;</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="k">[mydata._LANG.python]</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="n">loader</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;mypkg.load:load_mydata&quot;</span><span class="w">      </span><span class="c1"># how Python loads it</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="k">[mydata._LANG.julia]</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="n">loader</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;MyPkg.load_mydata&quot;</span><span class="w">           </span><span class="c1"># Julia&#39;s binding; Python never touches it</span>
 </code></pre></div>
 <p>A single-language project can write bare <code>fetcher</code> / <code>loader</code> / <code>shell</code> fields
 instead of <code>_LANG</code> tables, and <code>[_LOADERS]</code> maps formats to project-wide
@@ -1240,6 +1305,8 @@ loaders. How a binding is resolved, parameterized bindings
             </div>
           
           
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
 <script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
         </div>
         
@@ -1278,7 +1345,7 @@ loaders. How a binding is resolved, parameterized bindings
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link", "content.action.edit"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
       <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>

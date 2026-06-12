@@ -51,6 +51,8 @@
       
     
     
+      <link rel="stylesheet" href="assets/_mkdocstrings.css">
+    
     <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -76,7 +78,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#datamanifestpy" class="md-skip">
+        <a href="#datamanifest" class="md-skip">
           Skip to content
         </a>
       
@@ -545,6 +547,34 @@
   
   
     <li class="md-nav__item">
+      <a href="adding-datasets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adding datasets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="api/" class="md-nav__link">
         
   
@@ -552,7 +582,7 @@
   <span class="md-ellipsis">
     
   
-    Using it from your code
+    Using it from code
   
 
     
@@ -637,34 +667,6 @@
     
   
     Configuration
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="adding-datasets/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Adding datasets
   
 
     
@@ -864,6 +866,34 @@
     
   
     CLI reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="python-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python API
   
 
     
@@ -1106,8 +1136,16 @@
   </picture>
 </p>
 
-<h1 id="datamanifestpy">datamanifest[py]<a class="headerlink" href="#datamanifestpy" title="Permanent link">&para;</a></h1>
-<p>Keep track of the datasets used in a scientific project.</p>
+<h1 id="datamanifest">datamanifest<a class="headerlink" href="#datamanifest" title="Permanent link">&para;</a></h1>
+<p>Keep track of the datasets used in a scientific project. You declare each
+dataset in a <strong>manifest</strong> — a plain TOML file committed alongside your code —
+and three clients read and write it the same way: the <code>datamanifest</code>
+command line and the Python library (both in the PyPI package
+<a href="https://pypi.org/project/datamanifestpy/">datamanifestpy</a>), and the Julia
+package <a href="https://github.com/awi-esc/DataManifest.jl">DataManifest.jl</a>. The
+manifest format itself is defined by a shared, language-agnostic
+<a href="https://github.com/perrette/datamanifest.toml">spec</a>, so a project's manifest
+works across all three.</p>
 <ul>
 <li><strong>A transparent, trackable manifest.</strong> Every dataset a project depends on —
   URLs, DOIs, checksums (content hashes used to verify each file), formats — is
@@ -1133,19 +1171,55 @@
   the portable, shareable manifest.</li>
 </ul>
 <h2 id="get-started">Get started<a class="headerlink" href="#get-started" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span>datamanifestpy
+<p>Code examples across this site come in tabs — pick your client once (CLI,
+Python or Julia) and every page follows.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:4"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">CLI</label><label for="__tabbed_1_2">Python</label><label for="__tabbed_1_3">Julia</label><label for="__tabbed_1_4">Manifest</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pipx<span class="w"> </span>install<span class="w"> </span>datamanifestpy
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>datamanifest<span class="w"> </span>init
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>datamanifest<span class="w"> </span>add<span class="w"> </span>https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv<span class="w"> </span>--name<span class="w"> </span>co2
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>datamanifest<span class="w"> </span>path<span class="w"> </span>co2<span class="w">              </span><span class="c1"># the on-disk path, downloaded and verified</span>
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">datamanifest</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">df</span> <span class="o">=</span> <span class="n">datamanifest</span><span class="o">.</span><span class="n">load_dataset</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>   <span class="c1"># download on first use, then load</span>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># pip install datamanifestpy</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">datamanifest</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">datamanifest</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s2">&quot;https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">df</span> <span class="o">=</span> <span class="n">datamanifest</span><span class="o">.</span><span class="n">load_dataset</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>   <span class="c1"># download on first use, then load</span>
 </code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c"># using Pkg; Pkg.add(&quot;DataManifest&quot;)</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">using</span><span class="w"> </span><span class="n">DataManifest</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">DataManifest</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&quot;https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv&quot;</span><span class="p">;</span><span class="w"> </span><span class="n">name</span><span class="o">=</span><span class="s">&quot;co2&quot;</span><span class="p">)</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">path</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">get_dataset_path</span><span class="p">(</span><span class="s">&quot;co2&quot;</span><span class="p">)</span><span class="w">          </span><span class="c"># the on-disk path, downloaded and verified</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[co2]</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">checksum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;sha256:0058b3788040b5c27b2b5c1dd6d26226b7e4deef85e34c153e64806c37df7c75&quot;</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">uri</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv&quot;</span>
+</code></pre></div>
+</div>
+</div>
+</div>
+<p>Three ways in, one manifest:</p>
 <ul>
-<li><strong><a href="installation/">Installation</a></strong> — the package and its optional loader backends.</li>
-<li><strong><a href="quickstart/">Quickstart</a></strong> — declare your first dataset and load it.</li>
-<li><strong><a href="api/">Using it from your code</a></strong> — <code>load_dataset</code>, the <code>@cached</code> decorator, the file-less <code>Database</code>.</li>
-<li><strong><a href="cli/">CLI reference</a></strong> — every command and flag.</li>
+<li><strong>Use it from the shell</strong> — <a href="installation/">install the CLI</a> and follow the
+  <a href="quickstart/">quickstart</a>; the <a href="cli/">CLI reference</a> covers every command
+  and flag.</li>
+<li><strong>Use it from Python</strong> — <a href="api/">Using it from your code</a> walks through
+  <code>load_dataset</code>, the <code>@cached</code> decorator and the file-less <code>Database</code>; the
+  <a href="python-api/">Python API reference</a> lists everything.</li>
+<li><strong>Use it from Julia</strong> — the quickstart and guide pages carry Julia tabs for
+  the essentials; the full Julia API reference lives at
+  <a href="https://awi-esc.github.io/DataManifest.jl/">awi-esc.github.io/DataManifest.jl</a>.</li>
 </ul>
+<p>This site documents the CLI and the Python library in full, and the essentials
+for Julia.</p>
 <h2 id="guide">Guide<a class="headerlink" href="#guide" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="use-cases/">Use cases</a> — the CLI workflows end to end: add, repair, store, sync.</li>
@@ -1190,6 +1264,8 @@
             </div>
           
           
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
 <script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
         </div>
         
@@ -1228,7 +1304,7 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link", "content.action.edit"], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
       <script src="assets/javascripts/bundle.79ae519e.min.js"></script>

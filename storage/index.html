@@ -53,6 +53,8 @@
       
     
     
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
     <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -458,6 +460,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../adding-datasets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adding datasets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../api/" class="md-nav__link">
         
   
@@ -465,7 +495,7 @@
   <span class="md-ellipsis">
     
   
-    Using it from your code
+    Using it from code
   
 
     
@@ -711,34 +741,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../adding-datasets/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Adding datasets
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../importing/" class="md-nav__link">
         
   
@@ -918,6 +920,34 @@
     
   
     CLI reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../python-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python API
   
 
     
@@ -1226,27 +1256,50 @@ two folder settings.</p>
 <li>fetched dataset → <code>&lt;datasets_dir&gt;/&lt;key&gt;</code></li>
 <li>cached result → <code>&lt;datacache_dir&gt;/&lt;cachetype&gt;/[&lt;version&gt;/]&lt;hash&gt;</code></li>
 </ul>
+<p>To see where a dataset resolves on this machine:</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">CLI</label><label for="__tabbed_1_2">Python</label><label for="__tabbed_1_3">Julia</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>datamanifest<span class="w"> </span>path<span class="w"> </span>co2<span class="w">        </span><span class="c1"># print the resolved on-disk path</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">datamanifest</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">datamanifest</span><span class="o">.</span><span class="n">get_dataset_path</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>   <span class="c1"># or db.get_dataset_path(&quot;co2&quot;)</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">using</span><span class="w"> </span><span class="n">DataManifest</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">get_dataset_path</span><span class="p">(</span><span class="n">db</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;co2&quot;</span><span class="p">)</span><span class="w">   </span><span class="c"># or get_dataset_path(&quot;co2&quot;) for the default db</span>
+</code></pre></div>
+</div>
+</div>
+</div>
 <h2 id="changing-the-folders">Changing the folders<a class="headerlink" href="#changing-the-folders" title="Permanent link">&para;</a></h2>
 <p>Set either folder with <code>datamanifest config set</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="gp">$ </span>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datasets_dir<span class="w"> </span>/data/store<span class="w">           </span><span class="c1"># this checkout (default)</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="gp">$ </span>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datasets_dir<span class="w"> </span>/data/store<span class="w"> </span>--global<span class="w">  </span><span class="c1"># this user, all projects</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="gp">$ </span>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datacache_dir<span class="w"> </span><span class="s1">&#39;$repo/cached&#39;</span><span class="w"> </span>--project<span class="w">   </span><span class="c1"># committed to the manifest</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="gp">$ </span>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datasets_dir<span class="w"> </span>/work/data<span class="w"> </span>--host<span class="w"> </span><span class="s1">&#39;login*&#39;</span><span class="w">  </span><span class="c1"># committed, per-host</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="gp">$ </span>datamanifest<span class="w"> </span>config<span class="w"> </span>show<span class="w">                                    </span><span class="c1"># resolved values + raw rules</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="gp">$ </span>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datasets_dir<span class="w"> </span>/data/store<span class="w">           </span><span class="c1"># this checkout (default)</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="gp">$ </span>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datasets_dir<span class="w"> </span>/data/store<span class="w"> </span>--global<span class="w">  </span><span class="c1"># this user, all projects</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="gp">$ </span>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datacache_dir<span class="w"> </span><span class="s1">&#39;$repo/cached&#39;</span><span class="w"> </span>--project<span class="w">   </span><span class="c1"># committed to the manifest</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="gp">$ </span>datamanifest<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>datasets_dir<span class="w"> </span>/work/data<span class="w"> </span>--host<span class="w"> </span><span class="s1">&#39;login*&#39;</span><span class="w">  </span><span class="c1"># committed, per-host</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="gp">$ </span>datamanifest<span class="w"> </span>config<span class="w"> </span>show<span class="w">                                    </span><span class="c1"># resolved values + raw rules</span>
 </code></pre></div>
 <p>A value can be set per checkout (the default — the git-ignored
 <code>.datamanifest/config.toml</code>), in the committed manifest's <code>[_STORAGE]</code> table
 (<code>--project</code>, shared with collaborators), per host (<code>--host GLOB</code>), or
-user-wide (<code>--global</code>, in <code>~/.config/datamanifest/config.toml</code>). An
+user-wide (<code>--global</code>, in <code>~/.config/datamanifest/config.toml</code>). <code>config set</code>
+is a CLI convenience over plain TOML files — you can also edit them by hand,
+and peer implementations such as DataManifest.jl read the same files. An
 environment variable <code>DATAMANIFEST_DATASETS_DIR</code> / <code>DATAMANIFEST_DATACACHE_DIR</code>
 overrides them all for one process. The full set of scopes, the resolution
 order, and every variable are documented in <a href="../configuration/">Configuration</a>.</p>
 <h3 id="keeping-data-inside-the-repository">Keeping data inside the repository<a class="headerlink" href="#keeping-data-inside-the-repository" title="Permanent link">&para;</a></h3>
 <p>If you prefer visible <code>./datasets/</code> and <code>./cached/</code> folders inside the
 project, it is one committed edit:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[_STORAGE]</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">datasets_dir</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;datasets&quot;</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">datacache_dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;cached&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[_STORAGE]</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">datasets_dir</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;datasets&quot;</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">datacache_dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;cached&quot;</span>
 </code></pre></div>
 <p>Relative paths are anchored at the project root (the manifest's directory).
 Note that repo-local objects cannot be <code>push</code>/<code>pull</code>ed between machines — the
@@ -1288,19 +1341,19 @@ interpolate <code>$</code>-symbols (<code>$NAME</code> or <code>${NAME}</code>) 
 <li><code>$key</code> — the dataset's storage key (<code>host/path[#version]</code>). Only meaningful
   inside a dataset's <code>storage_path</code> (whose default is <code>$datasets_dir/$key</code>).</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[_STORAGE]</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">datacache_dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;$user_cache_dir/myproj&quot;</span><span class="w"> </span><span class="c1"># committed project intent</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">scratch</span><span class="w">       </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/tmp/$USER/scratch&quot;</span><span class="w">     </span><span class="c1"># user-defined symbol</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="k">[_STORAGE._HOST.</span><span class="s2">&quot;login*.hpc.edu&quot;</span><span class="k">]</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">scratch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/scratch/$USER&quot;</span><span class="w">               </span><span class="c1"># host-specific override of a user symbol</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="k">[bigsim]</span><span class="w">                                 </span><span class="c1"># → &lt;datasets_dir&gt;/&lt;key&gt;  (default storage_path)</span>
-<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">uri</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://example.com/bigsim.nc&quot;</span>
-<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
-<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="k">[hpc_output]</span><span class="w">                             </span><span class="c1"># per-dataset override (a path expression)</span>
-<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="n">storage_path</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;$scratch/results/$key&quot;</span>
-<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="n">format</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;nc&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">[_STORAGE]</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">datacache_dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;$user_cache_dir/myproj&quot;</span><span class="w"> </span><span class="c1"># committed project intent</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">scratch</span><span class="w">       </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/tmp/$USER/scratch&quot;</span><span class="w">     </span><span class="c1"># user-defined symbol</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="k">[_STORAGE._HOST.</span><span class="s2">&quot;login*.hpc.edu&quot;</span><span class="k">]</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">scratch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/scratch/$USER&quot;</span><span class="w">               </span><span class="c1"># host-specific override of a user symbol</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="k">[bigsim]</span><span class="w">                                 </span><span class="c1"># → &lt;datasets_dir&gt;/&lt;key&gt;  (default storage_path)</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="n">uri</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://example.com/bigsim.nc&quot;</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="k">[hpc_output]</span><span class="w">                             </span><span class="c1"># per-dataset override (a path expression)</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="n">storage_path</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;$scratch/results/$key&quot;</span>
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="n">format</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;nc&quot;</span>
 </code></pre></div>
 <h2 id="per-dataset-override">Per-dataset override<a class="headerlink" href="#per-dataset-override" title="Permanent link">&para;</a></h2>
 <p>A dataset may set <code>storage_path</code> — a path expression whose default is
@@ -1390,6 +1443,8 @@ stored bytes:</p>
             </div>
           
           
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
 <script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
         </div>
         
@@ -1428,7 +1483,7 @@ stored bytes:</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link", "content.action.edit"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
       <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>

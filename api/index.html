@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://perrette.github.io/datamanifest/api/">
       
       
-        <link rel="prev" href="../quickstart/">
+        <link rel="prev" href="../adding-datasets/">
       
       
         <link rel="next" href="../use-cases/">
@@ -27,7 +27,7 @@
     
     
       
-        <title>Using it from your code - datamanifest</title>
+        <title>Using it from code - datamanifest</title>
       
     
     
@@ -52,6 +52,8 @@
         <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
       
     
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
     
     <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
@@ -114,7 +116,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Using it from your code
+              Using it from code
             
           </span>
         </div>
@@ -455,6 +457,34 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../adding-datasets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adding datasets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -474,7 +504,7 @@
   <span class="md-ellipsis">
     
   
-    Using it from your code
+    Using it from code
   
 
     
@@ -492,7 +522,7 @@
   <span class="md-ellipsis">
     
   
-    Using it from your code
+    Using it from code
   
 
     
@@ -630,34 +660,6 @@
     
   
     Configuration
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../adding-datasets/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Adding datasets
   
 
     
@@ -857,6 +859,34 @@
     
   
     CLI reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../python-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python API
   
 
     
@@ -1077,32 +1107,71 @@
 
 
 <h1 id="using-it-from-your-code">Using it from your code<a class="headerlink" href="#using-it-from-your-code" title="Permanent link">&para;</a></h1>
-<p>Where the <a href="../cli/">CLI</a> <em>manages</em> a project's data, the Python API <em>consumes</em>
+<p>Where the <a href="../cli/">CLI</a> <em>manages</em> a project's data, the in-code API <em>consumes</em>
 it: your analysis code resolves and loads what the manifest declares, and never
-edits it.</p>
+edits it. This page is the narrative guide; the complete list of functions and
+classes is in the <a href="../python-api/">Python API reference</a>. The Julia tabs show
+the equivalent calls in <a href="https://awi-esc.github.io/DataManifest.jl/">DataManifest.jl</a>,
+which reads the same manifest.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Python</label><label for="__tabbed_1_2">Julia</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">datamanifest</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">df</span> <span class="o">=</span> <span class="n">datamanifest</span><span class="o">.</span><span class="n">load_dataset</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>          <span class="c1"># download on first use, then load</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>                                               <span class="c1"># (pandas/xarray/… per format)</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">path</span> <span class="o">=</span> <span class="n">datamanifest</span><span class="o">.</span><span class="n">get_dataset_path</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>    <span class="c1"># just the on-disk path</span>
 </code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">using</span><span class="w"> </span><span class="n">DataManifest</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">df</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">load_dataset</span><span class="p">(</span><span class="s">&quot;co2&quot;</span><span class="p">)</span><span class="w">            </span><span class="c"># download on first use, then load</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">path</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">get_dataset_path</span><span class="p">(</span><span class="s">&quot;co2&quot;</span><span class="p">)</span><span class="w">      </span><span class="c"># just the on-disk path</span>
+</code></pre></div>
+</div>
+</div>
+</div>
 <p><code>load_dataset</code> downloads on first use, verifies the checksum, then returns the
 loaded object using the backend for the dataset's format (install the matching
 <a href="../installation/">extra</a>). <code>get_dataset_path</code> stops at the on-disk path, for
 when you want to open the file yourself.</p>
 <h2 id="caching-computed-results">Caching computed results<a class="headerlink" href="#caching-computed-results" title="Permanent link">&para;</a></h2>
 <p>Cache an expensive computation, keyed by its keyword arguments:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datamanifest.cache</span><span class="w"> </span><span class="kn">import</span> <span class="n">cached</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nd">@cached</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">load_anomaly</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">grid</span><span class="o">=</span><span class="s2">&quot;5x5&quot;</span><span class="p">):</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="o">...</span>        <span class="c1"># expensive; returns e.g. an xarray.Dataset</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="k">return</span> <span class="n">ds</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">ds</span> <span class="o">=</span> <span class="n">load_anomaly</span><span class="p">(</span><span class="n">grid</span><span class="o">=</span><span class="s2">&quot;5x5&quot;</span><span class="p">)</span>                <span class="c1"># first call: computes and stores</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">ds</span> <span class="o">=</span> <span class="n">load_anomaly</span><span class="p">(</span><span class="n">grid</span><span class="o">=</span><span class="s2">&quot;5x5&quot;</span><span class="p">)</span>                <span class="c1"># later calls: loads and returns</span>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="n">ds</span> <span class="o">=</span> <span class="n">load_anomaly</span><span class="p">(</span><span class="n">grid</span><span class="o">=</span><span class="s2">&quot;5x5&quot;</span><span class="p">,</span> <span class="n">cached</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>  <span class="c1"># force recompute</span>
+<div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Python</label><label for="__tabbed_2_2">Julia</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datamanifest.cache</span><span class="w"> </span><span class="kn">import</span> <span class="n">cached</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nd">@cached</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">load_anomaly</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">grid</span><span class="o">=</span><span class="s2">&quot;5x5&quot;</span><span class="p">):</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="o">...</span>        <span class="c1"># expensive; returns e.g. an xarray.Dataset</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="k">return</span> <span class="n">ds</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">ds</span> <span class="o">=</span> <span class="n">load_anomaly</span><span class="p">(</span><span class="n">grid</span><span class="o">=</span><span class="s2">&quot;5x5&quot;</span><span class="p">)</span>                <span class="c1"># first call: computes and stores</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">ds</span> <span class="o">=</span> <span class="n">load_anomaly</span><span class="p">(</span><span class="n">grid</span><span class="o">=</span><span class="s2">&quot;5x5&quot;</span><span class="p">)</span>                <span class="c1"># later calls: loads and returns</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="n">ds</span> <span class="o">=</span> <span class="n">load_anomaly</span><span class="p">(</span><span class="n">grid</span><span class="o">=</span><span class="s2">&quot;5x5&quot;</span><span class="p">,</span> <span class="n">cached</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>  <span class="c1"># force recompute</span>
 </code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">using</span><span class="w"> </span><span class="n">DataManifest</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nd">@cached</span><span class="w"> </span><span class="n">key</span><span class="o">=</span><span class="p">(</span><span class="n">a</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="p">(;</span><span class="w"> </span><span class="n">a</span><span class="o">.</span><span class="n">grid</span><span class="p">,))</span><span class="w"> </span><span class="k">function</span><span class="w"> </span><span class="n">load_anomaly</span><span class="p">(;</span><span class="w"> </span><span class="n">grid</span><span class="o">::</span><span class="kt">String</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;5x5&quot;</span><span class="p">)</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="c"># … expensive computation …</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">ds</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="k">end</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="n">ds</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">load_anomaly</span><span class="p">(</span><span class="n">grid</span><span class="o">=</span><span class="s">&quot;5x5&quot;</span><span class="p">)</span><span class="w">                </span><span class="c"># first call: computes and stores</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="n">ds</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">load_anomaly</span><span class="p">(</span><span class="n">grid</span><span class="o">=</span><span class="s">&quot;5x5&quot;</span><span class="p">)</span><span class="w">                </span><span class="c"># later calls: loads and returns</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="n">ds</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">load_anomaly</span><span class="p">(</span><span class="n">grid</span><span class="o">=</span><span class="s">&quot;5x5&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">cached</span><span class="o">=</span><span class="nb">false</span><span class="p">)</span><span class="w">  </span><span class="c"># run the body, no disk I/O</span>
+</code></pre></div>
+<p>Julia's <code>@cached</code> takes the cache key explicitly (<code>key=</code> maps the keyword
+arguments to the parameters that identify the result) and saves with the
+stdlib <code>Serialization</code> (<code>jls</code>) by default — see the
+<a href="https://awi-esc.github.io/DataManifest.jl/caching/">Julia caching page</a>.</p>
+</div>
+</div>
+</div>
 <p>Each distinct keyword combination is stored separately. The result is saved
 with <code>pickle</code> by default; pass <code>format="nc"</code>/<code>"csv"</code>/… to pick a serialization,
 and <code>version="v2"</code> to invalidate when the function's <em>logic</em> changes.
@@ -1115,13 +1184,30 @@ alongside your datasets. The <a href="https://github.com/perrette/datamanifest/b
 artifact's identity (<code>cachetype</code>, <code>version</code>, parameter hash) is derived.</p>
 <h2 id="the-database-object-and-the-module-level-shortcuts">The <code>Database</code> object, and the module-level shortcuts<a class="headerlink" href="#the-database-object-and-the-module-level-shortcuts" title="Permanent link">&para;</a></h2>
 <p>The recommended style is to load the database once and call its methods:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">datamanifest</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">db</span> <span class="o">=</span> <span class="n">datamanifest</span><span class="o">.</span><span class="n">Database</span><span class="p">(</span><span class="s2">&quot;datamanifest.toml&quot;</span><span class="p">)</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">df</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">load_dataset</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">path</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">get_dataset_path</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>
+<div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Python</label><label for="__tabbed_3_2">Julia</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">datamanifest</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">db</span> <span class="o">=</span> <span class="n">datamanifest</span><span class="o">.</span><span class="n">Database</span><span class="p">(</span><span class="s2">&quot;datamanifest.toml&quot;</span><span class="p">)</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">df</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">load_dataset</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="n">path</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">get_dataset_path</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>
 </code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">using</span><span class="w"> </span><span class="n">DataManifest</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">db</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Database</span><span class="p">(</span><span class="s">&quot;Datasets.toml&quot;</span><span class="p">)</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">df</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">load_dataset</span><span class="p">(</span><span class="n">db</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;co2&quot;</span><span class="p">)</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">path</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">get_dataset_path</span><span class="p">(</span><span class="n">db</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;co2&quot;</span><span class="p">)</span>
+</code></pre></div>
+</div>
+</div>
+</div>
+<p>(<code>Datasets.toml</code> is the conventional manifest name on the Julia side; either
+tool reads the file you point it at.)</p>
 <p>This is explicit about which project's manifest the code uses, lets several
 databases coexist in one program, and pins the configuration: a <code>Database</code>
 takes its <a href="../configuration/">configuration snapshot</a> — config files,
@@ -1132,37 +1218,52 @@ use they locate the project's manifest (walking up from the working directory;
 it for the rest of the process — the manifest is read once, not on every call.
 Every <code>datamanifest.X(...)</code> is the method <code>X</code> on that default database, or on
 the database you pass explicitly:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">datamanifest</span><span class="o">.</span><span class="n">download_dataset</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>            <span class="c1"># the auto-discovered default</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">datamanifest</span><span class="o">.</span><span class="n">download_dataset</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">,</span> <span class="n">db</span><span class="o">=</span><span class="n">mydb</span><span class="p">)</span>   <span class="c1"># a specific database</span>
+<div class="tabbed-set tabbed-alternate" data-tabs="4:2"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1">Python</label><label for="__tabbed_4_2">Julia</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">datamanifest</span><span class="o">.</span><span class="n">download_dataset</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>            <span class="c1"># the auto-discovered default</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">datamanifest</span><span class="o">.</span><span class="n">download_dataset</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">,</span> <span class="n">db</span><span class="o">=</span><span class="n">mydb</span><span class="p">)</span>   <span class="c1"># a specific database</span>
 </code></pre></div>
-<p>See the docstrings (<code>help(datamanifest)</code>) and the
-<a href="https://github.com/perrette/datamanifest/blob/main/design/design-notes.md">design notes</a>.</p>
-<p>The full public surface, beyond <code>load_dataset</code> / <code>get_dataset_path</code>:</p>
-<ul>
-<li><code>add(...)</code> / <code>register_dataset(...)</code> — register a dataset (with / without
-  downloading), like the CLI's <a href="../cli/#set-up-and-add-data"><code>add</code></a>;</li>
-<li><code>download_dataset(name)</code> / <code>download_datasets()</code> — fetch one / all;</li>
-<li><code>delete_dataset(name, keep_cache=False)</code> — drop a manifest entry and, unless
-  <code>keep_cache</code>, its files (the CLI's <code>remove</code>);</li>
-<li><code>resolve_db(db)</code> / <code>get_default_database()</code> — the database behind the
-  module-level functions;</li>
-<li><code>Database</code>, <code>DatasetEntry</code> — the underlying classes;</li>
-<li><code>validate_loader</code> / <code>validate_loaders</code> — resolve one / every loader binding
-  to its callable, raising on failure, without loading any data;</li>
-<li><code>datamanifest.cache.cached</code> — the <a href="#caching-computed-results">caching decorator</a>.</li>
-</ul>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">download_dataset</span><span class="p">(</span><span class="s">&quot;co2&quot;</span><span class="p">)</span><span class="w">          </span><span class="c"># the active project&#39;s manifest</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">download_dataset</span><span class="p">(</span><span class="n">mydb</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;co2&quot;</span><span class="p">)</span><span class="w">    </span><span class="c"># a specific database</span>
+</code></pre></div>
+</div>
+</div>
+</div>
+<p>The rest of the surface — registering and deleting datasets, downloading in
+bulk, validating loader bindings — is in the
+<a href="../python-api/">Python API reference</a>; the
+<a href="https://github.com/perrette/datamanifest/blob/main/design/design-notes.md">design notes</a>
+cover the rationale.</p>
 <h2 id="a-file-less-database-no-manifest">A file-less database (no manifest)<a class="headerlink" href="#a-file-less-database-no-manifest" title="Permanent link">&para;</a></h2>
 <p>For library code that wants checksummed downloads into a folder it controls —
 an OS-appropriate data dir, say — a <strong>file-less database</strong> skips the manifest
 entirely: no <code>datamanifest.toml</code>, no state file, nothing written but the data.
 The folder accepts the same <code>$</code>-symbols as the <a href="../storage/">storage model</a>, and
 the database's methods do everything the module-level functions do:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datamanifest</span><span class="w"> </span><span class="kn">import</span> <span class="n">Database</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">db</span> <span class="o">=</span> <span class="n">Database</span><span class="p">(</span><span class="n">datasets_folder</span><span class="o">=</span><span class="s2">&quot;$user_data_dir/mylib&quot;</span><span class="p">,</span> <span class="n">persist</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">db</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s2">&quot;https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">path</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">download_dataset</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>   <span class="c1"># → ~/.local/share/mylib/gml.noaa.gov/…/co2_annmean_mlo.csv</span>
+<div class="tabbed-set tabbed-alternate" data-tabs="5:2"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1">Python</label><label for="__tabbed_5_2">Julia</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datamanifest</span><span class="w"> </span><span class="kn">import</span> <span class="n">Database</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">db</span> <span class="o">=</span> <span class="n">Database</span><span class="p">(</span><span class="n">datasets_folder</span><span class="o">=</span><span class="s2">&quot;$user_data_dir/mylib&quot;</span><span class="p">,</span> <span class="n">persist</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="n">db</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s2">&quot;https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="n">path</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">download_dataset</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>   <span class="c1"># → ~/.local/share/mylib/gml.noaa.gov/…/co2_annmean_mlo.csv</span>
 </code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">using</span><span class="w"> </span><span class="n">DataManifest</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">db</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Database</span><span class="p">(</span><span class="n">datasets_folder</span><span class="o">=</span><span class="sa">raw</span><span class="s">&quot;$user_data_dir/mylib&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">persist</span><span class="o">=</span><span class="nb">false</span><span class="p">)</span><span class="w">   </span><span class="c"># raw&quot;&quot;: keep Julia</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">                                                                          </span><span class="c"># from interpolating $</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="n">DataManifest</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">db</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv&quot;</span><span class="p">;</span><span class="w"> </span><span class="n">name</span><span class="o">=</span><span class="s">&quot;co2&quot;</span><span class="p">)</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="n">path</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">download_dataset</span><span class="p">(</span><span class="n">db</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;co2&quot;</span><span class="p">)</span><span class="w">  </span><span class="c"># → ~/.local/share/mylib/gml.noaa.gov/…/co2_annmean_mlo.csv</span>
+</code></pre></div>
+</div>
+</div>
+</div>
 
 
 
@@ -1180,6 +1281,8 @@ the database's methods do everything the module-level functions do:</p>
             </div>
           
           
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
 <script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
         </div>
         
@@ -1218,7 +1321,7 @@ the database's methods do everything the module-level functions do:</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link", "content.action.edit"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
       <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
