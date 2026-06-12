@@ -46,15 +46,37 @@ lands under [`datacache_dir`](storage.md) (default:
 alongside your datasets. The [design notes](https://github.com/perrette/datamanifest/blob/main/design/design-notes.md) cover how an
 artifact's identity (`cachetype`, `version`, parameter hash) is derived.
 
-## Finding the manifest, and targeting a specific database
+## The `Database` object, and the module-level shortcuts
 
-The module-level functions find the project's manifest automatically (walking
-up from the working directory; `DATAMANIFEST_TOML` overrides). To use a specific
-database instead, either call the function with `db=`
-(`datamanifest.download_dataset("co2", db=mydb)`) or use the database's own
-methods (`mydb.download_dataset("co2")`). Every `datamanifest.X(...)` is just
-`resolve_db(db).X(...)` — the method on `db`, or on the default database when
-`db` is None. See the docstrings (`help(datamanifest)`) and the
+The recommended style is to load the database once and call its methods:
+
+```python
+import datamanifest
+
+db = datamanifest.Database("datamanifest.toml")
+
+df = db.load_dataset("co2")
+path = db.get_dataset_path("co2")
+```
+
+This is explicit about which project's manifest the code uses, lets several
+databases coexist in one program, and pins the configuration: a `Database`
+takes its [configuration snapshot](configuration.md) — config files,
+environment, host — once, when it is created.
+
+The module-level functions are shortcuts over a **default database**. On first
+use they locate the project's manifest (walking up from the working directory;
+`DATAMANIFEST_TOML` overrides), build the default `Database` from it, and keep
+it for the rest of the process — the manifest is read once, not on every call.
+Every `datamanifest.X(...)` is the method `X` on that default database, or on
+the database you pass explicitly:
+
+```python
+datamanifest.download_dataset("co2")            # the auto-discovered default
+datamanifest.download_dataset("co2", db=mydb)   # a specific database
+```
+
+See the docstrings (`help(datamanifest)`) and the
 [design notes](https://github.com/perrette/datamanifest/blob/main/design/design-notes.md).
 
 The full public surface, beyond `load_dataset` / `get_dataset_path`:
