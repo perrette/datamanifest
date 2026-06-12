@@ -486,6 +486,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../manifest-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Manifest format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../api/" class="md-nav__link">
         
   
@@ -854,14 +882,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../manifest-format/" class="md-nav__link">
+      <a href="../manifest-spec/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Manifest format
+    Manifest specification
   
 
     
@@ -1206,11 +1234,11 @@ loader for its <code>format</code>. Both are declared in the manifest as <strong
 binding names a function by a <code>module:function</code> reference (a <strong>ref</strong>, resolved
 via <code>importlib</code>) — never inline code — and may optionally carry arguments.</p>
 <p>The same manifest drives both tools: the Python <code>datamanifest</code> package and
-Julia's <a href="https://awi-esc.github.io/DataManifest.jl/">DataManifest.jl</a> read one
+Julia's <a href="https://github.com/awi-esc/DataManifest.jl">DataManifest.jl</a> read one
 file, each running only the bindings written for its own language. This page
 describes how the Python tool reads bindings; the Julia-side rules and API are
-on the
-<a href="https://awi-esc.github.io/DataManifest.jl/language-bindings/">Julia documentation site</a>.</p>
+in the
+<a href="https://github.com/awi-esc/DataManifest.jl/blob/main/docs/language-bindings.md">Julia language-bindings notes</a>.</p>
 <p>This page covers the binding forms from the common case to the advanced ones:
 bare bindings for a single-language project, parameterized bindings,
 the per-language <code>_LANG</code> namespace for manifests shared across languages, the
@@ -1250,7 +1278,7 @@ namespace below), so a hand-authored single-language manifest round-trips
 unchanged.</p>
 <p>A full, runnable example manifest — bare loaders/fetchers, a parameterized
 loader, a <code>shell</code> fetcher — lives in the spec's
-<a href="https://perrette.github.io/datamanifest.toml">examples</a>.</p>
+<a href="https://github.com/perrette/datamanifest.toml/blob/main/examples/datasets.toml">examples</a>.</p>
 <h2 id="parameterized-bindings">Parameterized bindings<a class="headerlink" href="#parameterized-bindings" title="Permanent link">&para;</a></h2>
 <p>A binding may be a <code>{ ref, args, kwargs }</code> table instead of a plain string, so
 one function is reused across datasets that differ only in arguments:</p>
@@ -1373,7 +1401,7 @@ fetcher is <code>[&lt;ds&gt;._LANG.python].fetcher</code> is fetched by running
 with <code>DATAMANIFEST_TOML</code> pointing at the same manifest. When the CLI is
 absent, disabled, or fails, the fetch ends in the ordinary "no fetcher"
 error. See the
-<a href="https://awi-esc.github.io/DataManifest.jl/language-bindings/">Julia documentation</a>.</p>
+<a href="https://github.com/awi-esc/DataManifest.jl/blob/main/docs/language-bindings.md">Julia language-bindings notes</a>.</p>
 </div>
 </div>
 </div>
@@ -1398,8 +1426,7 @@ per run with the <code>--delegate</code> / <code>--no-delegate</code> flags on
 <p>A single manifest can be consumed by several tools: each reads the common
 fields and ignores the others' extension keys. The Julia-side API —
 <code>load_dataset</code>, <code>download_dataset</code>, and the rest of DataManifest.jl — is
-documented on the
-<a href="https://awi-esc.github.io/DataManifest.jl/">Julia documentation site</a>. See
+documented in the <a href="../julia-api/">Julia API reference</a> on this site. See
 <a href="../conformance/">conformance.md</a> for the shared manifest format and what this
 implementation supports.</p>
 

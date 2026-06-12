@@ -13,10 +13,10 @@
         <link rel="canonical" href="https://perrette.github.io/datamanifest/manifest-format/">
       
       
-        <link rel="prev" href="../related/">
+        <link rel="prev" href="../adding-datasets/">
       
       
-        <link rel="next" href="../cli/">
+        <link rel="next" href="../api/">
       
       
         
@@ -401,8 +401,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -413,11 +415,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
           <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
@@ -438,7 +440,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -472,6 +474,169 @@
   
 
       </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Manifest format
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Manifest format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#a-minimal-entry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A minimal entry
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common fields
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fetchers-and-loaders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fetchers and loaders
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#structural-tables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Structural tables
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rare-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rare fields
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-the-file-is-written" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How the file is written
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-full-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A full example
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-normative-specification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The normative specification
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -684,8 +849,6 @@
       
   
   
-    
-  
   
   
     
@@ -698,11 +861,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
           <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
@@ -723,7 +886,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -738,44 +901,17 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Manifest format
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../manifest-spec/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Manifest format
+    Manifest specification
   
 
     
@@ -784,114 +920,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#a-minimal-entry" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        A minimal entry
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#common-fields" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Common fields
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#fetchers-and-loaders" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Fetchers and loaders
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#structural-tables" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Structural tables
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#rare-fields" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Rare fields
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#how-the-file-is-written" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        How the file is written
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#a-full-example" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        A full example
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#the-normative-specification" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        The normative specification
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1245,10 +1273,11 @@
 <h1 id="manifest-format-datamanifesttoml">Manifest format (<code>datamanifest.toml</code>)<a class="headerlink" href="#manifest-format-datamanifesttoml" title="Permanent link">&para;</a></h1>
 <p>The manifest is a TOML file that declares the datasets a project depends on:
 where each one comes from, what its content should be, and how to load it. This
-page is a practical reference for the Python implementation. The format itself
-is shared across languages and defined normatively in the
-<a href="https://perrette.github.io/datamanifest.toml"><code>datamanifest.toml</code> specification</a>;
-see <a href="../conformance/">Conformance</a> for which parts this implementation supports.</p>
+page is the narrative treatment. The format itself is shared across languages
+and defined normatively in the
+<a href="../manifest-spec/">manifest specification</a> (mirrored on this site from the
+<code>datamanifest.toml</code> repository); see <a href="../conformance/">Conformance</a> for which
+parts this implementation supports.</p>
 <p>The canonical filename is <code>datamanifest.toml</code>; <code>DataManifest.toml</code>,
 <code>datasets.toml</code> and <code>Datasets.toml</code> are also recognized, in that order, when
 walking up from the working directory.</p>
@@ -1266,7 +1295,10 @@ smallest useful entry is a source and a checksum:</p>
   when it is empty, the digest is computed (as <code>sha256:</code>) on the first
   successful download and written back; on later fetches the download is
   verified against it, in the algorithm it names. A bare hex value with no
-  <code>algo:</code> prefix is read as <code>sha256</code>.</li>
+  <code>algo:</code> prefix is read as <code>sha256</code>. Verification runs when a dataset is
+  (re-)fetched — a completed download is not re-hashed on every load; passing
+  <code>overwrite</code> (CLI <code>--overwrite</code>) forces a re-fetch and with it
+  re-verification.</li>
 </ul>
 <h2 id="common-fields">Common fields<a class="headerlink" href="#common-fields" title="Permanent link">&para;</a></h2>
 <p>Every field is optional. Types are TOML types; defaults are the empty
@@ -1288,7 +1320,7 @@ string / empty list / <code>false</code> unless noted.</p>
 <tr>
 <td><code>uris</code></td>
 <td>array of string</td>
-<td>Several source URIs materialized into one dataset folder. Mutually exclusive with <code>uri</code>.</td>
+<td>Several source URIs materialized into one dataset folder. Mutually exclusive with <code>uri</code>. The dataset's <code>key</code> is derived from the URIs' common leading path segments (just the hostname when nothing is shared); an explicit <code>key =</code> overrides the derivation.</td>
 </tr>
 <tr>
 <td><code>checksum</code></td>
@@ -1471,7 +1503,8 @@ output over SSH, and a GitHub release archive:</p>
 <p>This page is a practical summary, not the contract. The authoritative,
 cross-language definition — the full field list, the resolution order, the
 preservation rules, and the conformance fixtures — is the
-<a href="https://perrette.github.io/datamanifest.toml"><code>datamanifest.toml</code> specification</a>.</p>
+<a href="../manifest-spec/">manifest specification</a>, mirrored on this site from the
+<a href="https://github.com/perrette/datamanifest.toml"><code>datamanifest.toml</code> repository</a>.</p>
 
 
 

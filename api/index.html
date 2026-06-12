@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://perrette.github.io/datamanifest/api/">
       
       
-        <link rel="prev" href="../adding-datasets/">
+        <link rel="prev" href="../manifest-format/">
       
       
         <link rel="next" href="../use-cases/">
@@ -483,6 +483,34 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../manifest-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Manifest format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -821,14 +849,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../manifest-format/" class="md-nav__link">
+      <a href="../manifest-spec/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Manifest format
+    Manifest specification
   
 
     
@@ -1137,7 +1165,7 @@
 it: your analysis code resolves and loads what the manifest declares, and never
 edits it. This page is the narrative guide; the complete list of functions and
 classes is in the <a href="../python-api/">Python API reference</a>. The Julia tabs show
-the equivalent calls in <a href="https://awi-esc.github.io/DataManifest.jl/">DataManifest.jl</a>,
+the equivalent calls in <a href="https://github.com/awi-esc/DataManifest.jl">DataManifest.jl</a>,
 which reads the same manifest.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Python</label><label for="__tabbed_1_2">Julia</label></div>
 <div class="tabbed-content">
@@ -1198,11 +1226,16 @@ when you want to open the file yourself.</p>
 <p>Julia's <code>@cached</code> takes the cache key explicitly (<code>key=</code> maps the keyword
 arguments to the parameters that identify the result) and saves with the
 stdlib <code>Serialization</code> (<code>jls</code>) by default — see the
-<a href="https://awi-esc.github.io/DataManifest.jl/caching/">Julia caching page</a>.</p>
+<a href="https://github.com/awi-esc/DataManifest.jl/blob/main/docs/caching.md">Julia caching page</a>.</p>
 </div>
 </div>
 </div>
-<p>Each distinct keyword combination is stored separately. The result is saved
+<p>Each distinct keyword combination is stored separately. The cache key is
+shared across languages: it is the SHA-256 of the canonical JSON
+(<a href="https://www.rfc-editor.org/rfc/rfc8785">RFC 8785</a>) of the keyword
+arguments, with Python's <code>json.dumps</code> float form as the reference — the Julia
+tool computes the identical key, so caches produced in one language are read
+by the other. The result is saved
 with <code>pickle</code> by default; pass <code>format="nc"</code>/<code>"csv"</code>/… to pick a serialization,
 and <code>version="v2"</code> to invalidate when the function's <em>logic</em> changes.
 <code>datamanifest list</code> shows cached results grouped by function with their
@@ -1261,6 +1294,11 @@ registers <strong>and downloads</strong> either way:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">download_dataset</span><span class="p">(</span><span class="s">&quot;co2&quot;</span><span class="p">)</span><span class="w">          </span><span class="c"># the active project&#39;s manifest</span>
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">download_dataset</span><span class="p">(</span><span class="n">mydb</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;co2&quot;</span><span class="p">)</span><span class="w">    </span><span class="c"># a specific database</span>
 </code></pre></div>
+<p>In Julia the default manifest comes from the <strong>active project</strong>
+(<code>julia --project</code> / <code>Pkg.activate</code>): the first of the recognized
+manifest names found next to the active <code>Project.toml</code>. The
+<code>DATAMANIFEST_TOML</code> (or <code>DATASETS_TOML</code>) environment variable points at
+a manifest explicitly and takes precedence over the project discovery.</p>
 </div>
 </div>
 </div>

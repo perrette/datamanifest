@@ -16,7 +16,7 @@
         <link rel="prev" href="../language-bindings/">
       
       
-        <link rel="next" href="../manifest-format/">
+        <link rel="next" href="../manifest-spec/">
       
       
         
@@ -486,6 +486,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../manifest-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Manifest format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../api/" class="md-nav__link">
         
   
@@ -747,6 +775,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#julia-alternatives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Julia alternatives
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#acknowledgments" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -832,14 +871,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../manifest-format/" class="md-nav__link">
+      <a href="../manifest-spec/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Manifest format
+    Manifest specification
   
 
     
@@ -1119,6 +1158,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#julia-alternatives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Julia alternatives
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#acknowledgments" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1167,10 +1217,12 @@ with two implementations:</p>
 </ul>
 <p>Both read and write the same manifest, so one file can serve a mixed
 Python/Julia project — see <a href="../language-bindings/">language bindings</a>.</p>
-<p>This site is the main documentation for the ecosystem: the manifest format,
-the CLI, the Python library, and the cross-language pages. The
-<a href="https://awi-esc.github.io/DataManifest.jl/">DataManifest.jl site</a> hosts the
-Julia API reference and a Julia-specific quickstart.</p>
+<p>This site is the documentation for the ecosystem: the
+<a href="../manifest-format/">manifest format</a> and its
+<a href="../manifest-spec/">specification</a>, the CLI, the Python library, the
+cross-language pages, and the <a href="../julia-api/">Julia API reference</a>.
+Julia-specific guides live as Markdown in the
+<a href="https://github.com/awi-esc/DataManifest.jl/blob/main/docs/doc.md">DataManifest.jl repository</a>.</p>
 <h2 id="from-the-same-author">From the same author<a class="headerlink" href="#from-the-same-author" title="Permanent link">&para;</a></h2>
 <p>A few other open-source tools I maintain.</p>
 <p><strong>Scientific writing &amp; data</strong></p>
@@ -1204,6 +1256,29 @@ Julia API reference and a Julia-specific quickstart.</p>
   download + cached storage with an OS-appropriate data dir; code-driven rather
   than manifest-driven.</li>
 </ul>
+<h2 id="julia-alternatives">Julia alternatives<a class="headerlink" href="#julia-alternatives" title="Permanent link">&para;</a></h2>
+<p>Single-language counterparts on the Julia side:</p>
+<ul>
+<li><a href="https://github.com/oxinabox/DataDeps.jl"><code>DataDeps.jl</code></a> —
+  download-on-first-access with checksum verification; registration lives in
+  code rather than a manifest file.</li>
+<li><a href="https://discourse.julialang.org/t/ann-datatoolkit-jl-reproducible-flexible-and-convenient-data-management/104757"><code>DataToolkit.jl</code></a> —
+  the most comparable: a rich, declarative data-management ecosystem with lazy
+  loading and a broad driver set. It allows in-config code via its meta
+  <code>@syntax</code>, where DataManifest prefers references to external code.</li>
+<li><a href="https://juliadynamics.github.io/DrWatson.jl/dev/"><code>DrWatson.jl</code></a> — broader
+  scientific-project organization (simulations, file layout, naming), of which
+  data handling is one part.</li>
+<li><a href="https://github.com/helgee/RemoteFiles.jl"><code>RemoteFiles.jl</code></a> — keep a local
+  file in sync with a remote URL.</li>
+<li>Pkg Artifacts (<code>Artifacts.toml</code>) — Julia's built-in TOML manifest of
+  content-addressed, hash-pinned data/binary bundles tied to packages.</li>
+</ul>
+<p>As a rule of thumb: for code-driven download-and-checksum alone, DataDeps.jl
+is lighter; for a rich declarative data ecosystem, DataToolkit.jl is richer;
+DataManifest.jl targets multi-dataset, multi-language projects that want the
+whole dependency declaration — and the derived-data cache — in one shareable
+file.</p>
 <h2 id="acknowledgments">Acknowledgments<a class="headerlink" href="#acknowledgments" title="Permanent link">&para;</a></h2>
 <p><code>datamanifest</code> is a Python port of
 <a href="https://github.com/awi-esc/DataManifest.jl"><code>awi-esc/DataManifest.jl</code></a>, written

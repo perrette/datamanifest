@@ -486,6 +486,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../manifest-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Manifest format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../api/" class="md-nav__link">
         
   
@@ -609,6 +637,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Where data goes by default">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#names-on-disk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Names on disk
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -882,14 +927,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../manifest-format/" class="md-nav__link">
+      <a href="../manifest-spec/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Manifest format
+    Manifest specification
   
 
     
@@ -1144,6 +1189,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Where data goes by default">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#names-on-disk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Names on disk
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1282,6 +1344,14 @@ two folder settings.</p>
 <li>fetched dataset → <code>&lt;datasets_dir&gt;/&lt;key&gt;</code></li>
 <li>cached result → <code>&lt;datacache_dir&gt;/&lt;cachetype&gt;/[&lt;version&gt;/]&lt;hash&gt;</code></li>
 </ul>
+<h3 id="names-on-disk">Names on disk<a class="headerlink" href="#names-on-disk" title="Permanent link">&para;</a></h3>
+<p>A dataset's <code>version</code> is part of its key, and hence of the on-disk name:
+<code>version = "v2.1"</code> turns <code>&lt;datasets_dir&gt;/&lt;key&gt;</code> into
+<code>&lt;datasets_dir&gt;/&lt;key&gt;#v2.1</code>, so several versions coexist. For
+<code>extract = true</code> datasets, the extracted folder is named after the archive
+with the archive extension stripped (<code>.zip</code>, <code>.tar</code>, <code>.tar.gz</code>); when there
+is no recognizable extension to strip (e.g. a versioned name ending in
+<code>#v2.1</code>), a <code>.d</code> suffix is appended instead.</p>
 <p>To see where a dataset resolves on this machine:</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">CLI</label><label for="__tabbed_1_2">Python</label><label for="__tabbed_1_3">Julia</label></div>
 <div class="tabbed-content">
@@ -1385,10 +1455,47 @@ interpolate <code>$</code>-symbols (<code>$NAME</code> or <code>${NAME}</code>) 
 </code></pre></div>
 <h2 id="per-dataset-override">Per-dataset override<a class="headerlink" href="#per-dataset-override" title="Permanent link">&para;</a></h2>
 <p>A dataset may set <code>storage_path</code> — a path expression whose default is
-<code>$datasets_dir/$key</code>. A <code>storage_path</code> that contains <code>$key</code> is a tool-managed
-keyed location. An exact path with no <code>$key</code> is a <strong>user-managed</strong> location:
-it is used verbatim, and maintenance commands (<code>delete</code>, <code>move</code>) never
-touch it.</p>
+<code>$datasets_dir/$key</code>. Setting it relocates one dataset without changing
+anything else. It comes in two flavors:</p>
+<ul>
+<li>a <code>storage_path</code> that contains <code>$key</code> is a <strong>tool-managed</strong> keyed
+  location — maintenance commands may move or delete it like any stored
+  object;</li>
+<li>an exact path with no <code>$key</code> is a <strong>user-managed</strong> location: it is used
+  verbatim, maintenance commands (<code>delete</code>, <code>move</code>) never touch it, and the
+  <a href="#read-pools">read pools</a> are not probed for it.</li>
+</ul>
+<p>The expression may use <code>$datasets_dir</code>, <code>$key</code> and the other
+<a href="#path-expressions"><code>$</code>-symbols</a>. A relative result is resolved against the
+project root (the manifest's directory) — convenient for committing small
+data files alongside the code. An absolute path is used as-is — handy for a
+NAS, an external drive, or a scratch volume.</p>
+<p>The rest of the pipeline is unchanged:</p>
+<ul>
+<li><strong>Cache hit.</strong> If the file is already at the resolved path, it is returned
+  without ever consulting the URI — exactly the behavior of a file committed
+  to the repository.</li>
+<li><strong>Cache miss.</strong> If the file is missing, the normal download from <code>uri</code> runs
+  and the result lands at the resolved path — so a fetched dataset can be
+  redirected into the repository instead of the shared store.</li>
+<li><strong>Checksum.</strong> A declared <code>checksum</code> is still verified against the file at
+  the resolved path.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[in_repo_dataset]</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">uri</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://example.com/dataset.csv&quot;</span><span class="w">   </span><span class="c1"># source</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">storage_path</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;data/dataset.csv&quot;</span><span class="w">         </span><span class="c1"># relative → resolved against the project root</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">checksum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;sha256:...&quot;</span><span class="w">                   </span><span class="c1"># still verified</span>
+</code></pre></div>
+<p>For sources that cannot be fetched automatically (bot protection,
+click-through agreements, manual logins), pair the entry with
+<code>skip_download = true</code>: it makes the user-managed nature explicit and
+prevents any download attempt. <code>skip_download = true</code> without a
+<code>storage_path</code> makes the dataset's local path the <code>uri</code> value, returned
+verbatim — useful when the URI already <em>is</em> a local path. (One divergence to
+be aware of: on a <code>skip_download</code> entry, DataManifest.jl resolves an explicit
+<code>storage_path</code> as the location, while the Python tool always returns the
+<code>uri</code> — so when both tools read the manifest, keep the <code>uri</code> pointing at the
+actual file.)</p>
 <h2 id="read-pools">Read pools<a class="headerlink" href="#read-pools" title="Permanent link">&para;</a></h2>
 <p>If a dataset (or a <code>@cached</code> result) already exists somewhere else on your
 machine — say another project downloaded it — <code>datamanifest</code> can reuse that

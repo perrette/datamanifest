@@ -16,7 +16,7 @@
         <link rel="prev" href="../quickstart/">
       
       
-        <link rel="next" href="../api/">
+        <link rel="next" href="../manifest-format/">
       
       
         
@@ -788,6 +788,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../manifest-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Manifest format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../api/" class="md-nav__link">
         
   
@@ -1043,14 +1071,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../manifest-format/" class="md-nav__link">
+      <a href="../manifest-spec/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Manifest format
+    Manifest specification
   
 
     
@@ -1667,6 +1695,13 @@ the core HTTP downloader:</p>
   cloned. Folders (clones, extracted archives) get a checksum computed over
   the whole tree.</li>
 </ul>
+<p>For data hosted on a git forge, prefer a release tarball URL (e.g.
+<code>https://github.com/owner/repo/archive/refs/tags/v2.1.zip</code> with
+<code>extract = true</code>) over the git repository itself — a plain download is
+platform-independent and needs no git client. Note also that the <code>uri</code> may
+be purely informative — pointing at a documentation page, say — when a
+<a href="../language-bindings/">fetcher binding</a> or <code>skip_download</code> provides the
+bytes instead.</p>
 <h3 id="other-tools-catalogs">Other tools' catalogs<a class="headerlink" href="#other-tools-catalogs" title="Permanent link">&para;</a></h3>
 <p>When the datasets are already listed in another tool's catalog file — a pooch
 registry, an intake catalog, DVC metadata, or a plain CSV/URL list — <code>import</code>

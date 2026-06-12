@@ -484,6 +484,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../manifest-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Manifest format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../api/" class="md-nav__link">
         
   
@@ -739,14 +767,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../manifest-format/" class="md-nav__link">
+      <a href="../manifest-spec/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Manifest format
+    Manifest specification
   
 
     
@@ -993,6 +1021,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#julia-implementation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Julia implementation
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1085,6 +1124,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#julia-implementation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Julia implementation
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1116,9 +1166,9 @@ the same <code>datamanifest.toml</code> can be consumed by sibling implementatio
 <a href="https://github.com/awi-esc/DataManifest.jl"><code>DataManifest.jl</code></a>) without conflict, because
 each tool reads the common fields plus its own <code>_LANG</code>-namespaced bindings and preserves
 the rest verbatim. The format is defined in its own specification,
-<a href="https://perrette.github.io/datamanifest.toml"><code>datamanifest.toml</code></a>. For a
+<a href="../manifest-spec/"><code>datamanifest.toml</code></a> (mirrored on this site). For a
 practical summary of the fields, see the <a href="../manifest-format/">manifest format</a>
-reference.</p>
+page.</p>
 <p>You do <strong>not</strong> need this page to use <code>datamanifest</code> — the
 <a href="../quickstart/">quickstart</a> and <a href="../use-cases/">use cases</a> cover everyday usage. This file is for anyone who needs the cross-tool details: which features
 this Python implementation supports, and which version of the shared format it targets.</p>
@@ -1196,6 +1246,13 @@ not automatically on every spec release.</p>
 file against its recorded hash, and runs only the fixtures whose declared
 capabilities are a subset of those implemented above, skipping the rest with a
 reason.</p>
+<h2 id="julia-implementation">Julia implementation<a class="headerlink" href="#julia-implementation" title="Permanent link">&para;</a></h2>
+<p><a href="https://github.com/awi-esc/DataManifest.jl">DataManifest.jl</a> anchors its
+conformance claim the same way: its <code>test/conformance_pin.toml</code> pins the same
+spec tag (currently <code>spec-v5.6</code>) with the same fixture mechanism — per-file
+content hashes, fixtures filtered by declared capabilities. The one capability
+it does not implement is <code>sync</code> (cross-machine <code>push</code>/<code>pull</code>); the Python CLI
+covers it.</p>
 
 
 

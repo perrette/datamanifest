@@ -1,0 +1,3889 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Declare and manage the datasets used in a scientific project — download, verify, cache, and share them">
+      
+      
+      
+        <link rel="canonical" href="https://perrette.github.io/datamanifest/manifest-spec/">
+      
+      
+        <link rel="prev" href="../related/">
+      
+      
+        <link rel="next" href="../cli/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Manifest specification - datamanifest</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#datamanifesttoml-manifest-schema-specification" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="datamanifest" class="md-header__button md-logo" aria-label="datamanifest" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            datamanifest
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Manifest specification
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/perrette/datamanifest" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    perrette/datamanifest
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="datamanifest" class="md-nav__button md-logo" aria-label="datamanifest" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    datamanifest
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/perrette/datamanifest" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    perrette/datamanifest
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adding-datasets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adding datasets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manifest-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Manifest format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using it from code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../use-cases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use cases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../importing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importing from other tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../language-bindings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Language bindings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../related/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Related projects
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Manifest specification
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Manifest specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#file-naming-and-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File naming and discovery
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#versioning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Versioning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#structural-keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Structural keys
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#top-level-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Top-level layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#language-agnostic-contract-common-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Language-agnostic contract (common fields)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#checksums" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Checksums
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#language-bindings-_lang" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Language bindings (_LANG)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Language bindings (_LANG)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#binding-forms-string-or-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Binding forms (string or table)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-dataset-bindings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-dataset bindings
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Per-dataset bindings">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameterized-bindings-ref-args-kwargs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameterized bindings (ref + args / kwargs)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shell-fetcher" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        shell fetcher
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#project-wide-loaders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Project-wide loaders
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#language-implicit-bindings-bare-fetcher-loader" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Language-implicit bindings (bare fetcher / loader)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resolution-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resolution semantics
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Resolution semantics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fetch-ladder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fetch ladder
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#download-schemes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Download schemes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#load-ladder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Load ladder
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cross-language-fetch-rung-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross-language fetch (rung 3)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Storage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scoped-configuration-two-config-files-and-the-resolution-ladder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scoped configuration (two config files and the resolution ladder)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#read-pools-reuse-what-is-already-on-the-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read pools (reuse what is already on the machine)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#symbols" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Symbols
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-dataset-path-storage_path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-dataset path (storage_path)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#in-memory-and-multiple-manifests-library-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        In-memory and multiple manifests (library use)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#concurrent-access-and-completeness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Concurrent access and completeness
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#produced-datasets-and-caching-companion-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Produced datasets and caching (companion layer)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Produced datasets and caching (companion layer)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameter-hash-keying" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameter-hash keying
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#identity-the-cachetype-namespace" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Identity: the cachetype namespace
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#identity-conflicts-same-cachetype-version-same-process" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Identity conflicts (same (cachetype, version), same process)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#produced-artifact-location" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Produced-artifact location
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cache-layout-and-sidecars" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cache layout and sidecars
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#default-serialization-format-per-language" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Default serialization format (per language)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-state-file-datamanifeststatetoml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The state file (.datamanifest/state.toml)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The state file (.datamanifest/state.toml)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-state-file-is-read-only-inventory-the-gold-standard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The state file is read-only inventory (the gold standard)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dirty-states-and-explicit-reconciliation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dirty states and explicit reconciliation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#maintenance-inspect-filter-delete" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Maintenance (inspect, filter, delete)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-this-spec-does-not-specify" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this spec does not specify
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cross-machine-sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross-machine sync
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#preservation-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Preservation contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conformance-levels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conformance levels
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#peer-cli-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Peer-CLI contract
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Peer-CLI contract">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#invocation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Invocation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#discovery-and-availability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Discovery and availability
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deprecations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deprecations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conformance-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conformance notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../python-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../julia-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Julia API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#file-naming-and-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File naming and discovery
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#versioning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Versioning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#structural-keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Structural keys
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#top-level-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Top-level layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#language-agnostic-contract-common-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Language-agnostic contract (common fields)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#checksums" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Checksums
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#language-bindings-_lang" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Language bindings (_LANG)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Language bindings (_LANG)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#binding-forms-string-or-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Binding forms (string or table)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-dataset-bindings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-dataset bindings
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Per-dataset bindings">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameterized-bindings-ref-args-kwargs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameterized bindings (ref + args / kwargs)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shell-fetcher" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        shell fetcher
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#project-wide-loaders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Project-wide loaders
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#language-implicit-bindings-bare-fetcher-loader" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Language-implicit bindings (bare fetcher / loader)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resolution-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resolution semantics
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Resolution semantics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fetch-ladder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fetch ladder
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#download-schemes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Download schemes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#load-ladder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Load ladder
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cross-language-fetch-rung-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross-language fetch (rung 3)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Storage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scoped-configuration-two-config-files-and-the-resolution-ladder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scoped configuration (two config files and the resolution ladder)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#read-pools-reuse-what-is-already-on-the-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read pools (reuse what is already on the machine)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#symbols" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Symbols
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-dataset-path-storage_path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-dataset path (storage_path)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#in-memory-and-multiple-manifests-library-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        In-memory and multiple manifests (library use)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#concurrent-access-and-completeness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Concurrent access and completeness
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#produced-datasets-and-caching-companion-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Produced datasets and caching (companion layer)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Produced datasets and caching (companion layer)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#parameter-hash-keying" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Parameter-hash keying
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#identity-the-cachetype-namespace" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Identity: the cachetype namespace
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#identity-conflicts-same-cachetype-version-same-process" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Identity conflicts (same (cachetype, version), same process)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#produced-artifact-location" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Produced-artifact location
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cache-layout-and-sidecars" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cache layout and sidecars
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#default-serialization-format-per-language" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Default serialization format (per language)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-state-file-datamanifeststatetoml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The state file (.datamanifest/state.toml)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The state file (.datamanifest/state.toml)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-state-file-is-read-only-inventory-the-gold-standard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The state file is read-only inventory (the gold standard)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dirty-states-and-explicit-reconciliation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dirty states and explicit reconciliation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#maintenance-inspect-filter-delete" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Maintenance (inspect, filter, delete)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-this-spec-does-not-specify" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this spec does not specify
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cross-machine-sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross-machine sync
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#preservation-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Preservation contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conformance-levels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conformance levels
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#peer-cli-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Peer-CLI contract
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Peer-CLI contract">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#invocation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Invocation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#discovery-and-availability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Discovery and availability
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deprecations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deprecations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conformance-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conformance notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/perrette/datamanifest/edit/main/manifest-spec.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="datamanifesttoml-manifest-schema-specification"><code>datamanifest.toml</code> — manifest schema specification<a class="headerlink" href="#datamanifesttoml-manifest-schema-specification" title="Permanent link">&para;</a></h1>
+<!-- Generated by docs/_sync_spec.py — do not edit by hand. -->
+
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This page mirrors the normative specification; the source of truth
+is
+<a href="https://github.com/perrette/datamanifest.toml/blob/main/SCHEMA.md">SCHEMA.md in the datamanifest.toml repository</a>.
+It is regenerated from that repository on every deploy of this site.</p>
+</div>
+<p>This document is the normative description of the TOML manifest format shared by the
+<a href="https://github.com/awi-esc/DataManifest.jl">DataManifest.jl</a> (Julia) and
+<a href="https://github.com/perrette/datamanifest">datamanifest</a> (Python) tools. A manifest
+declares the data dependencies of a project: each dataset's source URI, checksum,
+version, format, and how to fetch and load it. Either implementation can read and write a
+conforming file; each reads the language-agnostic contract fields plus its own
+<code>_LANG</code>-namespaced bindings, and preserves the rest verbatim.</p>
+<h2 id="file-naming-and-discovery">File naming and discovery<a class="headerlink" href="#file-naming-and-discovery" title="Permanent link">&para;</a></h2>
+<p>The canonical manifest filename is <strong><code>datamanifest.toml</code></strong>; a tool that creates a new
+manifest MUST use it. For compatibility, tools MUST also discover the alternate spellings,
+in this order (the first existing file wins):</p>
+<ol>
+<li><code>datamanifest.toml</code></li>
+<li><code>DataManifest.toml</code></li>
+<li><code>datamanifest.toml</code></li>
+<li><code>Datasets.toml</code></li>
+</ol>
+<p>An explicitly given path always bypasses discovery. Throughout this document
+<code>datamanifest.toml</code> stands for the manifest file under any of these names.</p>
+<h2 id="versioning">Versioning<a class="headerlink" href="#versioning" title="Permanent link">&para;</a></h2>
+<p>Two independent version axes govern this format:</p>
+<ul>
+<li><strong><code>_META.schema</code></strong> (integer, stored inside the file) is the <strong>data-model compatibility
+  version</strong>. It increments only on a breaking structural change. A file without <code>[_META]</code>
+  is treated as schema v0 (legacy flat) and read leniently. Current value: <strong>1</strong>.</li>
+<li><strong>Spec-document version</strong> (a git tag such as <code>spec-v1.0</code>) versions the prose,
+  examples, and fixture suite. An implementation conforming to "schema 1, spec ≥ v1.0"
+  pins to a spec tag; the spec may advance without retroactively breaking a pinned
+  implementation. The spec is never forked per language package: one normative document,
+  one fixture suite, multiple implementations at varying capability levels.</li>
+</ul>
+<h2 id="structural-keys">Structural keys<a class="headerlink" href="#structural-keys" title="Permanent link">&para;</a></h2>
+<p>Keys beginning with <code>_</code> are <strong>structural</strong> — they are not dataset tables. At the top
+level, the defined structural tables are <code>_META</code>, <code>_LANG</code>, <code>_STORAGE</code>, and <code>_LOADERS</code>.
+Within a dataset table, the only defined structural sub-table is <code>_LANG</code>. Readers MUST
+preserve unknown <code>_*</code> keys verbatim and MUST NOT treat them as datasets or drop them on
+write.</p>
+<h2 id="top-level-layout">Top-level layout<a class="headerlink" href="#top-level-layout" title="Permanent link">&para;</a></h2>
+<p>A v1 manifest is a TOML document with:</p>
+<ul>
+<li><strong><code>[_META]</code></strong> — schema metadata (<code>schema = 1</code>).</li>
+<li><strong><code>[_LANG.&lt;lang&gt;]</code></strong> — project-wide execution-context configuration for language
+  <code>&lt;lang&gt;</code>. The sub-key <code>loaders</code> is a <code>format → ref</code> map of default loaders for that
+  language.</li>
+<li><strong>One table per dataset</strong>, keyed by the dataset name. Dataset tables hold the
+  language-agnostic contract fields, an optional <code>_LANG</code> sub-table for per-dataset
+  bindings, and optional <strong>bare (language-implicit) <code>fetcher</code>/<code>loader</code> bindings</strong> (see
+  <em>Language-implicit bindings</em>).</li>
+<li><strong><code>[_STORAGE]</code></strong> — optional storage configuration: the two folder fields
+  (<code>datasets_dir</code> / <code>datacache_dir</code>), optional read-pool lists (<code>datasets_pools</code> /
+  <code>datacache_pools</code>), the <code>project</code> field, reusable <code>$</code>-symbols (predefined <code>$user_data_dir</code>
+  / <code>$user_cache_dir</code> / <code>$repo</code> / <code>$project</code> plus user-defined keys), and the <code>_HOST</code>
+  host-override sub-table. The same shape is read from two optional per-machine config
+  files. See Storage.</li>
+<li><strong><code>[_LOADERS]</code></strong> — a language-implicit <code>format → binding</code> loaders map (tolerated; the
+  bare counterpart of <code>[_LANG.&lt;self&gt;.loaders]</code>). See <em>Language-implicit bindings</em>.</li>
+</ul>
+<p>Example:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[_META]</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">schema</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="k">[_LANG.python.loaders]</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">csv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;pandas.io.parsers:read_csv&quot;</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">nc</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;xarray:open_dataset&quot;</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="k">[_LANG.julia.loaders]</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="n">csv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;CSV:read&quot;</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="n">nc</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;NCDatasets:Dataset&quot;</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="k">[foo]</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="n">uri</span><span class="w">      </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://example.com/foo.csv&quot;</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="n">checksum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;sha256:abc123&quot;</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="n">format</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;csv&quot;</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="k">[bar]</span>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="n">checksum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;sha256:def456&quot;</span>
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="n">format</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;nc&quot;</span>
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="n">shell</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;make-bar -o $download_path&quot;</span><span class="w">   </span><span class="c1"># language-agnostic shell fetcher</span>
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="k">[bar._LANG.julia]</span>
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="n">fetcher</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;MyPkg:build_bar&quot;</span>
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="n">loader</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;MyPkg:load_bar&quot;</span>
+<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>
+<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="k">[bar._LANG.python]</span>
+<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="n">fetcher</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;mypkg.build:bar&quot;</span>
+<a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="n">loader</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;mypkg.load:bar&quot;</span>
+</code></pre></div>
+<h2 id="language-agnostic-contract-common-fields">Language-agnostic contract (common fields)<a class="headerlink" href="#language-agnostic-contract-common-fields" title="Permanent link">&para;</a></h2>
+<p>Every field is optional and defaults to the empty string / empty list / <code>false</code> shown.
+Types are TOML types (<code>string</code>, <code>array of string</code>, <code>bool</code>).</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Default</th>
+<th>Semantics</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>uri</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>Single source URI. HTTP(S), <code>git</code>/<code>ssh+git</code>/<code>*.git</code>, <code>ssh</code>/<code>sshfs</code>/<code>rsync</code>, <code>file://</code>, or an <strong>object-store scheme</strong> (<code>s3://</code>, <code>gs://</code>, <code>gcs://</code>, <code>az://</code>, <code>abfs://</code>, <code>abfss://</code>, <code>adl://</code>, <code>gdrive://</code> — see <em>Download schemes</em>). Mutually exclusive with <code>uris</code>.</td>
+</tr>
+<tr>
+<td><code>uris</code></td>
+<td>array of string</td>
+<td><code>[]</code></td>
+<td>Batch of source URIs written into a single dataset folder under disambiguated relative paths. Mutually exclusive with <code>uri</code>.</td>
+</tr>
+<tr>
+<td><code>host</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>Parsed from the URI (derived; tools omit it on write).</td>
+</tr>
+<tr>
+<td><code>path</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>Parsed from the URI (derived; tools omit it on write).</td>
+</tr>
+<tr>
+<td><code>scheme</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>Parsed from the URI (derived; tools omit it on write).</td>
+</tr>
+<tr>
+<td><code>version</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>Dataset version; participates in the storage key so multiple versions coexist on disk.</td>
+</tr>
+<tr>
+<td><code>branch</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>For git sources: branch/tag to clone (<code>--branch</code>).</td>
+</tr>
+<tr>
+<td><code>doi</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>DOI of the dataset; also usable as a search key.</td>
+</tr>
+<tr>
+<td><code>aliases</code></td>
+<td>array of string</td>
+<td><code>[]</code></td>
+<td>Alternative names this dataset can be looked up by.</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>Human-readable description (replaces TOML comments).</td>
+</tr>
+<tr>
+<td><code>key</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>Storage key (relative path under the datasets folder). Derived from host + path + version when absent.</td>
+</tr>
+<tr>
+<td><code>storage_path</code></td>
+<td>string</td>
+<td><code>$datasets_dir/$key</code></td>
+<td><strong>Path expression</strong> for where this dataset lives on disk, overriding the default. May interpolate <code>$</code>-symbols (<code>$datasets_dir</code>, <code>$key</code>, <code>$user_data_dir</code>, <code>$scratch</code>, …), <code>$USER</code>/env, and <code>~</code>; relative ⇒ resolved against the project root. Containing <strong><code>$key</code></strong> ⇒ a tool-managed keyed location; an <strong>exact path without <code>$key</code></strong> ⇒ a user-managed location used verbatim that maintenance never touches. Generalizes the former <code>local_path</code> and subsumes the former <code>store</code>. See Storage. Honored under the <code>storage</code> capability; other tools preserve it verbatim.</td>
+</tr>
+<tr>
+<td><code>checksum</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>Expected content digest of the downloaded file/folder as <strong><code>&lt;algo&gt;:&lt;hex&gt;</code></strong> (e.g. <code>sha256:abc…</code>, <code>md5:…</code>); a bare hex value with no <code>algo:</code> prefix means <code>sha256</code>. Auto-filled (as <code>sha256:</code>) on first successful download and verified — in the declared algorithm — at fetch time; <strong>not</strong> re-verified on every load (re-verification is opt-in). See <em>Checksums</em>.</td>
+</tr>
+<tr>
+<td><code>sha256</code> <em>(legacy)</em></td>
+<td>string</td>
+<td><code>""</code></td>
+<td><strong>Deprecated alias</strong> for <code>checksum</code>, superseded by it. Readers MUST accept <code>sha256 = "&lt;hex&gt;"</code> and treat it as <code>checksum = "sha256:&lt;hex&gt;"</code>; writers SHOULD emit <code>checksum</code>.</td>
+</tr>
+<tr>
+<td><code>skip_checksum</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Disable checksum verification for this dataset.</td>
+</tr>
+<tr>
+<td><code>skip_download</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td><strong>Management mode</strong> — treat the dataset as a <em>passive, externally-managed dependency</em>: it is <strong>not</strong> downloaded, <strong>not</strong> checksum-verified, and <strong>never</strong> moved or deleted by maintenance; the documented <code>uri</code>/path is returned as-is. For data the user provides and maintains (e.g. a large shared archive that should not be fetched over the network). Distinct from <code>lazy_access</code> — this is about <em>who manages the bytes</em>, not <em>how they are read</em>.</td>
+</tr>
+<tr>
+<td><code>lazy_access</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td><strong>Access mode</strong> — access the dataset <em>in place</em> instead of materializing a local copy: the <code>uri</code> is handed to a <strong>loader</strong> that opens it where it lives (typically a remote object store), with <strong>no local copy, no checksum, and no state-file record</strong>. Requires a loader (a bare <code>lazy_access</code> with no loader is an <strong>error</strong>). The access mechanism (streaming, mount, FUSE, …) is <strong>implementation-defined</strong> — the spec fixes only that the bytes are not materialized. Distinct from <code>skip_download</code> (a management mode); the two are independent and not meant to combine.</td>
+</tr>
+<tr>
+<td><code>delegate</code></td>
+<td>bool</td>
+<td><em>(run default)</em></td>
+<td>Force the cross-language fetch rung (rung 3) on (<code>true</code>) or off (<code>false</code>) for this dataset. When omitted, the tool's run-level default applies (<code>--delegate</code> / configuration). Honored under the <code>delegation</code> capability; other tools preserve it verbatim. See Cross-language fetch.</td>
+</tr>
+<tr>
+<td><code>extract</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>After download, extract the archive (<code>zip</code> / <code>tar</code> / <code>tar.gz</code>) and use the extracted directory as the dataset path.</td>
+</tr>
+<tr>
+<td><code>format</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td>Data format hint used to pick a default loader (<code>csv</code>, <code>parquet</code>, <code>nc</code>, <code>json</code>, <code>yaml</code>, <code>toml</code>, <code>md</code>, <code>txt</code>, <code>zip</code>, <code>tar</code>, <code>tar.gz</code>, …). Inferred from the URI when absent.</td>
+</tr>
+<tr>
+<td><code>requires</code></td>
+<td>array of string</td>
+<td><code>[]</code></td>
+<td>Names of datasets that must be downloaded before this one; defines a dependency graph resolved in topological order.</td>
+</tr>
+<tr>
+<td><code>fetcher</code></td>
+<td>string | table</td>
+<td><code>""</code></td>
+<td><strong>Language-implicit</strong> fetcher binding — read as the running tool's own language (see <em>Language-implicit bindings</em>). Equivalent to <code>[&lt;dataset&gt;._LANG.&lt;self&gt;].fetcher</code>.</td>
+</tr>
+<tr>
+<td><code>loader</code></td>
+<td>string | table</td>
+<td><code>""</code></td>
+<td><strong>Language-implicit</strong> loader binding — read as the running tool's own language. Equivalent to <code>[&lt;dataset&gt;._LANG.&lt;self&gt;].loader</code>.</td>
+</tr>
+<tr>
+<td><code>shell</code></td>
+<td>string</td>
+<td><code>""</code></td>
+<td><strong>Language-agnostic</strong> shell fetcher — a command template run as a subprocess (the same command for every tool). Fetcher only; see <em><code>shell</code> fetcher</em>.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Identifier resolution is exact-or-error.</strong> A dataset is looked up by its <strong>name</strong>, an
+<strong><code>alias</code></strong>, or its <strong><code>doi</code></strong>. When an operation must resolve to a <strong>single</strong> dataset, an
+identifier matching <strong>more than one</strong> dataset is a <strong>fail-loud error</strong> that names the
+candidates — never a silent first-match. This matters because a <code>doi</code> may be shared by
+several datasets (e.g. one archive split into parts), and acting on an arbitrary one of <em>N</em>
+is a correctness footgun. (The same rule governs sync addressing, where an ambiguous id
+requires an explicit <code>--batch</code>; see <em>Cross-machine sync</em>.)</p>
+<h2 id="checksums">Checksums<a class="headerlink" href="#checksums" title="Permanent link">&para;</a></h2>
+<p>The <code>checksum</code> field pins a dataset's content as <strong><code>&lt;algo&gt;:&lt;hex&gt;</code></strong> — a hash
+algorithm name, a colon, then the lower-case hex digest:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">checksum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;sha256:da5f85235baf7f858f1b52ed73405f5d4ed28a8f6da92e16070f86b724d8bb25&quot;</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">checksum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;md5:5df2d37b8ab9e5a13bfd444caf972dd8&quot;</span>
+</code></pre></div>
+<ul>
+<li><strong>Algorithms.</strong> <code>sha256</code> (default and recommended), plus any other algorithm both
+  the writer and reader implement (<code>md5</code>, <code>sha1</code>, <code>sha512</code>, …). A value with <strong>no
+  <code>algo:</code> prefix</strong> is read as <code>sha256</code>, so a bare 64-char hex string stays valid.
+  Non-<code>sha256</code> algorithms exist so a digest published by the data source (e.g. an
+  <code>md5</code> from a data repository) can be carried and verified without re-hashing.</li>
+<li><strong>One algorithm per dataset.</strong> <code>checksum</code> is used for <strong>both</strong> fetch-time
+  verification and change detection, in the algorithm it names. A tool MUST NOT
+  silently replace a declared non-<code>sha256</code> digest with a <code>sha256</code> one.</li>
+<li><strong>Auto-fill.</strong> When <code>checksum</code> is empty, a tool computes the digest (as <code>sha256:</code>)
+  on first successful download/adoption and writes it back.</li>
+<li><strong>Legacy <code>sha256</code>.</strong> A <code>sha256 = "&lt;hex&gt;"</code> key is the deprecated spelling; readers
+  MUST treat it as <code>checksum = "sha256:&lt;hex&gt;"</code>. This is additive and
+  backward-compatible (no <code>_META.schema</code> bump): a tool upgrades a manifest in place
+  the next time it writes the file, replacing <code>sha256</code> with <code>checksum</code>.</li>
+</ul>
+<h2 id="language-bindings-_lang">Language bindings (<code>_LANG</code>)<a class="headerlink" href="#language-bindings-_lang" title="Permanent link">&para;</a></h2>
+<p>Executable bindings live under a structural <code>_LANG</code> namespace, keyed by language tag
+(<code>python</code>, <code>julia</code>, <code>r</code>, …). The dataset table itself stays fully agnostic. (The
+language-agnostic shell fetcher is a bare <code>shell</code> field, not a <code>_LANG</code> tag — see
+<em><code>shell</code> fetcher</em>.)</p>
+<p>All executable references are <strong><code>module:function</code> references</strong> — never inline code, in
+any language. A local module is importable because the manifest's directory (the project
+root) is on the language tool's import path by convention. There are no <code>includes</code> or
+<code>modules</code> fields in v1. A binding may additionally carry <strong>arguments as data</strong>
+(<code>args</code> / <code>kwargs</code>); these are passed to the referenced function and are never
+interpreted as code (see <em>Binding forms</em>).</p>
+<h3 id="binding-forms-string-or-table">Binding forms (string or table)<a class="headerlink" href="#binding-forms-string-or-table" title="Permanent link">&para;</a></h3>
+<p>A <strong>binding</strong> is the single, unified concept used at <strong>every</strong> executable site — a
+per-dataset <code>fetcher</code> or <code>loader</code> (<code>[&lt;dataset&gt;._LANG.&lt;lang&gt;]</code>) <strong>and</strong> every entry in a
+project-wide <code>[_LANG.&lt;lang&gt;.loaders]</code> format map. It takes one of two interchangeable
+forms:</p>
+<ol>
+<li><strong>string</strong> — a bare <code>module:function</code> reference; or</li>
+<li><strong>table</strong> — <code>{ ref = "module:function", args = [...], kwargs = {...} }</code>, with
+   <code>args</code>/<code>kwargs</code> optional (see <em>Parameterized bindings</em>).</li>
+</ol>
+<p>The string is an <strong>alias</strong> for the ref-only table — <code>"M:f"</code> ≡ <code>{ ref = "M:f" }</code> — so a
+reader MUST accept either form anywhere a binding is allowed. <strong>Call semantics follow the
+arguments, not the syntax:</strong> with no <code>args</code>/<code>kwargs</code> the tool makes its <strong>conventional
+call</strong> (a loader receives the dataset path; a fetcher the standard fetch context); with
+<code>args</code>/<code>kwargs</code> the call is <strong>explicit</strong> — <code>ref(*args; kwargs...)</code>, nothing auto-injected
+— and runtime values are passed via <code>$var</code> substitution (<code>$path</code>, …).</p>
+<p><strong>Canonical writing.</strong> A binding with no <code>args</code> and no <code>kwargs</code> MUST be written as the
+<strong>string</strong>; the bare <code>{ ref = … }</code> table is accepted on read but normalized to the string
+on write. A binding that carries <code>args</code>/<code>kwargs</code> is written as a table.</p>
+<p>The <code>shell</code> fetcher is <strong>not</strong> a <code>module:function</code> binding — it is a language-agnostic
+command-template string (see <em><code>shell</code> fetcher</em>) — so it is always a string, never a table.</p>
+<h3 id="per-dataset-bindings">Per-dataset bindings<a class="headerlink" href="#per-dataset-bindings" title="Permanent link">&para;</a></h3>
+<p><code>[&lt;dataset&gt;._LANG.&lt;lang&gt;]</code> holds singular bindings for a specific dataset in language
+<code>&lt;lang&gt;</code>. Both keys are optional, and each is a <strong>binding</strong> in either form (see <em>Binding
+forms</em>).</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Type</th>
+<th>Semantics</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>fetcher</code></td>
+<td>string | table</td>
+<td><code>module:function</code> ref (or <code>{ ref, args }</code> table) called to produce the dataset bytes, instead of (or in addition to) downloading the <code>uri</code>.</td>
+</tr>
+<tr>
+<td><code>loader</code></td>
+<td>string | table</td>
+<td><code>module:function</code> ref (or <code>{ ref, args }</code> table) called to load the dataset into memory, overriding the format default.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="parameterized-bindings-ref-args-kwargs">Parameterized bindings (<code>ref</code> + <code>args</code> / <code>kwargs</code>)<a class="headerlink" href="#parameterized-bindings-ref-args-kwargs" title="Permanent link">&para;</a></h4>
+<p>A binding may be written as a table so one function is reused across datasets that differ
+only in arguments — the same loader called with <code>grid = "5x5"</code> for one dataset and
+<code>grid = "10x10"</code> for another:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[esm_5x5._LANG.julia.loader]</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">ref</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;MyPkg:load_esm&quot;</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">args</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;$path&quot;</span><span class="p">]</span><span class="w">                                     </span><span class="c1"># positional, in order</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">kwargs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">grid</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;5x5&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">skip_models</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;CESM.*&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span><span class="w">    </span><span class="c1"># keyword</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="k">[esm_10x10._LANG.julia.loader]</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">ref</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;MyPkg:load_esm&quot;</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">args</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;$path&quot;</span><span class="p">]</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">kwargs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">grid</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;10x10&quot;</span><span class="w"> </span><span class="p">}</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Type</th>
+<th>Semantics</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ref</code></td>
+<td>string</td>
+<td>The <code>module:function</code> reference (required).</td>
+</tr>
+<tr>
+<td><code>args</code></td>
+<td>array</td>
+<td>Positional arguments, in order (optional).</td>
+</tr>
+<tr>
+<td><code>kwargs</code></td>
+<td>table</td>
+<td>Keyword arguments (optional).</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><code>args</code> and <code>kwargs</code> are <strong>plain data</strong> (string, number, bool, array, table) — never
+  code. <code>args</code> is an ordered list of positional values; <code>kwargs</code> keys become keyword
+  parameters. Values map to each language's native types.</li>
+<li>A binding carrying <code>args</code>/<code>kwargs</code> is called <strong>explicitly</strong>: the tool calls
+  <code>ref(*args; kwargs...)</code> and does <strong>not</strong> auto-inject any standard value. Runtime values
+  are referenced by <strong><code>$var</code> substitution</strong> in string values — the same variables the
+  <code>shell</code> fetcher exposes (<code>$key</code>, <code>$version</code>, <code>$doi</code>, <code>$format</code>, <code>$branch</code>, <code>$uri</code>,
+  <code>$project_root</code>; <code>$download_path</code> for fetchers, <code>$path</code> — the resolved dataset path —
+  for loaders). The ref-only form (the bare string, equivalently <code>{ ref = … }</code>) instead
+  makes the tool's conventional call and is written as the string (see <em>Binding forms</em>).</li>
+<li><strong>Type mapping is language-neutral.</strong> A value with no TOML type — e.g. a Julia <code>Symbol</code>
+  — is written as its plain string form (<code>weighting_method = "model"</code> for <code>:model</code>); the
+  target function accepts the string (or coerces it at its boundary). A binding's
+  arguments MUST be representable as TOML data.</li>
+<li>A tool that executes <code>&lt;lang&gt;</code> bindings but does not implement the <code>binding-args</code>
+  capability MUST <strong>error</strong> when it encounters <code>args</code>/<code>kwargs</code>, rather than silently
+  calling the function without them (which would change results). The bare-string form
+  requires no such capability.</li>
+<li>For canonical serialization, <code>kwargs</code> keys are emitted in lexicographic order like all
+  other keys (including inside an inline <code>{ }</code> table); <code>args</code> is an <strong>ordered array</strong>, so
+  its element order is preserved as data (arrays are never reordered). Both therefore carry
+  the same key order and element order across tools — <strong>semantically identical</strong> (and
+  byte-identical via the canonical reference form; see the <code>byte-identity</code> capability).</li>
+</ul>
+<h3 id="shell-fetcher"><code>shell</code> fetcher<a class="headerlink" href="#shell-fetcher" title="Permanent link">&para;</a></h3>
+<p><code>shell</code> is a <strong>bare, language-agnostic</strong> dataset field: a command template run as a
+subprocess to fetch the dataset. Unlike a bare <code>fetcher</code>/<code>loader</code> (language-<em>implicit</em> —
+the running tool's own language), <code>shell</code> is the <strong>same command for every tool</strong>, so it
+belongs on the dataset table, not under the language namespace. It is a fetcher only — a
+subprocess cannot return a live in-memory object, so there is no shell <code>loader</code>. The value
+is a command template supporting variable substitutions: <code>$download_path</code>, <code>$project_root</code>,
+<code>$uri</code>, <code>$key</code>, <code>$version</code>, <code>$doi</code>, <code>$format</code>, <code>$branch</code>, <code>$path_&lt;ref&gt;</code>, <code>$path_&lt;i&gt;</code>,
+<code>$requires_paths</code>.</p>
+<p>The bare <code>shell</code> field is the canonical (and only) form; the former
+<code>[&lt;dataset&gt;._LANG.shell].fetcher</code> is <strong>not</strong> part of the spec.</p>
+<h3 id="project-wide-loaders">Project-wide loaders<a class="headerlink" href="#project-wide-loaders" title="Permanent link">&para;</a></h3>
+<p><code>[_LANG.&lt;lang&gt;.loaders]</code> is a <code>format → binding</code> map of project-wide default loaders for
+language <code>&lt;lang&gt;</code>: each value is a <strong>binding</strong> in either form (a bare <code>module:function</code>
+string, or a <code>{ ref, args, kwargs }</code> table — see <em>Binding forms</em>), so a format default may
+be parameterized exactly like a per-dataset loader. It applies when a dataset has no
+per-dataset <code>loader</code> for that language. Note the singular <code>loader</code> key per dataset vs. the
+plural <code>loaders</code> format map at the top level.</p>
+<h3 id="language-implicit-bindings-bare-fetcher-loader">Language-implicit bindings (bare <code>fetcher</code> / <code>loader</code>)<a class="headerlink" href="#language-implicit-bindings-bare-fetcher-loader" title="Permanent link">&para;</a></h3>
+<p>For a single-language project the <code>[&lt;dataset&gt;._LANG.&lt;lang&gt;]</code> wrapper is needless ceremony.
+A dataset table MAY therefore carry a <strong>bare</strong> <code>fetcher</code> and/or <code>loader</code> directly (a
+binding in either form), and a top-level <strong><code>[_LOADERS]</code></strong> table MAY carry a bare
+<code>format → binding</code> map. "Bare" means <strong>language-implicit</strong>: a reading tool interprets these
+as bindings in <strong>its own language</strong>, exactly as if they appeared under
+<code>[&lt;dataset&gt;._LANG.&lt;self&gt;]</code> / <code>[_LANG.&lt;self&gt;.loaders]</code>.</p>
+<ul>
+<li><strong>Precedence — explicit wins.</strong> An explicit own-language binding overrides the bare one:
+  <code>[&lt;dataset&gt;._LANG.&lt;self&gt;].loader</code> &gt; bare <code>loader</code>, and <code>[_LANG.&lt;self&gt;.loaders][fmt]</code> &gt;
+  <code>[_LOADERS][fmt]</code> (likewise for <code>fetcher</code>).</li>
+<li><strong>Strict — fail loud.</strong> A bare binding is <strong>present</strong> for the running language (bare =
+  the running language), so it is treated exactly like an explicit <code>[&lt;dataset&gt;._LANG.&lt;self&gt;]</code>
+  binding: if it fails to <strong>resolve</strong> it is an <strong>error</strong>, and if it resolves and then
+  <strong>raises</strong> at run time the error <strong>propagates</strong> — never a silent fall-through to a
+  different loader/fetcher (which could hand a program wrong-shaped data behind only a
+  warning). The ladder falls through only for bindings that are <strong>absent</strong> for the running
+  language. A manifest meant to be read by more than one language uses explicit
+  <code>[&lt;dataset&gt;._LANG.&lt;lang&gt;]</code> bindings (absent — and so correctly skipped — in the other
+  languages); sharing a <em>bare</em> binding across languages and expecting the others to ignore
+  it is unsupported. (A tool-wide best-effort mode — e.g. "fetch everything that succeeds,
+  skip the rest" — is a separate concern, out of scope for this rule and not introduced
+  here.)</li>
+<li><strong>Preserve verbatim (round-trip).</strong> A writer MUST keep a bare binding <strong>bare</strong> — it MUST
+  NOT promote <code>loader = …</code> into <code>[&lt;dataset&gt;._LANG.&lt;self&gt;].loader</code>. A tool writes under
+  <code>_LANG.&lt;self&gt;</code> only for bindings it generates itself, so hand-authored bare bindings
+  survive a read-write round-trip unchanged and one tool never rewrites another language's
+  view.</li>
+</ul>
+<p><code>[_LOADERS]</code> was previously a deprecated back-compat table; it is now <strong>tolerated</strong> as the
+language-implicit counterpart of <code>[_LANG.&lt;self&gt;.loaders]</code> — read as the running tool's
+format-default loaders and preserved verbatim on write. The <code>shell</code> fetcher is the
+language-<strong>agnostic</strong> sibling of these language-implicit bindings: a bare dataset field
+carrying the same command for every tool (see <em><code>shell</code> fetcher</em>).</p>
+<h2 id="resolution-semantics">Resolution semantics<a class="headerlink" href="#resolution-semantics" title="Permanent link">&para;</a></h2>
+<p>At runtime, each language tool collapses the <code>_LANG</code> tree to a single effective
+<strong>fetcher</strong> and <strong>loader</strong> for each dataset. The full <code>_LANG</code> tree is retained
+internally for lossless round-trip.</p>
+<h3 id="fetch-ladder">Fetch ladder<a class="headerlink" href="#fetch-ladder" title="Permanent link">&para;</a></h3>
+<p>The tool tries each rung in order, using the first that applies:</p>
+<ol>
+<li><code>[&lt;dataset&gt;._LANG.&lt;self&gt;].fetcher</code>, else the bare <code>[&lt;dataset&gt;].fetcher</code> — in-process
+   call (own language, fastest);</li>
+<li>the dataset's <code>shell</code> command — run the command template (cheap subprocess);</li>
+<li><strong>cross-language fetch</strong> — the rare case: run a fetcher defined in another language
+   (mechanism implementation-defined; the Python CLI can serve as a fallback), controlled
+   by <code>delegate</code> / <code>--delegate</code>; see Cross-language fetch below;</li>
+<li>plain <code>uri</code> download (if <code>uri</code> is set) — dispatched by scheme (see <em>Download schemes</em>);</li>
+<li>else error.</li>
+</ol>
+<h3 id="download-schemes">Download schemes<a class="headerlink" href="#download-schemes" title="Permanent link">&para;</a></h3>
+<p>The plain-<code>uri</code> rung dispatches on the URI <strong>scheme</strong>. The spec fixes the <strong>scheme set and
+its semantics — "fetch the named object, then verify <code>sha256</code> as usual"</strong> — but <strong>not the
+mechanism</strong>: each implementation fetches with whatever backend fits the language.</p>
+<table>
+<thead>
+<tr>
+<th>Scheme(s)</th>
+<th>Fetch</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>http</code> / <code>https</code></td>
+<td>streaming GET</td>
+</tr>
+<tr>
+<td><code>git</code> / <code>ssh+git</code> / <code>https://*.git</code></td>
+<td>shallow clone (<code>--branch</code> honors <code>branch</code>)</td>
+</tr>
+<tr>
+<td><code>ssh</code> / <code>sshfs</code> / <code>rsync</code></td>
+<td>rsync over SSH</td>
+</tr>
+<tr>
+<td><code>file://</code></td>
+<td>copy (or rsync from a remote host)</td>
+</tr>
+<tr>
+<td><strong>object stores</strong> — <code>s3://</code>, <code>gs://</code>, <code>gcs://</code>, <code>az://</code>, <code>abfs://</code>, <code>abfss://</code>, <code>adl://</code>, <code>gdrive://</code></td>
+<td>fetch the object from the named store, then verify <code>sha256</code></td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Object-store schemes are normative</strong>, but mechanism-agnostic: a tool MAY implement them
+  with any backend (the Python tool uses <code>fsspec</code> behind an optional extra; a peer tool uses
+  its own packages). A tool that cannot serve a scheme <strong><code>delegate</code>s</strong> it (cross-language
+  fetch) or errors with <em>unsupported scheme</em> — it MUST NOT silently skip it.</li>
+<li><strong>HTTP/HTTPS are deliberately not in the object-store set</strong> — they keep their own dedicated
+  GET path.</li>
+<li>A <code>uri</code> fetched by <strong>any</strong> scheme is <code>sha256</code>-verified like any other download; an
+  object-store URI is just another source of bytes. (To open such a URI <em>without</em> downloading,
+  set <code>lazy_access</code>; see the field table.)</li>
+</ul>
+<h3 id="load-ladder">Load ladder<a class="headerlink" href="#load-ladder" title="Permanent link">&para;</a></h3>
+<p>The tool tries each rung in order:</p>
+<ol>
+<li><code>[&lt;dataset&gt;._LANG.&lt;self&gt;].loader</code>, else the bare <code>[&lt;dataset&gt;].loader</code>;</li>
+<li><code>[_LANG.&lt;self&gt;.loaders][&lt;dataset&gt;.format]</code>, else <code>[_LOADERS][&lt;dataset&gt;.format]</code> —
+   manifest-configured format default;</li>
+<li>the tool's built-in default loader for <code>&lt;dataset&gt;.format</code>;</li>
+<li>else error.</li>
+</ol>
+<p>At each own-language rung the explicit <code>_LANG.&lt;self&gt;</code> binding takes precedence over the
+bare one. A binding that is <strong>present</strong> for the running language (bare, or explicit
+<code>_LANG.&lt;self&gt;</code>) but fails to resolve is an <strong>error</strong>; one that resolves and then raises
+<strong>propagates</strong>. The ladder falls through only to skip rungs that are <strong>absent</strong> (another
+language's <code>_LANG.&lt;other&gt;</code> fetcher, or no own loader), never to paper over a broken present
+binding (see <em>Language-implicit bindings</em>).</p>
+<p><strong>Load never delegates.</strong> A loader returns a live in-memory native object, which cannot
+cross a process boundary. Cross-language data preparation is modeled as one language's
+<em>fetcher</em> writing a normalized artifact (Arrow/parquet/netcdf) that another language
+then loads with its own format default.</p>
+<h3 id="cross-language-fetch-rung-3">Cross-language fetch (rung 3)<a class="headerlink" href="#cross-language-fetch-rung-3" title="Permanent link">&para;</a></h3>
+<p>Reached <strong>only</strong> in the rare case that a dataset has no fetcher in the running tool's own
+language, no <code>shell</code> command, and no <code>uri</code> — its bytes can be produced only by a fetcher
+defined in another language (<code>[&lt;ds&gt;._LANG.&lt;other&gt;].fetcher</code>). Native / <code>shell</code> / plain
+<code>uri</code> cases never reach here, so each implementation is self-sufficient for nearly all
+datasets.</p>
+<p><strong>How a tool runs a foreign fetcher is implementation-defined.</strong> It MAY invoke that
+language's runtime directly (e.g. <code>julia --project=&lt;env&gt; -e '…'</code>, writing to
+<code>$download_path</code> and materializing the result itself), MAY delegate to a peer-language
+<code>datamanifest</code> CLI (see Peer-CLI contract), or MAY skip the rung. The <strong>Python
+implementation is the reference</strong> and aims to cover every language, so a tool with no
+native way to run a foreign fetcher can simply <strong>call the Python CLI as a fallback</strong>.</p>
+<p>Either way it moves bytes on disk only (load never crosses languages); a tool MUST fall
+through to <code>uri</code> when the needed toolchain is absent; and it applies to fetched datasets
+only — produced (<code>@cached</code>) datasets are not cross-language. Gated by the <code>delegation</code>
+capability; the <code>delegate</code> field / <code>--delegate</code> toggles it.</p>
+<h2 id="storage">Storage<a class="headerlink" href="#storage" title="Permanent link">&para;</a></h2>
+<p>Storage reduces to <strong>two paths</strong>: where fetched datasets go, and where the produced cache
+goes. Both are configurable — in the manifest's <code>[_STORAGE]</code>, in a per-machine config file,
+or by environment (see <em>Scoped configuration</em>) — and <strong>default to machine-global,
+platform-derived folders</strong>, so with zero configuration the repository holds only the
+manifest and the git-ignored <code>.datamanifest/</code> directory:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">datasets_dir</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;$user_data_dir/datamanifest/shared/datasets&quot;</span><span class="w">            </span><span class="c1"># fetched datasets (default)</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">datacache_dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;$user_cache_dir/datamanifest/projects/$project/cached&quot;</span><span class="w">  </span><span class="c1"># produced cache (default)</span>
+</code></pre></div>
+<ul>
+<li><strong>Fetched datasets are shared and keyed.</strong> A dataset key (<code>host/path[#version]</code>) is a
+  globally unique content identity, so one shared store deduplicates across projects by
+  construction, and no project name appears in the path. The shared store coincides with a
+  built-in read pool (see <em>Read pools</em>), so it self-populates.</li>
+<li><strong>The produced cache is per-project.</strong> <code>&lt;cachetype&gt;[/&lt;version&gt;]/&lt;hash&gt;</code> is <em>not</em> globally
+  unique (two projects can both have a <code>utils.load@v1</code>) and a produced artifact carries no
+  content checksum, so artifacts are namespaced under the predefined <strong><code>$project</code></strong> symbol
+  (see <em>Symbols</em>).</li>
+<li><strong>The trailing kind segments (<code>shared/datasets</code> / <code>projects/$project/cached</code>) are
+  load-bearing</strong>, not cosmetic: <code>$user_data_dir</code> and <code>$user_cache_dir</code> are
+  platform-dependent and often pointed at one folder (e.g. both set to <code>$scratch</code>), and the
+  two defaults stay disjoint all the way down. The <code>shared/</code> vs <code>projects/</code> split also means
+  no project name can ever collide with the shared store.</li>
+<li>A globally-stored object is <strong>syncable</strong> (see <em>Cross-machine sync</em>), so the defaults make
+  both kinds transferable between machines.</li>
+<li><strong>Relative ⇒ relative to the project root</strong> (the manifest's directory, <code>$repo</code>). Absolute,
+  <code>~</code>-, or <code>$symbol</code>-rooted paths are used as written. Setting <code>datasets_dir = "datasets"</code> /
+  <code>datacache_dir = "cached"</code> restores the pre-spec-v5 repo-local layout — manifests migrated
+  from spec-v3 pin exactly that explicitly, so their behavior is unchanged.</li>
+<li>Resulting paths are flat: a fetched dataset lands at <code>&lt;datasets_dir&gt;/&lt;key&gt;</code>; a produced
+  artifact at <code>&lt;datacache_dir&gt;/&lt;cachetype&gt;/[&lt;version&gt;/]&lt;hash&gt;/</code> (see <em>Produced datasets and
+  caching</em>). No partition, no prefix, no derived name in between — the folder you set <strong>is</strong>
+  the location.</li>
+</ul>
+<p>Storage is a portable <em>location</em> layer: the symbols below resolve to the same place in every
+implementation, so peer tools (Python / Julia) share an on-disk location without
+configuration. The core knows <strong>locations only — no lifetime policy</strong>; disposability and GC of
+produced datasets are the cache layer's concern (see <em>Produced datasets and caching</em>), not the
+core fetch engine's. <code>[_STORAGE]</code> and its <code>_HOST</code> sub-table are <strong>defined structural keys</strong>: a
+conforming tool parses them identically and preserves them verbatim (a tool without the
+<code>storage</code> capability treats the whole table as a preserved unknown).</p>
+<h3 id="scoped-configuration-two-config-files-and-the-resolution-ladder">Scoped configuration (two config files and the resolution ladder)<a class="headerlink" href="#scoped-configuration-two-config-files-and-the-resolution-ladder" title="Permanent link">&para;</a></h3>
+<p>Folder directives are inherently per-machine, but the manifest is committed and shared —
+writing a personal absolute path into <code>[_STORAGE]</code> leaks one user's layout to every
+collaborator. Two optional config files therefore carry per-machine configuration,
+git-config style:</p>
+<ul>
+<li><strong><code>.datamanifest/config.toml</code></strong> — per-checkout, git-ignored. It lives in the
+  <strong><code>.datamanifest/</code></strong> directory beside the manifest, which also holds the state file (see
+  <em>The state file</em>). The rule: <strong>the manifest is the only committed file; <code>.datamanifest/</code>
+  is entirely git-ignored.</strong> A tool creates <code>.datamanifest/.gitignore</code> containing <code>*</code> on
+  first write, so the checkout needs no <code>.gitignore</code> edit.</li>
+<li><strong><code>$XDG_CONFIG_HOME/datamanifest/config.toml</code></strong> (default
+  <code>~/.config/datamanifest/config.toml</code>) — user-global.</li>
+</ul>
+<p><strong>Linked <code>git worktree</code>s read the main checkout's checkout config</strong> when they have none of
+their own (spec-v5.4) — the same fallback, for the same reason, as the state file
+(spec-v5.1, see <em>The state file</em>): a linked worktree starts without the git-ignored
+<code>.datamanifest/</code> directory. A <code>.datamanifest/config.toml</code> present in the worktree itself
+always wins. The fallback applies to <strong>reads</strong>; a tool that writes checkout config writes
+under the project root it operates in, and that file thereafter takes precedence.</p>
+<p>Both files are <strong><code>[_STORAGE]</code>-shaped TOML at the root level</strong>: the folder fields, the pool
+lists, the <code>project</code> field, user-defined symbols, and <code>_HOST.&lt;glob&gt;</code> sub-tables — host
+scoping included because home directories and checkouts commonly live on filesystems shared
+across cluster nodes, so even "personal" config needs per-host values. Readers MUST ignore
+unknown keys (implementations may keep tooling fields there, e.g. a <code>default_remote</code> for
+transfer commands). Directives never live in the <em>state</em> file: it is regenerable and
+rewritten wholesale on every download/produce, so a hand-set directive there would be
+clobbered.</p>
+<p><strong>The resolution ladder</strong> (per symbol or field; first match wins — the more specific scope
+wins, git-style):</p>
+<ol>
+<li><code>DATAMANIFEST_&lt;NAME&gt;</code> environment variable;</li>
+<li><code>.datamanifest/config.toml</code> — checkout config (<code>_HOST</code> glob match first, then base);</li>
+<li>manifest <code>[_STORAGE._HOST.&lt;glob&gt;]</code> (committed, shared infrastructure);</li>
+<li>manifest <code>[_STORAGE]</code> base (committed project intent);</li>
+<li><code>~/.config/datamanifest/config.toml</code> — user config (<code>_HOST</code> glob match first, then base);</li>
+<li>built-in defaults.</li>
+</ol>
+<p>The committed manifest sits <strong>between</strong> the two config files: the checkout config overrides
+it (a personal, per-clone decision), while the user-global config only fills in what the
+project does not set.</p>
+<p><strong>Evaluation timing (spec-v5.5).</strong> The ladder is evaluated <strong>once, when a manifest is
+materialized</strong> (a Database/session object is built from it): a conforming tool captures the
+file-backed layers together with the environment and host as one frozen snapshot, and every
+subsequent resolution for that manifest uses the snapshot — a config-file or environment
+change does not silently retarget an existing session. Re-resolution is an explicit user
+action (re-materialize, or a dedicated refresh call). One-shot CLI invocations are
+unaffected: each invocation materializes afresh, so edits take effect on the next run. A
+tool resolving on <strong>another machine's</strong> behalf (cross-machine sync) builds that machine's
+own snapshot — its config files, probed environment, and hostname — rather than overriding
+parts of the local one.</p>
+<p><strong>The <code>canonical</code> directive (spec-v5.4).</strong> The configuration field <strong><code>canonical</code></strong>
+(boolean, default <code>false</code>), resolved on the ordinary ladder (<code>DATAMANIFEST_CANONICAL</code>
+environment variable → config files / <code>[_STORAGE]</code>, <code>_HOST</code>-composable like any field),
+opts manifest writes into the canonical reference byte form: a tool whose native
+serialization differs from the normative reference SHOULD, when the field is truthy, route
+its manifest output through the reference serializer (<code>datamanifest format</code>) so every tool
+emits byte-identical files (see the <code>byte-identity</code> capability). The value is a TOML
+boolean or a string; <code>1</code>/<code>true</code>/<code>yes</code>/<code>on</code> (case-insensitive) are truthy. When the
+reference CLI is unavailable the tool MUST fall back to its native — semantically
+identical — output rather than fail the write. Like the folder fields, <code>canonical</code> is a
+directive, never a user-defined <code>$symbol</code>. A consequence for tools: writing a <em>default</em> value into <code>[_STORAGE]</code>
+(e.g. on migration) would permanently shadow the user's machine-wide preference, so a tool
+SHOULD write machine-specific directives to the checkout config and SHOULD NOT write
+built-in defaults into the manifest.</p>
+<h3 id="read-pools-reuse-what-is-already-on-the-machine">Read pools (reuse what is already on the machine)<a class="headerlink" href="#read-pools-reuse-what-is-already-on-the-machine" title="Permanent link">&para;</a></h3>
+<p>Two optional <code>[_STORAGE]</code> list fields name <strong>read-only locations to reuse before
+materializing</strong>, so an object another project already has is not fetched or
+recomputed again:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[_STORAGE]</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">datasets_pools</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;~/.cache/Datasets&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;$user_data_dir/datamanifest/datasets&quot;</span><span class="p">]</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">datacache_pools</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;$team/cache&quot;</span><span class="p">]</span><span class="w">        </span><span class="c1"># opt-in; no default</span>
+</code></pre></div>
+<ul>
+<li><strong><code>datasets_pools</code> — fetched datasets.</strong> Resolution probes each pool (at the
+  dataset's keyed sub-path) <strong>after the recorded and directive-derived locations
+  and before downloading</strong>. On a hit the declared <code>sha256</code> is <strong>verified</strong> (a
+  mismatch is skipped, never trusted), the location is <strong>recorded in the state
+  file</strong>, and the bytes are used <strong>in place — no copy</strong>. A genuine download still
+  goes to <code>datasets_dir</code> (the directive — gold standard). <strong>Default when the field
+  is absent</strong> — the built-in pools, in order:</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>$repo/datasets
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>$user_data_dir/datamanifest/shared/datasets
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>$user_data_dir/datamanifest/datasets
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>~/.cache/Datasets
+</code></pre></div>
+<p><code>$repo/datasets</code> is the pre-spec-v5 repo-local default, so existing repo-local
+  data in unconfigured projects is still found and adopted, never re-downloaded
+  (skipped when no project root is known); the shared store comes next (it is the
+  <code>datasets_dir</code> default, so the store doubles as the default read pool and
+  self-populates); the last two are legacy locations. An <strong>explicit list</strong> is used
+  verbatim; an <strong>empty list disables</strong> pools.
+- <strong><code>datacache_pools</code> — produced artifacts.</strong> Symmetric: the produced-dataset
+  hit-search also probes each pool at <code>&lt;pool&gt;/&lt;cachetype&gt;[/&lt;version&gt;]/&lt;hash&gt;</code>, gated
+  by the usual <code>config.toml</code> validation, and self-heals the record on a hit. It is
+  <strong>opt-in — absent means no pools</strong> (and no built-in default): there is no de-facto
+  shared compute location, and a produced artifact carries no content checksum
+  (only its <code>cachetype</code>/<code>version</code>/<code>hash</code> identity), so cross-project adoption must
+  be deliberate.
+- <strong>Read-only and host-local.</strong> Pools are never written to and never edit
+  <code>datamanifest.toml</code>; they only add candidate <em>locations</em> to read-resolution. They are
+  resolved like any other path expression (<code>$</code>-symbols, <code>~</code>, env) and are
+  <strong>host-composable</strong> via <code>_HOST</code> (a pool list set per hostname glob, in the
+  manifest or either config file — the ordinary ladder); environment overrides are
+  <code>DATAMANIFEST_DATASETS_POOLS</code> / <code>DATAMANIFEST_DATACACHE_POOLS</code>.
+  Honored under the <code>storage</code> capability; other tools preserve the fields verbatim.</p>
+<h3 id="symbols">Symbols<a class="headerlink" href="#symbols" title="Permanent link">&para;</a></h3>
+<p>A folder path may interpolate <code>$</code>-symbols: <code>$NAME</code> / <code>${NAME}</code> expands to a defined symbol,
+else to the environment variable <code>NAME</code>; <code>~</code> expands to home. A symbol is <em>defined</em> by a bare
+key and <em>referenced</em> with <code>$</code>.</p>
+<p><strong>Predefined</strong> (platform- or project-resolved; the two <code>user_*</code> names map directly to
+<code>platformdirs</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Symbol</th>
+<th>Resolves to</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>$user_data_dir</code></td>
+<td><code>platformdirs.user_data_dir()</code> — the machine's user <strong>data</strong> dir (persistent)</td>
+</tr>
+<tr>
+<td><code>$user_cache_dir</code></td>
+<td><code>platformdirs.user_cache_dir()</code> — the machine's user <strong>cache</strong> dir (reclaimable)</td>
+</tr>
+<tr>
+<td><code>$repo</code></td>
+<td>the project root (the manifest's directory); the base for relative paths</td>
+</tr>
+<tr>
+<td><code>$project</code></td>
+<td>the project <strong>name</strong> — by default the basename of the project root (falling back to the working directory when no root is known), overridable as a bare <code>project</code> field on the resolution ladder (a committed <code>project = "…"</code> names the project for every collaborator — shared intent, not a leak)</td>
+</tr>
+</tbody>
+</table>
+<p>They are <strong>bare</strong> — no <code>datamanifest</code>/app name is appended; you namespace explicitly
+(<code>datasets_dir = "$user_data_dir/myproj"</code>). Every implementation MUST resolve them to the
+identical path and MUST NOT substitute a language-native location (e.g. a package depot), so
+Python and Julia agree. <code>$USER</code> and any other environment variable are available too.</p>
+<p>Renaming a project (and so changing the derived <code>$project</code>) is safe: the state file keeps
+finding existing artifacts at their recorded locations, new writes go under the new name,
+and leftovers under the old name are ordinary maintenance material.</p>
+<p><strong>User-defined</strong> — any other bare key under <code>[_STORAGE]</code> is a reusable symbol, and may be made
+<strong>host-specific</strong> in <code>[_STORAGE._HOST."&lt;glob&gt;"]</code> (matched against the hostname). The two
+fields themselves may also be host-specific:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[_STORAGE]</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">datacache_dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;$scratch/cache&quot;</span><span class="w">        </span><span class="c1"># reference a custom symbol</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">scratch</span><span class="w">          </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/scratch/$USER&quot;</span><span class="w">        </span><span class="c1"># its default definition</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="k">[_STORAGE._HOST.</span><span class="s2">&quot;login*.hpc.edu&quot;</span><span class="k">]</span><span class="w">          </span><span class="c1"># hostname glob / regex</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">scratch</span><span class="w">          </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/work/$USER&quot;</span><span class="w">           </span><span class="c1"># host-specific value</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="n">datasets_dir</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;$user_data_dir/shared&quot;</span><span class="w"> </span><span class="c1"># a field, host-specific</span>
+</code></pre></div>
+<p><strong>Resolution ladder</strong> (symbol or field; first match wins): the full six-rung ladder of
+<em>Scoped configuration</em> — <code>DATAMANIFEST_&lt;NAME&gt;</code> environment variable → checkout config
+(<code>_HOST</code> glob, then base) → manifest <code>[_STORAGE._HOST.&lt;glob&gt;]</code> → manifest <code>[_STORAGE]</code>
+base → user config (<code>_HOST</code> glob, then base) → the built-in default (for the two folder
+fields the global expressions above; for predefined symbols the platformdirs /
+project-root / project-name value). Host-specificity always lives in the <strong>symbol's
+resolution</strong>, never a per-dataset host map.</p>
+<p><strong>To keep data repo-local</strong> (the pre-spec-v5 layout — visible <code>./datasets/</code> and
+<code>./cached/</code>), set the two fields to relative paths; <strong>to centralize under a name you
+choose</strong>, point them at a machine dir — either way one self-documenting edit, nothing
+derived:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">[_STORAGE]</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">datasets_dir</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;datasets&quot;</span><span class="w">                 </span><span class="c1"># repo-local…</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">datacache_dir</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;$user_cache_dir/myproj&quot;</span><span class="w">   </span><span class="c1"># …or centralized under a chosen name</span>
+</code></pre></div>
+<h3 id="environment">Environment<a class="headerlink" href="#environment" title="Permanent link">&para;</a></h3>
+<p>Every field and symbol can be overridden by the environment variable
+<strong><code>DATAMANIFEST_&lt;NAME&gt;</code></strong> (the upper-cased name) — for HPC / CI / containers where editing
+a file is inconvenient. The common cases are the two folder fields,
+<strong><code>DATAMANIFEST_DATASETS_DIR</code></strong> and <strong><code>DATAMANIFEST_DATACACHE_DIR</code></strong>; the same rule covers
+user-defined symbols and the scalar directives (<code>DATAMANIFEST_CANONICAL</code>,
+<code>DATAMANIFEST_LOCK_STALE_AGE</code>). The environment is the top rung of the resolution ladder,
+above every file.</p>
+<h3 id="per-dataset-path-storage_path">Per-dataset path (<code>storage_path</code>)<a class="headerlink" href="#per-dataset-path-storage_path" title="Permanent link">&para;</a></h3>
+<p>A dataset MAY override where <em>it</em> lives with the <strong><code>storage_path</code></strong> field — a path expression
+that defaults to <strong><code>$datasets_dir/$key</code></strong> (<code>$key</code> is the dataset's storage key, see <code>key</code>). It
+generalizes the former <code>local_path</code> (which was exact-only) and subsumes the former <code>store</code>; the
+only distinction was whether the key is appended:</p>
+<ul>
+<li>contains <strong><code>$key</code></strong> ⇒ a <strong>tool-managed, keyed</strong> location; the dataset is materialized there
+  and maintenance MAY act on it. <code>storage_path = "$scratch/$key"</code> parks one heavy dataset on
+  scratch.</li>
+<li>an <strong>exact path without <code>$key</code></strong> ⇒ a <strong>user-managed</strong> location, used verbatim, bypassing the
+  keyed layout — and <strong>maintenance never touches it</strong>. <code>storage_path = "$cmip/AMIP/tas.nc"</code>
+  points at a file you manage; with <code>$cmip</code> resolved host-specifically, that is the
+  heavy-archive-per-host pattern (host-specificity in the symbol, never a per-dataset host map).</li>
+</ul>
+<p>(The name <code>path</code> is <strong>not</strong> used for this — it is already the URI's parsed path component.)</p>
+<h3 id="in-memory-and-multiple-manifests-library-use">In-memory and multiple manifests (library use)<a class="headerlink" href="#in-memory-and-multiple-manifests-library-use" title="Permanent link">&para;</a></h3>
+<p>A manifest is a <strong>logical structure</strong>; a <code>datamanifest.toml</code> file is its canonical serialized
+form, but a tool MAY construct and hold one <strong>in memory</strong>, and <strong>several MAY be live at once</strong>
+in one process — each resolving its own datasets, bindings, and storage <strong>independently</strong> (an
+in-memory manifest resolves identically to a file-backed one). The construction surface is
+per-language and non-normative (Python's <code>Database</code>, Julia's <code>Database</code>); whether and where
+such a manifest is persisted is the author's choice.</p>
+<p>This is how a <strong>library</strong> owns its own data without touching the end user's <code>datamanifest.toml</code>:
+it builds its own manifest, declares its datasets via the language API, and sets its
+<code>datasets_dir</code> / <code>datacache_dir</code> explicitly (e.g. under <code>$user_data_dir/&lt;library&gt;</code>) — a
+relative path would otherwise resolve against the <em>end user's</em> project, never the installed
+library's. <strong>Recommended:</strong> a library shipping data dependencies should own them this way (its
+own manifest + explicit folders); without explicit folders, its data correctly falls back to
+the end user's configuration ladder and the machine-global defaults, which the end user owns.</p>
+<h3 id="concurrent-access-and-completeness">Concurrent access and completeness<a class="headerlink" href="#concurrent-access-and-completeness" title="Permanent link">&para;</a></h3>
+<p>A folder may be shared between tools and between concurrent processes (e.g. HPC jobs), so
+materialization MUST be safe under concurrency, and peer tools sharing a folder MUST agree
+on these conventions:</p>
+<ul>
+<li><strong>Atomic publish.</strong> Materialize into a temporary path <strong>within the same store partition as
+  the final path</strong> (e.g. <code>&lt;key&gt;.tmp</code> beside <code>&lt;key&gt;</code>) and atomically rename it into place, so a
+  killed process never leaves a partial entry that looks complete. Staging is <strong>never</strong> a
+  central/global cache: a download (or produce) destined for <code>$scratch</code> stages <strong>on
+  <code>$scratch</code></strong> — required for the rename to be atomic (same filesystem) and essential for
+  voluminous data, which must never transit a small <code>~/.cache</code> first.</li>
+<li><strong>Completion marker.</strong> An entry is <em>complete</em> iff its marker exists —
+  <code>&lt;key&gt;/.complete</code> for a directory, <code>&lt;key&gt;.complete</code> for a file. Readers MUST treat an
+  entry without its marker as absent (re-fetch); a writer MUST create the marker only
+  after a successful, verified materialization.</li>
+<li><strong>Lock.</strong> A writer SHOULD hold an exclusive lock <code>&lt;key&gt;.lock</code> while materializing, so
+  concurrent workers neither recompute nor clobber the same entry. The lock is a pidfile
+  recording <code>&lt;pid&gt; &lt;hostname&gt;</code>; while held, the writer SHOULD refresh the file's
+  modification time on a regular interval (a <strong>heartbeat</strong>, recommended every
+  <code>stale_age / 2</code> seconds for the tool's chosen staleness age <code>stale_age</code>), so the lock's
+  age stays near zero for the whole write no matter how long it takes.</li>
+<li><strong>Contention.</strong> A process finding the lock held SHOULD <strong>wait</strong> for it rather than fail
+  or proceed unlocked, and on acquiring it MUST <strong>re-check</strong> the entry before writing —
+  the previous holder may have just published exactly what the waiter was about to
+  materialize, in which case the now-complete entry is used as-is (for a produced
+  artifact: loaded, not recomputed). A lock MAY be reclaimed as <strong>stale</strong> when its age
+  exceeds <code>stale_age</code> AND either (a) its recorded PID is dead — verifiable only when the
+  recorded hostname is the local host — or (b) its age exceeds a several-fold grace
+  multiple of <code>stale_age</code>, i.e. the holder has missed many consecutive heartbeats
+  (crashed on another node, or frozen). A wrong reclaim is <strong>safe by construction</strong>: the
+  atomic-publish and completion-marker rules above bound the damage to duplicate work
+  (last writer wins), never to a partial or corrupt entry — so staleness needs a
+  pragmatic threshold, not a perfect liveness oracle.</li>
+<li><strong>Configuring the staleness age (spec-v5.3).</strong> The staleness age is the configuration
+  field <strong><code>lock_stale_age</code></strong> (seconds, default <code>30</code>), resolved on the ordinary scoped
+  configuration ladder: the <code>DATAMANIFEST_LOCK_STALE_AGE</code> environment variable, then the
+  config files / <code>[_STORAGE]</code> (<code>_HOST</code>-composable, like any field). The value is a TOML
+  number or a numeric string; a tool MUST fall back to the default on an unparsable or
+  non-positive value.</li>
+</ul>
+<h2 id="produced-datasets-and-caching-companion-layer">Produced datasets and caching (companion layer)<a class="headerlink" href="#produced-datasets-and-caching-companion-layer" title="Permanent link">&para;</a></h2>
+<blockquote>
+<p><strong>Spec-v2.1 — a companion <em>layer</em>, not a core capability.</strong> The produce-or-load
+(<code>@cached</code>) layer sits <strong>outside the core fetch engine</strong> as a distinct capability layer
+built on the shared substrate it reuses (safe-materialization, folder resolution,
+loaders). This section is the cross-tool <strong>format</strong> spec for that layer — it stays in
+this document so both languages agree on the on-disk shape.</p>
+<p><strong>Packaging is not constrained by this spec.</strong> Whether an implementation ships the layer
+as a <strong>separate package</strong> that depends on the core, or as an <strong>optional module of the
+same package</strong>, is the implementation's choice (spec-v2 over-specified this as a separate
+package; spec-v2.1 relaxes it). What the spec fixes is the <strong>boundary</strong>: the
+<code>cache-produce</code> / <code>inspect</code> capabilities are <strong>never declared by the core fetch
+capability</strong>, and <strong>the core fetch engine keeps no garbage collection and no disposability
+policy</strong>.</p>
+<p>The format is <strong>additive over a <code>datamanifest.toml</code></strong>: it adds <strong>no field to the
+hand-authored <code>datamanifest.toml</code></strong> and does not change its <code>_META.schema</code> (still <strong>1</strong>). A
+produced dataset reuses the existing <strong>engine</strong> — the storage model, the
+safe-materialization primitive, and the load ladder — but is <strong>not declared in
+<code>datamanifest.toml</code></strong>; its only on-disk record is the machine-generated <code>config.toml</code> /
+<code>metadata.toml</code> sidecars (each <code>_META.schema = 1</code>) and the project's state file
+(<code>_META.schema = 5</code>). The format is gated by two independent capabilities, <code>cache-produce</code>
+and <code>inspect</code>, so a companion may ship neither, one, or both.</p>
+</blockquote>
+<p>A <strong>produced dataset</strong> is one whose bytes come from running a project function rather
+than downloading a <code>uri</code>. It is the same "recipe + key + store + policy" object as a
+fetched dataset; the distinction is purely two slots:</p>
+<ul>
+<li>the <strong>recipe</strong> — a <code>uri</code>/<code>shell</code>/<code>git</code> recipe with a source-identity key, versus a
+  <em>function</em> recipe with a <em>parameter-hash</em> key;</li>
+<li>the <strong>authorship</strong> — a fetched dataset is <strong>hand-authored</strong> in <code>datamanifest.toml</code>; a
+  produced dataset is <strong>machine-generated</strong>.</li>
+</ul>
+<p>Everything else — the storage folders, the safe-materialization primitive, loaders, the
+preservation contract — is recipe-agnostic and applies unchanged. The only new
+normative axis is <strong>parameter-hash keying</strong> and its on-disk bookkeeping.</p>
+<p><strong>A produced dataset has no entry in <code>datamanifest.toml</code>.</strong> It originates from a function
+that a tool exposes through its produce-or-load surface (the <code>@cached</code> decorator /
+macro — per-language and non-normative; see below), and is recorded only after it
+runs. <code>cachetype</code> is therefore <strong>not</strong> a <code>datamanifest.toml</code> field; it is a namespace that
+appears solely in the machine-generated records — the state file's <code>datacache</code> entry,
+the <code>config.toml</code> <code>[_META]</code> block, and the on-disk path. A conforming fetch path
+(<code>download_dataset</code> and the fetch ladder) <strong>never encounters a produced dataset</strong>: the
+two concerns share the <em>engine</em>, not the <em>manifest</em>. This keeps <code>datamanifest.toml</code> clean
+(the hand-authored, git-committed <strong>spec</strong>) and confines produced,
+parameter-hash-keyed churn to the git-ignored <strong>state file</strong> (regenerable ground
+truth).</p>
+<p>A produced dataset is identified <strong>by its keyword parameters</strong>, not by content: its
+storage <strong>key</strong> is <code>&lt;cachetype&gt;/&lt;param-hash&gt;</code>, its parameters <em>are</em> the hash inputs,
+and the <code>config.toml</code> sidecar is the re-checkable record of those inputs (it is not
+content-pinned by a manifest <code>sha256</code>). It is materialized under <strong><code>datacache_dir</code></strong>
+(default <code>$user_cache_dir/datamanifest/projects/$project/cached</code> — per-project, see
+Storage), the producing layer's folder.</p>
+<blockquote>
+<p><strong>Keyword-only.</strong> Because the parameters double as identity, the producing function
+is <strong>keyword-only</strong> for hashing: an ordered positional argument list has no stable
+name→value identity to hash, so a <code>cache-produce</code> tool MUST derive the key table from
+keyword parameters only. This is a property of the produce-or-load <em>surface</em>, not a
+<code>datamanifest.toml</code> rule — fetched datasets keep their positional <code>args</code> per spec-v1.1.</p>
+</blockquote>
+<h3 id="parameter-hash-keying">Parameter-hash keying<a class="headerlink" href="#parameter-hash-keying" title="Permanent link">&para;</a></h3>
+<p>A produced dataset's identity is <code>(cachetype, hash-of-its-parameters)</code>. The
+<strong>hash inputs</strong> are the producing function's hash-affecting keyword parameters as a
+<strong>key table</strong>: a mapping parameter name → value. Parameters split three ways
+(normative — the split, not the exact source mapping):</p>
+<table>
+<thead>
+<tr>
+<th>Class</th>
+<th>In the hash?</th>
+<th>Stored where</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>hash-affecting params</strong></td>
+<td>yes</td>
+<td><code>config.toml</code> sidecar</td>
+<td><code>grid = "5x5"</code></td>
+</tr>
+<tr>
+<td><strong>runtime knobs</strong> (<code>_</code>-prefixed keys)</td>
+<td>no</td>
+<td>nowhere (transient)</td>
+<td><code>_parallel = true</code></td>
+</tr>
+<tr>
+<td><strong>audit-only extras</strong></td>
+<td>no</td>
+<td><code>metadata.toml</code> sidecar</td>
+<td>producing git commit</td>
+</tr>
+</tbody>
+</table>
+<p>How a tool derives the key table from a function's declared keyword parameters
+(signature introspection, an explicit key selector like LGMIO's <code>key=(args -&gt; (;…))</code>,
+etc.) is <strong>implementation-defined</strong>; the <strong>serialization and hash are normative</strong> so
+the same parameters yield the same key everywhere:</p>
+<ol>
+<li>Build the key table from the hash-affecting keyword parameters, <strong>excluding every
+   key whose name begins with <code>_</code></strong> (those are runtime knobs).</li>
+<li>Serialize it to <strong>canonical JSON</strong> (JCS, <a href="https://www.rfc-editor.org/rfc/rfc8785">RFC 8785</a>): object members sorted by
+   Unicode code point at every nesting level, no insignificant whitespace
+   (member separator <code>,</code>, name separator <code>:</code>), UTF-8 output with minimal JSON
+   string escaping. To keep canonicalization unambiguous, <strong>hash-input values are
+   restricted to strings, integers, finite floats, booleans, and arrays/objects
+   composed of those</strong>. A finite float serializes through this same canonical-JSON
+   projection — the Python reference <code>json.dumps</code> float form is normative (<code>1.0</code> →
+   <code>1.0</code>, <code>0.1</code> → <code>0.1</code>) and a non-Python tool MUST reproduce it byte-for-byte.
+   <strong><code>NaN</code> and <code>±Inf</code> are disallowed</strong> (no JSON representation), as are <strong>nulls</strong>
+   (an absent parameter is omitted, not encoded as null). A float-valued knob MAY
+   still be passed as a string when maximal cross-tool hash stability matters,
+   since float formatting is the most implementation-sensitive case. Array element
+   order is significant (arrays are data); object key order is not (sorted).</li>
+<li>The parameter hash is the lowercase hex <strong>SHA-256</strong> of those canonical UTF-8
+   bytes.</li>
+<li>The storage <strong>key</strong> is <code>"&lt;cachetype&gt;/&lt;hash&gt;"</code> — or <code>"&lt;cachetype&gt;/&lt;version&gt;/&lt;hash&gt;"</code>
+   when an optional recipe version is set (see <em>Produced-artifact location</em>). (Tools MAY
+   <em>display</em> a short hash prefix, but the on-disk directory and all references use the full
+   64-hex digest.)</li>
+</ol>
+<p>Canonical JSON (rather than TOML) is the hash input precisely because it has a
+fully-pinned byte form that Python (<code>json.dumps(obj, sort_keys=True,
+separators=(",", ":"), ensure_ascii=False)</code>) and Julia produce <strong>identically
+today</strong> for strings, integers, booleans, and their arrays/objects, independent of
+the cross-tool TOML <code>byte-identity</code> work (for finite floats the Python form is the
+normative reference a non-Python tool reproduces). So a produced
+dataset resolves to the same <code>&lt;cache_root&gt;/&lt;cachetype&gt;/&lt;hash&gt;</code> path under either
+tool (even though the artifact <em>bytes</em> a given tool writes there may be
+language-specific; cross-tool <em>loading</em> of a produced artifact is not implied,
+only cross-tool <em>addressing</em> and <em>maintenance</em>). The <code>config.toml</code> sidecar
+stores the same key table in human-readable TOML; the hash is over its canonical
+<strong>JSON</strong> projection, not over the TOML bytes.</p>
+<h3 id="identity-the-cachetype-namespace">Identity: the <code>cachetype</code> namespace<a class="headerlink" href="#identity-the-cachetype-namespace" title="Permanent link">&para;</a></h3>
+<p><code>cachetype</code> is the disambiguation namespace that, paired with the parameter
+<code>hash</code>, identifies a produced artifact. It has a <strong>default and an override</strong>:</p>
+<ul>
+<li><strong>Default — the producing function's canonical importable name.</strong> Absent an
+  explicit <code>cachetype</code>, a tool MUST derive it from the function's
+  fully-qualified, <em>importable</em> name in the host language (Python:
+  <code>module.qualname</code>, e.g. <code>mypkg.analysis.produce</code>; the cross-language rule is
+  "the canonical name by which the runtime re-imports that callable"). An
+  explicit <code>cachetype = "&lt;name&gt;"</code> override remains — for a stable hand-chosen
+  name, or to deliberately group several functions under one namespace. <strong>The
+  auto and explicit forms share one namespace</strong>: an explicit <code>cachetype</code> equal to
+  the derived name denotes the same identity. (So the default <code>cachetype</code>
+  coincides with the state file's <code>datacache</code> entry <code>ref</code> — by default the
+  namespace <em>is</em> the producer's identity.)</li>
+<li><strong>Why unique-per-function is the right default.</strong> The worst cache failure is
+  silently <em>mixing</em> unrelated results under one key, so the default must be
+  unique per producing function. The accepted, <strong>prominently documented</strong>
+  consequence: renaming or moving the function (or restructuring its package)
+  changes its <code>cachetype</code> and <strong>orphans</strong> the prior artifacts — the correct
+  behavior, since the code identity that produced them is gone. <code>version</code> remains
+  the tool for <em>deliberate</em> busting; re-pinning an explicit <code>cachetype</code> is the
+  tool for <em>deliberate</em> continuity across a rename.</li>
+<li><strong>No stable identity ⇒ require an explicit <code>cachetype</code>.</strong> When the producing
+  function has <strong>no stable importable identity</strong> — a top-level script, a REPL, an
+  eval-string, a notebook — a tool <strong>MUST NOT</strong> synthesize an ambiguous
+  cachetype; it MUST <strong>require an explicit <code>cachetype</code></strong> and error otherwise. This
+  is the same constraint native serialization already imposes (an object defined
+  in the entry-point module has no portable qualified name). <em>(Python reference,
+  non-normative: a <code>__main__</code> function is resolved via the launch's recorded
+  module identity — <code>__main__.__spec__.name</code>, which Python sets for <code>python -m
+  pkg.mod</code> → <code>pkg.mod</code> but leaves <code>None</code> for a loose script, <code>-c</code>, the REPL, and
+  notebooks — so those require an explicit <code>cachetype</code>.)</em></li>
+</ul>
+<h3 id="identity-conflicts-same-cachetype-version-same-process">Identity conflicts (same <code>(cachetype, version)</code>, same process)<a class="headerlink" href="#identity-conflicts-same-cachetype-version-same-process" title="Permanent link">&para;</a></h3>
+<p>Because <code>cachetype</code> can be set explicitly, two <em>distinct</em> producing functions can
+be made to claim the <strong>same</strong> namespace. A tool SHOULD guard the dangerous case:
+if two distinct functions claim the <strong>same <code>(cachetype, version)</code> pair</strong> while
+<em>simultaneously live in one process</em>, it SHOULD raise immediately and name both,
+rather than let them silently share a key.</p>
+<ul>
+<li>The key is the <strong>pair</strong>. The same <code>cachetype</code> with <em>different</em> <code>version</code>s is a
+  valid, tolerated case (e.g. two functions running <code>calibration</code> v1 and v2 at
+  once). Storage location is <strong>irrelevant</strong> to the check — a <code>cachetype</code> must be unique
+  regardless of where its artifacts are written.</li>
+<li>The guard is intentionally <strong>same-process / same-time</strong>. Equally-named
+  functions used in <em>separate</em> runs simply share the slot, which is permitted — a
+  user may engineer that, or split modules / set explicit cachetypes to keep them
+  apart. There is <strong>no</strong> static cross-process check, and none is wanted: "live in
+  one process at the same time" is exactly the boundary where a collision is
+  unambiguously a mistake.</li>
+<li><strong>Transient functions are exempt.</strong> Nested, local, or anonymous functions (a
+  closure, or a function defined inside another) are dynamic and short-lived, so
+  they are exempt from the guard — and they typically lack a stable importable
+  identity, so they already require an explicit <code>cachetype</code> (above) to be cached
+  at all.</li>
+<li>The mechanism is implementation-defined. <em>(Reference, non-normative: a
+  process-local registry populated at decoration/registration time — keyed by the
+  function's <code>ref</code> so a re-import overwrites rather than duplicates — with </em><em>no
+  disk writes</em><em>; a tool that never imports the user's code never sees the recipes,
+  and separate processes keep separate registries, so the guard never entangles
+  caches across projects.)</em></li>
+</ul>
+<blockquote>
+<p><strong>When and how to detect is the implementer's call.</strong> A tool SHOULD run the
+check at the <strong>earliest reasonable and practical point</strong> for how its host
+language loads and runs code. In a dynamically-loaded language (Python) that is
+decoration / import time. In a language that mixes <strong>ahead-of-time
+precompilation</strong> with live execution (notably Julia) the right point is less
+obvious — registration done at top level may run during <em>precompilation</em> rather
+than in the user's session — so a faithful, low-surprise guard might instead
+belong at first call or a runtime-init hook, or, if precompilation makes a sound
+guard impractical, be <strong>narrowed or omitted</strong>. The spec fixes only the
+<em>semantics</em> — two distinct functions, the same <code>(cachetype, version)</code>,
+simultaneously live — never the timing or mechanism; that is left to each
+language's implementer to realize (or to judge infeasible), which is why the
+guard is a <strong>SHOULD</strong>.</p>
+</blockquote>
+<h3 id="produced-artifact-location">Produced-artifact location<a class="headerlink" href="#produced-artifact-location" title="Permanent link">&para;</a></h3>
+<p>A produced artifact composes its path under the <strong><code>datacache_dir</code></strong> (see Storage):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>&lt;datacache_dir&gt;/&lt;cachetype&gt;/[&lt;version&gt;/]&lt;hash&gt;/
+</code></pre></div>
+<p>The produce surface resolves <code>datacache_dir</code> from the <strong>same configuration ladder</strong> as
+fetched data — it MUST read the nearest discovered manifest's <code>[_STORAGE]</code> (the same upward
+walk used to find the project root; a plain TOML read, no fetch layer) plus the config
+files of <em>Scoped configuration</em>, so produced and fetched data share one storage
+configuration. By default <code>datacache_dir =
+"$user_cache_dir/datamanifest/projects/$project/cached"</code> — per-project under the machine's
+cache dir; keeping artifacts repo-local and visible is the explicit <code>datacache_dir =
+"cached"</code> edit (Storage). There is no scope, prefix, or partition in the path beyond the
+folder expression itself — the folder you set <strong>is</strong> the location.</p>
+<ul>
+<li><strong>version</strong> — an optional recipe/code version segment (below).</li>
+<li>An <strong>explicit per-call location</strong> — given per <code>@cached</code> call (<code>cache_dir = …</code>) — is used
+  <strong>verbatim</strong> (<code>&lt;cache_dir&gt;/&lt;cachetype&gt;/[&lt;version&gt;/]&lt;hash&gt;</code>), the <em>experiment-folder</em>
+  workflow.</li>
+</ul>
+<p>The location affects <em>location only</em> — never hit validity, which is the key
+(<code>cachetype</code> + hash) alone.</p>
+<p><strong>Recipe version (optional).</strong> A producing call MAY carry a short <strong><code>version</code></strong> string
+(e.g. <code>"v3"</code>, a date). When set it becomes a path segment between <code>cachetype</code> and <code>hash</code>
+(<code>&lt;cachetype&gt;/&lt;version&gt;/&lt;hash&gt;</code>) and is recorded in the <code>config.toml</code> sidecar and the
+state file's <code>datacache</code> entry (in the recipe key, <code>&lt;cachetype&gt;@&lt;version&gt;</code>). <code>version</code> does <strong>not</strong> enter the parameter hash; it is an explicit,
+human-set <strong>recipe/code</strong> version, orthogonal to the parameter key and distinct from
+<code>_META.schema</code> (the on-disk <em>format</em> version). Its purpose is correctness under sharing: a
+change to a function's <em>logic</em> that leaves its <em>parameters</em> unchanged would otherwise read a
+stale hit from another branch or clone — bumping <code>version</code> forces a miss. When unset, the key
+stays <code>&lt;cachetype&gt;/&lt;hash&gt;</code>.</p>
+<h3 id="cache-layout-and-sidecars">Cache layout and sidecars<a class="headerlink" href="#cache-layout-and-sidecars" title="Permanent link">&para;</a></h3>
+<p>A produced artifact is materialized at the composed path above —
+<code>&lt;datacache_dir&gt;/&lt;cachetype&gt;/[&lt;version&gt;/]&lt;hash&gt;/</code> (see
+<em>Produced-artifact location</em>) — via the same safe-materialization primitive (atomic publish,
+<code>.complete</code> marker, <code>.lock</code> pidfile) as any other store write. The directory is
+<strong>self-describing</strong> through two sidecars written next to the artifact:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>…/&lt;cachetype&gt;/[&lt;version&gt;/]&lt;hash&gt;/
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>├── &lt;basename&gt;.&lt;ext&gt;      # the produced artifact (format-determined)
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>├── config.toml           # the re-hashable hash inputs (the key table)
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>├── metadata.toml         # provenance / audit (never hashed)
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>└── .complete             # completion marker (file form: &lt;hash&gt;.complete alongside)
+</code></pre></div>
+<p><strong><code>config.toml</code></strong> (<code>cache-produce</code>) — the key table verbatim plus a <code>[_META]</code>
+block, so any tool can recompute the hash and confirm the directory's identity. The
+key table is written at the <strong>root</strong> and <strong>first</strong> (TOML requires root-table keys to
+precede any table header), so <code>[_META]</code> comes last; reading back, the key table is
+every root key except the <code>[_META]</code> block:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># --- hash-affecting parameters (the key table) ---</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">grid</span><span class="w">        </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;5x5&quot;</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="n">skip_models</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;CESM.*&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;FGOALS.*&quot;</span><span class="p">]</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="k">[_META]</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="n">schema</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="n">cachetype</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;esm_20c_anomaly&quot;</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="c1"># version = &quot;v3&quot;   # optional recipe/code version (becomes a path segment when set)</span>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="c1"># hash = SHA-256( {&quot;grid&quot;:&quot;5x5&quot;,&quot;skip_models&quot;:[&quot;CESM.*&quot;,&quot;FGOALS.*&quot;]} ), canonical JSON:</span>
+<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="n">hash</span><span class="w">      </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;83425a30d111562d46c1fce9de7618ea7f1f54e1be72e086cba0ac63c6f2ce9b&quot;</span>
+</code></pre></div>
+<p>(<code>83425a3…</code> is a verifiable reference vector: it is the SHA-256 of the canonical
+JSON <code>{"grid":"5x5","skip_models":["CESM.*","FGOALS.*"]}</code>. Every conforming
+<code>cache-produce</code> implementation MUST reproduce it.)</p>
+<p>A tool with <code>cache-produce</code> MUST be able to recompute the hash from <code>config.toml</code>'s
+key table and MUST treat a directory whose recomputed hash ≠ <code>_META.hash</code> as
+<strong>not</strong> a valid cache hit (re-produce).</p>
+<p>Because <code>format</code> is a serialization choice and <strong>not</strong> a hash input, several formats of
+the same computation share one <code>&lt;cachetype&gt;/[&lt;version&gt;/]&lt;hash&gt;</code> directory (a <code>data.&lt;ext&gt;</code>
+per format). A hit is therefore valid only when the data file <strong>for the requested format</strong>
+is present: a complete, hash-valid directory whose <code>data.&lt;ext&gt;</code> for <em>this</em> format is absent
+<strong>recomputes</strong> (writing that format) rather than failing — so two recipes that share a
+<code>cachetype</code> and hash to the same key but emit different formats coexist instead of
+colliding.</p>
+<p><strong><code>metadata.toml</code></strong> (<code>cache-produce</code>) — provenance only, never an input to the
+hash and never an authority for cache validity:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[_META]</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">schema</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="n">created</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;2026-06-02T15:04:05Z&quot;</span><span class="w">        </span><span class="c1"># RFC 3339 UTC</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="n">tool</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;datamanifestpy 0.17.0&quot;</span><span class="w">        </span><span class="c1"># producing tool + version</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="n">host</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;login3.hpc.edu&quot;</span>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="n">user</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;mahe&quot;</span>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>
+<a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="k">[git]</span>
+<a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="n">commit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;1f8839c…&quot;</span>
+<a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="n">branch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;main&quot;</span>
+<a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="n">dirty</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+<a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a>
+<a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="k">[origin]</span>
+<a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="n">state_file</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/home/mahe/proj/.datamanifest/state.toml&quot;</span><span class="w">   </span><span class="c1"># the state file that inventories this artifact</span>
+</code></pre></div>
+<h3 id="default-serialization-format-per-language">Default serialization format (per language)<a class="headerlink" href="#default-serialization-format-per-language" title="Permanent link">&para;</a></h3>
+<p>A produced dataset MAY omit <code>format</code>. When it does, a tool serializes the returned value
+with its <strong>language-native default format</strong> and reads it back with the matching built-in
+loader — so a bare return value round-trips with no configuration. This default is <strong>per
+language and RECOMMENDED, not normative</strong> (native serialization is language-private and
+version-sensitive; the spec pins cross-tool <em>addressing</em>, not the blob), but each
+conforming <code>cache-produce</code> tool SHOULD define one and SHOULD ship both the <strong>saver</strong> (value
+→ bytes) and the matching built-in loader (bytes → value):</p>
+<table>
+<thead>
+<tr>
+<th>Language</th>
+<th>RECOMMENDED default <code>format</code></th>
+<th>saver / loader</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Python</td>
+<td><code>pickle</code> (<code>data.pickle</code>)</td>
+<td><code>pickle.dump</code> / <code>pickle.load</code></td>
+</tr>
+<tr>
+<td>Julia</td>
+<td><code>jld2</code> (<code>data.jld2</code>)</td>
+<td><code>JLD2.save</code> / <code>JLD2.load</code></td>
+</tr>
+</tbody>
+</table>
+<p>An explicit <code>format</code> always overrides. Bytes in a language-native default format are <strong>not</strong>
+cross-language-loadable by construction (<code>pickle</code> is Python-only, <code>jld2</code> Julia-only) — which
+is consistent with the spec pinning only cross-tool addressing and maintenance, never the
+blob format.</p>
+<h3 id="the-state-file-datamanifeststatetoml">The state file (<code>.datamanifest/state.toml</code>)<a class="headerlink" href="#the-state-file-datamanifeststatetoml" title="Permanent link">&para;</a></h3>
+<p>The hand-authored <code>datamanifest.toml</code> stays clean — it is the <strong>spec</strong>: <em>what</em> to
+track and <em>how</em> to obtain it (a dataset's <code>uri</code>/<code>fetcher</code>/<code>shell</code>, a <code>@cached</code>
+function's code), hand-authored and <strong>git-committed</strong>, the source of intent. What
+it records is the <strong>expectation</strong> — a per-dataset directive <code>storage_path</code> (where
+bytes <em>should</em> go) and a contract <code>sha256</code> (what they <em>should</em> hash to).</p>
+<p><em>Where each object actually landed on this machine</em> is recorded separately, in
+<strong><code>.datamanifest/state.toml</code></strong> — the <strong>state file</strong>: a tool-maintained, per-object
+inventory of resolved on-disk locations, kept in the per-checkout, git-ignored
+<code>.datamanifest/</code> directory beside the manifest (which also holds the checkout config —
+see <em>Scoped configuration</em>). It is the machine analogue of
+a lockfile, except it is <strong>not a committed reproducibility lock</strong> — it says
+nothing about <em>how</em> to re-obtain a resource (that lives in the spec), so it is no
+help to a fresh clone; it is <strong>regenerable local state</strong>, and therefore
+<strong>git-ignored by default</strong>. (Produced artifacts and many fetched datasets live on
+one machine, often outside the repo, and cannot be pulled from the internet — so
+committing the inventory would only record paths no other clone can use. A project
+whose data sits on a shared drive every clone can reach MAY choose to track it,
+but that is a user's setup, not the design intent.) The dotted <code>.datamanifest/</code>
+directory marks it as tool-maintained state, not a hand-edited document.</p>
+<p>The state file inventories <strong>both kinds</strong> of materialized object — fetched
+datasets and produced artifacts — under two top-level namespaces (<code>datasets</code> and
+<code>datacache</code>) parallel to the two storage folders, so the two never collide and
+each is greppable on its own. <code>_META.schema = 5</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[_META]</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">schema</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">5</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># --- fetched datasets: storage key → resolved location (+ actual checksum) ---</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="k">[datasets.</span><span class="s2">&quot;example.com/foo.nc&quot;</span><span class="k">]</span>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="n">storage_path</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;datasets/example.com/foo.nc&quot;</span><span class="w">   </span><span class="c1"># where the bytes actually are</span>
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="n">sha256</span><span class="w">       </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;abc123…&quot;</span><span class="w">                         </span><span class="c1"># actual digest; omitted under skip_checksum</span>
+<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>
+<a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="c1"># --- produced artifacts: cachetype[@version] → instances{hash → location} ---</span>
+<a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="k">[datacache.</span><span class="s2">&quot;lgmpre.data.load_20c@v3&quot;</span><span class="k">]</span><span class="w">            </span><span class="c1"># bare cachetype when unversioned</span>
+<a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="n">ref</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;lgmpre.data:load_20c&quot;</span><span class="w">                  </span><span class="c1"># producing module:function (refreshed across a refactor)</span>
+<a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="n">format</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;nc&quot;</span>
+<a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a>
+<a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a><span class="w">  </span><span class="k">[datacache.</span><span class="s2">&quot;lgmpre.data.load_20c@v3&quot;</span><span class="k">.instances]</span>
+<a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a><span class="w">  </span><span class="s2">&quot;83425a30d111562d46c1fce9de7618ea7f1f54e1be72e086cba0ac63c6f2ce9b&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;cached/lgmpre.data.load_20c/v3/83425a30…&quot;</span>
+</code></pre></div>
+<ul>
+<li><strong><code>datasets</code> — fetched.</strong> Keyed by the dataset's existing storage <strong>key</strong>
+  (<code>host/path[#version]</code>, its machine-independent identity — no new id). Each entry
+  records the <strong>resolved</strong> <code>storage_path</code> (where the bytes actually are) and the
+  <strong>actual</strong> <code>sha256</code> of what is on disk (omitted when the dataset sets
+  <code>skip_checksum</code>, so a very large file need never be hashed).</li>
+<li><strong><code>datacache</code> — produced.</strong> One table per recipe, keyed by
+  <code>&lt;cachetype&gt;[@&lt;version&gt;]</code> — <code>@</code> is a <strong>reserved</strong> version separator, so a bare
+  key is the unversioned recipe and two versions of one cachetype never collide (a
+  <code>cachetype</code> MUST NOT contain <code>@</code>, which <code>module.qualname</code> never does). It carries
+  recipe-level <code>ref</code> / <code>format</code> and an <strong><code>instances</code></strong> table mapping each produced
+  variation's parameter <code>hash</code> to the <strong>full artifact directory</strong> it was written
+  to. The <strong>params are not stored here</strong> — they live in each artifact's
+  <code>config.toml</code> sidecar (read at enumeration), so a single artifact's recorded
+  location is its own complete record.</li>
+<li><strong>Spec vs. state — the same two fields, two meanings.</strong> A dataset's
+  <code>storage_path</code> and <code>sha256</code> appear in <em>both</em> files <strong>on purpose</strong>: in
+  <code>datamanifest.toml</code> they are the <strong>expectation</strong> (the directive for where bytes go /
+  the contract digest); in the state file they are <strong>ground truth</strong> (the resolved
+  location / the actual digest). The duplication is intentional and harmless — the
+  state file is derived and disposable. (Fully separating directive-from-resolved
+  and expected-from-actual is a future cleanup; see <code>ROADMAP.md</code>.)</li>
+<li>The state file is a <strong>defined structural sibling format</strong> with its own
+  <code>_META.schema</code>. A tool that implements neither <code>inspect</code> nor produced caching
+  need not read it. Earlier shapes (<code>_META.schema</code> 1–4: the produced-only flat and
+  nested <code>cached.toml</code> forms) are still <strong>read and migrated forward</strong>, and the
+  <strong>legacy paths are still recognized</strong>: a reader accepts <code>.datamanifest-state.toml</code>
+  (the pre-spec-v5 sibling location) and <code>cached.toml</code>, and the first write
+  relocates the file to the canonical <code>.datamanifest/state.toml</code> (the legacy file
+  is removed only after the canonical one is written). A produced artifact's
+  <code>metadata.toml</code> carries a <code>state_file</code> back-pointer to the file that inventories
+  it (audit only).</li>
+<li><strong>Linked <code>git worktree</code>s share the main checkout's state file</strong> (spec-v5.1). A
+  linked worktree (<code>git worktree add</code>) starts without the git-ignored
+  <code>.datamanifest/</code> directory, so a per-checkout lookup would come up empty even
+  though the project's inventory exists. When the project directory holds <strong>no</strong>
+  state file under any recognized path and sits inside a linked worktree, a tool
+  SHOULD fall through to the <strong>corresponding directory in the main checkout</strong> —
+  for reads <em>and</em> as the write target, so every worktree of a repository maintains
+  <strong>one</strong> shared inventory (consistent with the inventory being per-project state,
+  not per-checkout intent, and keeping one liveness root for maintenance). A state
+  file present in the worktree itself always takes precedence — creating one there
+  opts that worktree out. The main checkout SHOULD be resolved by asking the <code>git</code>
+  executable (e.g. <code>git rev-parse --git-common-dir</code>; the on-disk worktree layout
+  is git internal); when <code>git</code> is unavailable, the main repository is bare, or the
+  directory is not inside a linked worktree, lookups stay local and behavior is
+  unchanged.</li>
+</ul>
+<h4 id="the-state-file-is-read-only-inventory-the-gold-standard">The state file is read-only inventory (the gold standard)<a class="headerlink" href="#the-state-file-is-read-only-inventory-the-gold-standard" title="Permanent link">&para;</a></h4>
+<p>The guiding invariant: <strong>the state file records where things are and is consulted
+to <em>find</em> an existing object — it never directs a <em>write</em>.</strong> Every
+(re)materialization follows the <strong>current directive</strong> — <code>datasets_dir</code> /
+<code>datacache_dir</code>, a per-dataset <code>storage_path</code>, an explicit
+<code>@cached(storage_path=…)</code> — which is the <strong>gold standard</strong>; the recorded location
+only short-circuits the lookup.</p>
+<ul>
+<li><strong>Read-resolution checks the state file first.</strong> Resolving where an object lives
+  consults the recorded <code>storage_path</code> <strong>ahead of any derivation rule</strong>: if the
+  bytes are actually there (and, for a dataset, checksum-valid when a digest is
+  recorded), that is a hit — no re-derive, no re-download, no recompute. Only on a
+  miss does resolution fall back to the directive-derived path, then any
+  <strong>read pools</strong> (§Storage — reuse a copy another project already has, recording it
+  on a hit), and only then fetch or produce. This is how a <strong>moved</strong> object is still
+  found at its new home.</li>
+<li><strong>Self-heal is additive, never destructive.</strong> Active resolution refreshes the
+  record to match reality: a <em>relocated</em> object (bytes at the derived path, record
+  stale) has its recorded location <strong>refreshed</strong>; an <em>untracked</em> object (bytes
+  present, no entry) is <strong>registered</strong>; a <em>missing</em> one is <strong>re-materialized at the
+  current directive</strong> and recorded. Because any access that consults the state file
+  and finds nothing proceeds to fetch/produce, resolution can never leave a stale
+  record. The relocate-refresh is the <strong>only</strong> automatic mutation; active
+  resolution <strong>never deletes</strong>.</li>
+<li><strong>A deleted or missing state file repopulates</strong> as objects are accessed — it is
+  regenerable by construction.</li>
+<li><strong>Concurrency.</strong> Every write <strong>re-reads the file, merges</strong> (additive union,
+  last-writer-wins per object), then writes via a temp file + <strong>atomic rename</strong>, so
+  parallel downloads / produces cannot clobber each other; additive-only updates
+  make the merge conflict-free.</li>
+<li><strong>Garbage vs. dirty.</strong> A <em>malformed</em> entry that roots nothing (e.g. an
+  instance-less residue from a format change) is corruption, not a
+  tracked-but-missing object — it is <strong>cleaned silently</strong> on read. A well-formed
+  entry whose bytes are merely absent is a <em>dirty</em> state (below), surfaced rather
+  than silently dropped.</li>
+</ul>
+<h4 id="dirty-states-and-explicit-reconciliation">Dirty states and explicit reconciliation<a class="headerlink" href="#dirty-states-and-explicit-reconciliation" title="Permanent link">&para;</a></h4>
+<p>The state file is a first-order source of truth for <em>where objects are</em>, kept
+<strong>non-destructively</strong> (git-style). A tool MAY classify each object's
+state-vs-disk as <strong><code>clean</code></strong>, <strong><code>missing</code></strong> (recorded bytes gone), <strong><code>relocated</code></strong>
+(recorded at <code>L</code>, bytes at the derived path <code>D</code>), <strong><code>untracked</code></strong> (bytes present,
+no entry — an <em>orphan</em> for produced artifacts), or <strong><code>modified</code></strong> (recorded
+<code>sha256</code> ≠ actual; the full expected-vs-actual digest treatment is deferred).
+Passive listing only <strong>labels</strong> these states — it never mutates.</p>
+<p>Two <strong>explicit, user-invoked</strong> actions reconcile:</p>
+<ul>
+<li><strong><code>--refresh</code></strong> — fix the <strong>state file only</strong> (no downloads, no file moves):
+  re-point <em>relocated</em> entries to where the bytes actually are, and <strong>drop</strong>
+  <em>stale / missing</em> entries. A pure state↔disk reconcile. (Untracked artifacts are
+  picked up by active access, not here.)</li>
+<li><strong><code>--delete</code></strong> — remove the selected objects' <strong>bytes and</strong> their entries; the
+  only byte-removing action.</li>
+</ul>
+<p>Removal is therefore <strong>explicit-only</strong>: passive listing and active resolution
+never delete, <code>--refresh</code> only edits the record, and <code>--delete</code> is the sole byte
+remover.</p>
+<h3 id="maintenance-inspect-filter-delete">Maintenance (inspect, filter, delete)<a class="headerlink" href="#maintenance-inspect-filter-delete" title="Permanent link">&para;</a></h3>
+<p>Both fetched datasets and produced artifacts accumulate, so a tool MAY offer <strong>maintenance</strong>
+(the <code>inspect</code> capability): enumerate the physical store, filter it, and delete an explicit
+selection. Maintenance is <strong>user-driven, never automatic</strong>: it surfaces what is stored and
+deletes only what the user explicitly selects. There is <strong>no automatic garbage collector</strong> —
+see <em>Why not automatic reachability</em> below.</p>
+<blockquote>
+<p><strong>Reference CLI (non-normative).</strong> A tool exposes this however fits — like the <code>@cached</code>
+surface, the command shape is per-tool, not part of the spec. The reference design folds
+it into the existing <strong><code>datamanifest list</code></strong>: a default summary view with <code>--field</code> to pick
+columns; filter flags over the object fields (<code>--kind</code>, <code>--folder</code>, <code>--orphan</code>, <code>--dirty</code>,
+<code>--older-than</code>, <code>--format</code>, size); and action flags on the selected set — <strong><code>--delete</code></strong>,
+<strong><code>--refresh</code></strong> (reconcile the state file only), and optionally <strong><code>--move</code></strong> (dry-run/confirm
+by default). There is no separate <code>gc</code> command.</p>
+</blockquote>
+<ul>
+<li><strong>Object fields.</strong> Each stored object — a fetched dataset or a produced artifact — exposes
+  a common set of inspectable fields:</li>
+<li><code>kind</code> — <code>data</code> (fetched) or <code>cached</code> (produced);</li>
+<li><code>key</code> — <code>&lt;key&gt;</code> (fetched) or <code>&lt;cachetype&gt;[/&lt;version&gt;]/&lt;hash&gt;</code> (produced); <code>hash</code> for
+    produced;</li>
+<li><code>location</code> — the resolved absolute path on disk;</li>
+<li><code>referenced</code> — whether a still-present local <code>.toml</code> roots it or it is an <strong>orphan</strong>. For
+    a produced artifact the match is the full <strong><code>(cachetype, version, hash)</code></strong> tuple
+    against a state-file <code>datacache</code> instance, so another project's artifact (in a different folder) is
+    not mistaken for referenced; for a fetched dataset, its key listed in a <code>datamanifest.toml</code>;</li>
+<li><code>format</code>, <code>size</code>, <code>created</code>, and a best-effort, filesystem-derived
+    <strong>last-access</strong> time (read from <code>stat</code>, never written on read; MAY be unknown).</li>
+</ul>
+<p>These fields are the cross-tool inspectable surface; a tool with the <code>inspect</code> capability
+  MUST be able to report them.
+- <strong>View.</strong> A tool presents a <strong>default summary</strong> (the most useful columns) and SHOULD let
+  the user choose which fields to show.
+- <strong>Filter.</strong> Any field is a filter predicate — <code>kind = cached</code>, <code>folder = &lt;path&gt;</code>,
+  <code>referenced = false</code> (orphans), <code>last-access older than 90d</code>, <code>format</code>, <code>size</code> — so the
+  user can target, e.g., "orphaned produced artifacts in this folder not accessed in 90 days."
+- <strong>Act on the selection.</strong> Actions operate on <strong>exactly</strong> the filtered set, uniformly
+  across fetched datasets and produced artifacts: <strong><code>delete</code></strong> (remove the bytes <strong>and</strong>
+  prune the object's state-file entry) and optionally <strong><code>move</code></strong> (relocate the bytes and
+  <strong>repoint the recorded <code>storage_path</code></strong> — <code>datamanifest.toml</code> is <em>not</em> edited, so a later
+  re-fetch still follows the <code>datasets_dir</code> directive; gold standard). A tool <strong>MUST NOT</strong>
+  delete everything by default and <strong>MUST NOT</strong> delete as a side effect of any other
+  command. The <strong>explicit filter + action is itself the selection</strong> (typing the action over a
+  filtered set is the confirmation), so a tool MAY apply directly; it SHOULD offer a
+  <strong><code>--dry-run</code> preview</strong>. Deletion is always of a user-chosen set, never an automatic sweep.
+- <strong>Protections (the rule is unchanged, generalized).</strong> Maintenance never touches data the
+  user owns: a fetched dataset whose <code>storage_path</code> is a <strong>user-managed exact path</strong> (no
+  <code>$key</code>) or that is <strong><code>skip_download</code></strong> (a passive, externally-managed dependency) is reported
+  as <em>skipped</em>, never moved or deleted — the same guard already used for deletion, applied to
+  both kinds. A <strong><code>lazy_access</code></strong> dataset has no local copy to touch in the first place.
+  Tool-managed (keyed) objects under <code>datasets_dir</code> / <code>datacache_dir</code> are fair game.</p>
+<p><strong>Both kinds are reclaimable, with different regeneration costs.</strong> Deleting a fetched
+dataset under <code>datasets/</code> just means it re-downloads on next use; deleting a produced
+artifact under <code>cached/</code> means it recomputes. Neither destroys irreplaceable state — the
+manifest and the producing function are the sources of truth — which is exactly why a
+curated delete is safe and an automatic collector is unnecessary. <code>storage_path</code> data and
+anything outside the tool-managed <code>datasets/</code> / <code>cached/</code> trees are never touched by
+maintenance.</p>
+<p><strong>Why not automatic reachability.</strong> An earlier draft computed liveness as "no manifest
+references this key." That model has a hole: the record documents an artifact's <em>producer</em>,
+but a <strong>read-only consumer</strong> — another project, or a fresh clone, reading a shared- or
+group-scoped artifact it did not produce and does not list — never registers as a referrer,
+so an automatic collector would reap an artifact still in active use. Rather than patch this
+with ever-more-complete bookkeeping, maintenance keeps a human in the loop; liveness signals
+are <strong>advisory inputs to a filter</strong>, not a deletion authority:</p>
+<ul>
+<li><strong>Last-access is filesystem-derived and best-effort — never written on read.</strong> A tool
+  reads it at inspect time from the artifact's filesystem metadata (the <code>stat</code> access time,
+  falling back to the modification time or <code>created</code> when atime is unusable); it <strong>MUST NOT</strong>
+  rewrite any sidecar, index, or <code>.toml</code> on read to record access. (Touching a file on the
+  lock-free read path would contend with the produce <code>.lock</code>, serialize concurrent readers,
+  and put I/O on the hot path — all for a value that is purely advisory.) Because the OS
+  maintains it, a read-only consumer's use is still reflected wherever the filesystem records
+  it, but the signal is coarse and may be <strong>absent</strong>: <code>relatime</code> advances atime at most once
+  a day, and <code>noatime</code>, network, and read-only filesystems record nothing — so a tool MAY
+  report <code>last-access</code> as <strong>unknown</strong>. It is <strong>advisory only</strong>, never the sole basis for
+  deletion; <code>created</code> (stamped once at produce time in <code>metadata.toml</code>) is the
+  always-available age signal.</li>
+<li><strong>The <code>referenced</code> field is advisory too.</strong> "Is this orphaned?" (no still-present local
+  <code>.toml</code> lists its key) is one more column to show and filter on — input to the user's
+  choice, not an automatic trigger. An orphan is a strong <em>delete candidate</em>, never an
+  automatic deletion.</li>
+<li>The per-artifact <code>metadata.toml</code> back-pointer remains <strong>audit only</strong> — never a deletion
+  authority (it goes stale and cannot express multiple references).</li>
+</ul>
+<p>Because each project's data lives under its own folder (<code>datacache_dir</code> / <code>datasets_dir</code>),
+"show/delete only this project" is a trivial path filter, and inspecting across projects never
+risks an accidental cross-project wipe because deletion is always an explicit selection.</p>
+<h3 id="what-this-spec-does-not-specify">What this spec does not specify<a class="headerlink" href="#what-this-spec-does-not-specify" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>The <code>@cached</code> macro / decorator API</strong> (Julia macro, Python decorator) is the
+  <em>ergonomic surface</em> over this model and is <strong>per-language, not normative</strong> — a
+  tool exposes it however fits the language. Normative are: the on-disk formats (key hash,
+  <code>config.toml</code>, <code>metadata.toml</code>, the state file <code>.datamanifest/state.toml</code>), the path composition (the <code>datasets_dir</code> / <code>datacache_dir</code> folders), the identity rules (<code>cachetype</code> default + the stable-name requirement; the
+  <code>(cachetype, version)</code> same-process conflict guard; the index lifecycle), and the
+  maintenance rules (user-driven; no automatic deletion). <em>How</em> a tool derives a default
+  <code>cachetype</code> or detects the conflict is implementation-defined; <em>that</em> it does is not.</li>
+<li><strong>The artifact serialization format</strong> (<code>jls</code>/<code>jld2</code>/<code>pickle</code>/…) is a per-tool,
+  per-<code>format</code> choice; produced artifacts are not assumed cross-language-loadable. A tool
+  SHOULD define a RECOMMENDED language-native default for a format-less produced dataset
+  (see <em>Default serialization format</em>), but the spec does not mandate which.</li>
+<li><strong>In-place access</strong> (no local copy) is the <strong><code>lazy_access</code></strong> mode (see the dataset field
+  table): the <code>uri</code> is opened where it lives by a loader. The <strong>mechanism</strong> — streaming, an
+  sshfs/FUSE <strong>mount</strong>, an object-store filesystem — is implementation-defined and <strong>not</strong>
+  specced; the former standalone <code>mount</code> store is subsumed by <code>lazy_access</code> (one materialization
+  axis: download vs. in-place), so no separate <code>mount</code> capability is defined. What a tool
+  actually supports depends on its loaders and backends.</li>
+<li><strong>Cloud / <code>fsspec</code> / CAS backends</strong> are not a core model; if a tool adds them,
+  they are optional per-language extras behind the recipe interface, not a spec
+  contract.</li>
+</ul>
+<h2 id="cross-machine-sync">Cross-machine sync<a class="headerlink" href="#cross-machine-sync" title="Permanent link">&para;</a></h2>
+<p>A stored object — a fetched dataset or an expensive produced artifact — can be <strong>transferred
+between machines</strong> instead of re-downloaded or recomputed, because every object has a
+<strong>machine-independent address</strong> (a fetched dataset's source key; a produced artifact's
+<code>cachetype[/version]/hash</code>): the same object has the same logical address everywhere, only
+the physical root differs. Sync is a transfer between two stores, gated by the optional
+<strong><code>sync</code></strong> capability.</p>
+<ul>
+<li><strong>Target = an SSH address</strong> (<code>user@host</code>): SSH is both the transport (rsync over ssh) and
+  the host identity; no separate remote registry is required.</li>
+<li><strong>Each end resolves its own store</strong> from its own configuration ladder (environment,
+  config files, the manifest's <code>_HOST</code> rules) — <em>not</em> from any knowledge of the remote's
+  project folder. This works because syncable objects live in <strong>machine-global</strong> folders
+  (<code>$user_data_dir</code> / <code>$user_cache_dir</code> / user-defined — where the spec-v5 defaults put
+  them); a <strong><code>$repo</code>-relative (local) object is not syncable</strong>, which is exactly why the
+  remote project location never has to be known.</li>
+<li><strong>Symmetric.</strong> <code>push</code> and <code>pull</code> differ only in transfer direction; each side resolves its
+  own store identically, so there is no asymmetry between them.</li>
+<li><strong>Writes no manifest.</strong> Sync moves bytes only; it never edits <code>datamanifest.toml</code> or the
+  state file on either end. A transferred object lands in the global store as an
+  <strong>orphan</strong> (present, unreferenced) — immediately usable via read-resolution, and registered
+  by the receiver's normal flow if and when its own project uses it.</li>
+<li><strong>Integrity is the transport's</strong> (rsync verifies every file as it copies); the spec adds no
+  separate artifact-level digest. <strong>Idempotent</strong>: a no-op when the target already holds the
+  object complete (its <code>.complete</code> marker is present).</li>
+<li><strong>The receiver's folders route it</strong>: a transferred object lands under the receiver's own
+  <code>datasets_dir</code> / <code>datacache_dir</code>, resolved from its environment. The recipe
+  <code>version</code> keeps produced-sync safe — logic that changed bumps <code>version</code>, so a divergent
+  artifact never overwrites at the same address.</li>
+</ul>
+<p><strong>Addressing for sync.</strong> An object is named by its identifier: a fetched dataset by <code>name</code> /
+<code>alias</code> / <code>doi</code>; a produced artifact by <code>cachetype[/version]/hash</code> (full, or an unambiguous
+hash prefix). Resolution to <strong>exactly one</strong> object is the contract — an identifier matching
+several is a fail-loud error (the general <em>exact-or-error</em> rule; see <em>Identifier resolution</em>),
+so a bare <code>cachetype</code> or a shared <code>doi</code> is ambiguous and must be disambiguated.</p>
+<blockquote>
+<p><strong>Reference CLI (non-normative).</strong> First-order <code>datamanifest push &lt;id&gt; &lt;ssh-host&gt;</code> /
+<code>pull &lt;id&gt; &lt;ssh-host&gt;</code> transfer a <strong>single</strong> object; an ambiguous <code>&lt;id&gt;</code> errors unless
+<code>--batch</code> is given, and <code>--dry-run</code> reports the selection and total size first. Filtered
+bulk transfer reuses the selection model — <code>datamanifest list &lt;filters&gt; --push/--pull
+&lt;host&gt;</code> — rather than duplicating filters onto <code>push</code>/<code>pull</code>.</p>
+</blockquote>
+<h2 id="preservation-contract">Preservation contract<a class="headerlink" href="#preservation-contract" title="Permanent link">&para;</a></h2>
+<p>A conforming writer of language <code>L</code> MUST:</p>
+<ul>
+<li>Regenerate its own <code>[&lt;dataset&gt;._LANG.L]</code> from its internal state;</li>
+<li>Copy every other <code>[&lt;dataset&gt;._LANG.X]</code> (X ≠ L) <strong>verbatim</strong>, without parsing or
+  reordering;</li>
+<li>Regenerate its own top-level <code>[_LANG.L]</code> (config and <code>loaders</code> map);</li>
+<li>Copy every other top-level <code>[_LANG.X]</code> (X ≠ L) verbatim;</li>
+<li>Preserve any <code>_</code>-prefixed structural table that it does not own (<code>_META</code>, unknown
+  future <code>_*</code>) verbatim;</li>
+<li>Preserve legacy <code>[_LOADERS]</code> verbatim if present and not explicitly migrated.</li>
+<li>Preserve <code>[_STORAGE]</code> verbatim unless it implements the <code>storage</code> capability, in which
+  case it MAY regenerate its own <code>_STORAGE</code> entries (a shared, non-language-namespaced
+  table).</li>
+</ul>
+<p>Implementation pattern: a <code>DatasetEntry</code> keeps foreign <code>_LANG.X</code> subtrees and unknown
+scalar keys in its <code>extra</code>; the <code>Database</code> keeps foreign top-level <code>[_LANG.X]</code> and
+unknown <code>_*</code> tables in a database-level <code>extra</code>. Both splice back on write.</p>
+<h2 id="conformance-levels">Conformance levels<a class="headerlink" href="#conformance-levels" title="Permanent link">&para;</a></h2>
+<p>A <em>capability</em> is a named feature that an implementation may support independently of
+others. An implementation declares the capability set it supports and runs only the
+fixture-suite tests tagged for those capabilities.</p>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>lang-read</code></td>
+<td>Parse <code>[&lt;ds&gt;._LANG.&lt;lang&gt;]</code> and <code>[_LANG.&lt;lang&gt;.loaders]</code>; apply the load ladder.</td>
+</tr>
+<tr>
+<td><code>lang-write</code></td>
+<td>Regenerate own <code>_LANG.&lt;self&gt;</code> and preserve foreign <code>_LANG.*</code> verbatim on write (full lossless round-trip).</td>
+</tr>
+<tr>
+<td><code>shell-fetch</code></td>
+<td>Execute the dataset's <code>shell</code> command template in the fetch ladder.</td>
+</tr>
+<tr>
+<td><code>delegation</code></td>
+<td>Cross-language fetch (rung 3, the rare case): run a fetcher defined in another language — mechanism implementation-defined (call the language's runtime, or a peer <code>datamanifest</code> CLI), with fall-through to <code>uri</code> — controlled by <code>delegate</code> / <code>--delegate</code> (see Cross-language fetch, Peer-CLI contract).</td>
+</tr>
+<tr>
+<td><code>storage</code></td>
+<td>Honor the <code>datasets_dir</code> / <code>datacache_dir</code> folders (machine-global defaults), the optional <code>datasets_pools</code> / <code>datacache_pools</code> read pools, <code>$</code>-symbol resolution (<code>$user_data_dir</code> / <code>$user_cache_dir</code> / <code>$repo</code> / <code>$project</code> + user-defined, host-aware via <code>_HOST</code>), the scoped config files and their resolution ladder (<code>.datamanifest/config.toml</code>, <code>~/.config/datamanifest/config.toml</code>), and per-dataset <code>storage_path</code> (see Storage).</td>
+</tr>
+<tr>
+<td><code>byte-identity</code></td>
+<td>Emit the canonical key ordering (structural <code>_*</code> tables first at the top level, code-point order everywhere else — see <em>Validation rules</em>) so the same logical manifest is <strong>semantically identical</strong> across tools — same keys, same values, same order at every level (verified by the cross-tool fixture). This is the <em>guaranteed</em> constraint. Literal <strong>byte-for-byte</strong> identity is <strong>not</strong> assured by default: current TOML writers differ in cosmetic formatting (indentation, blank lines, inline-vs-multiline arrays), so a one-to-one byte match is not always achievable. The <strong>Python tool is the normative reference</strong> for the canonical byte form; tools MAY offer an opt-in path to it (e.g. <code>datamanifest format</code>, Julia <code>write(...; canonical=true)</code>, or the <code>canonical</code> config field).</td>
+</tr>
+<tr>
+<td><code>binding-args</code></td>
+<td>Execute the table form of a binding (<code>{ ref, args, kwargs }</code>): call <code>ref(*args; kwargs...)</code> with <code>$var</code> substitution in string values.</td>
+</tr>
+<tr>
+<td><code>cache-produce</code></td>
+<td><strong>Cache-layer</strong> produce-or-load: function-backed (produced) datasets with parameter-hash keying, optional recipe <code>version</code>, the <code>config.toml</code> / <code>metadata.toml</code> sidecars, and the state file's <code>datacache</code> inventory, materialized under the <code>datacache_dir</code> folder (§Produced datasets). Declared by the cache layer, never by the core fetch capability (packaging — separate package or submodule — is unconstrained).</td>
+</tr>
+<tr>
+<td><code>inspect</code></td>
+<td>The <strong>user-driven</strong> store-inspection toolkit (§Maintenance): enumerate stored objects (datasets + cached, via the state file <code>.datamanifest/state.toml</code>) with their fields (<code>kind</code>, <code>key</code>/<code>hash</code>, <code>location</code>, <code>referenced</code>/orphan, dirty state, <code>format</code>, <code>size</code>, <code>created</code>, <code>last-access</code>), filter them, and act on a selection (<code>delete</code>, <code>refresh</code>, optional <code>move</code>). There is <strong>no automatic collector</strong>: deletion is always an explicit user selection; <code>referenced</code>/<code>last-access</code> are advisory. The reference CLI exposes it as <code>datamanifest list … --delete</code>.</td>
+</tr>
+<tr>
+<td><code>sync</code></td>
+<td>Cross-machine transfer (<code>push</code> / <code>pull</code>) of a stored object between two stores over SSH/rsync, addressed by its machine-independent identifier (<code>name</code>/<code>alias</code>/<code>doi</code>, or <code>cachetype[/version]/hash</code>); each end resolves its own store from its own configuration ladder (<code>$repo</code> excluded); writes no manifest; integrity via rsync; idempotent (§Cross-machine sync).</td>
+</tr>
+</tbody>
+</table>
+<p>Capabilities are independent — a partial implementation may ship <code>lang-read</code> and
+<code>lang-write</code> without <code>shell-fetch</code> or <code>delegation</code>. The spec and its fixture suite are
+never forked per language package; divergent per-language pace is expressed by each
+implementation declaring its supported capability set and pinning to a spec tag.</p>
+<p><code>_META.schema</code> (the integer stored in the file) is the data-model compatibility version
+and is bumped only on breaking structural changes. The spec-document version (git tag,
+e.g. <code>spec-v1.0</code>) tracks prose and fixture evolution independently. An implementation
+conforms to "schema N, spec ≥ vX" — these two axes are independent.</p>
+<h2 id="peer-cli-contract">Peer-CLI contract<a class="headerlink" href="#peer-cli-contract" title="Permanent link">&para;</a></h2>
+<p>One way to do cross-language fetch (rung 3) is to call a peer-language <code>datamanifest</code> CLI.
+This section is the normative invocation interface for any tool that does so. (A tool that
+instead runs the foreign language's runtime directly does not use this contract.)</p>
+<h3 id="invocation">Invocation<a class="headerlink" href="#invocation" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>datamanifest fetch &lt;name&gt; --datasets-toml &lt;path&gt; [--datasets-folder &lt;dir&gt;]
+</code></pre></div>
+<ul>
+<li><code>&lt;name&gt;</code> — the dataset key as it appears in the manifest.</li>
+<li><code>--datasets-toml &lt;path&gt;</code> — absolute or project-relative path to the manifest file.</li>
+<li><code>--datasets-folder &lt;dir&gt;</code> — (optional) directory that holds the shared download
+  cache. If omitted, the tool's default cache location applies.</li>
+</ul>
+<p>The peer tool resolves its own <code>[&lt;dataset&gt;._LANG.&lt;lang&gt;].fetcher</code> (using its own
+fetch ladder), writes the result into the shared cache, verifies <code>sha256</code> if
+present, and <strong>exits non-zero on any failure</strong>. It produces <strong>no dataset bytes on
+stdout</strong> — the artifact lands in the cache on disk and the calling tool reads it
+from there.</p>
+<h3 id="discovery-and-availability">Discovery and availability<a class="headerlink" href="#discovery-and-availability" title="Permanent link">&para;</a></h3>
+<p>Each language's CLI is discoverable on <code>PATH</code> under a language-specific name, e.g.
+<code>datamanifest</code> (Python), <code>DataManifest</code> or <code>datamanifest-julia</code> (Julia). The Python
+<code>datamanifest</code> CLI is the <strong>reference peer</strong> (the fallback target for cross-language fetch).
+Before
+delegating, a tool MUST probe that the peer CLI (and its runtime) is installed and
+usable; if the probe fails, the delegation rung is silently skipped and the ladder
+advances to rung 4 (<code>uri</code> download). Probe commands and PATH names are left to each
+implementation to document.</p>
+<h2 id="deprecations">Deprecations<a class="headerlink" href="#deprecations" title="Permanent link">&para;</a></h2>
+<p>The following v0 forms are still read for backward compatibility but SHOULD NOT be
+written by conforming v1 tools:</p>
+<ul>
+<li><strong>Per-dataset language-named flat fields <code>julia=</code> / <code>python=</code> / <code>callable=</code></strong> (and any
+  other <code>&lt;lang&gt;=</code>) — historically held <strong>inline code</strong>, which v1 forbids. Replaced by a
+  <code>module:function</code> binding under <code>[&lt;dataset&gt;._LANG.&lt;lang&gt;].fetcher</code> (or the bare,
+  language-implicit <code>fetcher</code>). Kept verbatim in the dataset's <code>extra</code> on read (no
+  auto-rewrite, to avoid touching another language's data); <code>migrate</code> rewrites the
+  ref-shaped ones. A tool MAY emit a one-time deprecation notice.</li>
+<li><strong><code>julia_modules</code> / <code>python_includes</code></strong> — retired; the manifest's directory is on the
+  tool's import path by convention. Legacy <code>*_includes</code> values are still read as extra
+  import-path entries for back-compat.</li>
+</ul>
+<p>Note: bare <code>fetcher</code> / <code>loader</code> (language-implicit), bare <code>shell</code> (language-agnostic), and
+top-level <code>[_LOADERS]</code> are <strong>not</strong> deprecated — they are supported forms (see
+<em>Language-implicit bindings</em> and <em><code>shell</code> fetcher</em>). Only the inline-code language-named
+fields above are legacy.</p>
+<p>An opt-in <code>datamanifest migrate</code> command (not normative in this spec) may rewrite a v0
+flat file to v1 <code>_LANG</code> form for the tool's own language.</p>
+<h2 id="conformance-notes">Conformance notes<a class="headerlink" href="#conformance-notes" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Readers MUST ignore unknown top-level tables and unknown fields rather than erroring,
+  so that new datasets, new <code>_LANG</code> entries, and other tools' extension keys do not break
+  an older reader.</li>
+<li>Readers MUST preserve unknown <code>_*</code> structural keys verbatim — not treat them as
+  datasets, not drop them on write.</li>
+<li>Writers SHOULD omit derived fields (<code>host</code>, <code>path</code>, <code>scheme</code>) and any field left at
+  its default value.</li>
+<li>Writers MUST emit all keys sorted, at every nesting level. At the <strong>top level</strong>, the
+  structural <code>_*</code> tables (<code>_META</code>, <code>_LANG</code>, <code>_LOADERS</code>, <code>_STORAGE</code>, …) come <strong>first</strong>, then
+  the datasets, each group in <strong>Unicode code-point lexicographic order</strong> (spec-v5.4;
+  because <code>_</code> (U+005F) sorts after uppercase but before lowercase ASCII letters, a uniform
+  code-point sort would drop the structural tables <em>between</em> the upper-cased / digit-named
+  datasets and the lower-cased ones — the head of the file is where a reader looks for
+  them). Below the top level no table is special-cased: the fields within each table,
+  including keys nested in inline <code>{ }</code> tables, sort by plain code-point order (the shared
+  default of Python <code>sorted()</code> and Julia <code>TOML.print(sorted=true)</code>). This guarantees
+  <strong>semantic identity</strong> across tools — the same logical manifest round-trips to the same
+  keys, values, and ordering through either tool (the weaker constraint that is always
+  met). It does <strong>not</strong>, by itself, guarantee <strong>byte-for-byte</strong> identity: the Python
+  (<code>tomli_w</code>) and Julia (<code>TOML.print</code>) serializers differ in cosmetic formatting
+  (indentation, blank lines, inline-vs-multiline arrays), and current tooling does not
+  always permit a one-to-one byte match. For literal byte-identity the <strong>Python tool is the
+  normative reference</strong> for the canonical form, and a tool MAY route its output through it
+  opt-in (<code>datamanifest format</code>, Julia <code>write(...; canonical=true)</code>, or the <code>canonical</code>
+  config field — see <em>Scoped configuration</em>).</li>
+<li><code>uri</code> and <code>uris</code> are mutually exclusive on a single dataset.</li>
+<li>A file with no <code>[_META]</code> section is read as schema v0 (legacy flat), leniently.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link", "content.action.edit"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
