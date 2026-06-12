@@ -48,8 +48,9 @@ Python or Julia) and every page follows.
     # pip install datamanifestpy
     import datamanifest
 
-    datamanifest.add("https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv", name="co2")
-    df = datamanifest.load_dataset("co2")   # download on first use, then load
+    db = datamanifest.Database("datamanifest.toml")
+    db.add("https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv", name="co2")
+    df = db.load_dataset("co2")             # downloaded and verified, then loaded
     ```
 
 === "Julia"
@@ -58,8 +59,9 @@ Python or Julia) and every page follows.
     # using Pkg; Pkg.add("DataManifest")
     using DataManifest
 
-    DataManifest.add("https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv"; name="co2")
-    path = get_dataset_path("co2")          # the on-disk path, downloaded and verified
+    db = read_dataset("datamanifest.toml")
+    add(db, "https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv"; name="co2")
+    path = get_dataset_path(db, "co2")      # the on-disk path, downloaded and verified
     ```
 
 === "Manifest"
@@ -79,7 +81,8 @@ Three ways in, one manifest:
   `load_dataset`, the `@cached` decorator and the file-less `Database`; the
   [Python API reference](python-api.md) lists everything.
 - **Use it from Julia** — the quickstart and guide pages carry Julia tabs for
-  the essentials; the full Julia API reference lives at
+  the essentials; the [Julia API reference](julia-api.md) lists everything,
+  and the full Julia documentation lives at
   [awi-esc.github.io/DataManifest.jl](https://awi-esc.github.io/DataManifest.jl/).
 
 This site documents the CLI and the Python library in full, and the essentials

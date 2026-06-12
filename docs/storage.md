@@ -43,7 +43,8 @@ To see where a dataset resolves on this machine:
     ```python
     import datamanifest
 
-    datamanifest.get_dataset_path("co2")   # or db.get_dataset_path("co2")
+    db = datamanifest.Database("datamanifest.toml")
+    db.get_dataset_path("co2")   # print the resolved on-disk path
     ```
 
 === "Julia"
@@ -51,7 +52,8 @@ To see where a dataset resolves on this machine:
     ```julia
     using DataManifest
 
-    get_dataset_path(db, "co2")   # or get_dataset_path("co2") for the default db
+    db = read_dataset("datamanifest.toml")
+    get_dataset_path(db, "co2")   # print the resolved on-disk path
     ```
 
 ## Changing the folders

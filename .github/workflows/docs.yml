@@ -31,4 +31,11 @@ jobs:
           restore-keys: |
             mkdocs-material-
       - run: pip install .[docs]
+      # Refresh the Julia API reference from the DataManifest.jl repo's main
+      # branch (public repo, no token needed).
+      - uses: actions/checkout@v4
+        with:
+          repository: awi-esc/DataManifest.jl
+          path: _julia_repo
+      - run: python docs/_sync_julia_api.py _julia_repo/docs/api.md
       - run: mkdocs gh-deploy --force

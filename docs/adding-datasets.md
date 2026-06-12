@@ -31,7 +31,7 @@ all follow from that entry.
     ```julia
     using DataManifest
 
-    db = Database("datamanifest.toml")
+    db = read_dataset("datamanifest.toml")
     add(db, "https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv"; name="co2")
     ```
 
@@ -43,12 +43,10 @@ all follow from that entry.
     uri = "https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv"
     ```
 
-When the download happens differs slightly per client: the CLI downloads right
-away (pass `--no-download` to only declare), Julia's `add` does too (pass
-`skip_download=true`), while Python's `db.add` only writes the entry — the
-download happens on first use (`db.load_dataset` / `db.download_dataset`).
-Without an explicit `db`, the module-level `datamanifest.add(...)` /
-`DataManifest.add(...)` write to the default database.
+In every client, `add` writes the entry and downloads right away. Pass
+`--no-download` (CLI) or `skip_download=true` (Python / Julia) to only
+declare it — the download then happens on first use
+(`load_dataset` / `download_dataset`) or with `datamanifest download`.
 
 The `checksum` carries its algorithm. A digest published by the source (an md5
 from a Zenodo or PANGAEA file listing, a pooch registry, a DVC file) is

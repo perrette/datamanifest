@@ -44,13 +44,6 @@ theme:
 plugins:
   - search
   - include-markdown
-  - mkdocstrings:
-      handlers:
-        python:
-          options:
-            docstring_style: sphinx
-            show_source: false
-            members_order: source
 
 markdown_extensions:
   - admonition
@@ -89,6 +82,7 @@ nav:
       - Manifest format: manifest-format.md
       - CLI reference: cli.md
       - Python API: python-api.md
+      - Julia API: julia-api.md
   - Development:
       - Conformance: conformance.md
       - Roadmap: roadmap.md

@@ -28,14 +28,16 @@ all in one place.
 === "Python"
 
     ```python
-    import datamanifest as dm
+    import datamanifest
 
-    dm.add("https://host/path/file.nc")     # register in the manifest
-    dm.download_datasets()                  # fetch everything not yet present
+    db = datamanifest.Database("datamanifest.toml")
 
-    data = dm.load_dataset("co2")           # download if needed, then load
-    path = dm.get_dataset_path("co2")       # just the on-disk path
-    dm.delete_dataset("old_entry")          # drop an entry
+    db.add("https://host/path/file.nc")     # register in the manifest + download
+    db.download_datasets()                  # fetch everything not yet present
+
+    data = db.load_dataset("co2")           # download if needed, then load
+    path = db.get_dataset_path("co2")       # just the on-disk path
+    db.delete_dataset("old_entry")          # drop an entry
     ```
 
 === "Julia"
@@ -43,11 +45,14 @@ all in one place.
     ```julia
     using DataManifest
 
-    add("https://host/path/file.nc")        # register in the manifest + download
+    db = read_dataset("datamanifest.toml")
 
-    data = load_dataset("co2")              # download if needed, then load
-    path = get_dataset_path("co2")          # just the on-disk path
-    delete_dataset("old_entry")             # drop an entry
+    add(db, "https://host/path/file.nc")    # register in the manifest + download
+    download_datasets(db)                   # fetch everything not yet present
+
+    data = load_dataset(db, "co2")          # download if needed, then load
+    path = get_dataset_path(db, "co2")      # just the on-disk path
+    delete_dataset(db, "old_entry")         # drop an entry
     ```
 
 The CLI-only commands (`list`, `show`, `verify`, `update-checksums`, …) manage
@@ -71,7 +76,7 @@ Cached
 ```
 
 `temperature` loads from code just like `co2` —
-`datamanifest.load_dataset("temperature")` — and the **Cached** group lists the
+`db.load_dataset("temperature")` — and the **Cached** group lists the
 `load_anomaly(grid=…)` results from the [`@cached` example](api.md), grouped by
 function with their parameters.
 

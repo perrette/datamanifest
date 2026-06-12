@@ -22,23 +22,24 @@ whole site follows.
     ```python
     import datamanifest
 
-    datamanifest.add("https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv", name="co2")
+    db = datamanifest.Database("datamanifest.toml")
+    db.add("https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv", name="co2")
     ```
 
-    `add` writes the manifest entry — at the project root, located via your
-    `pyproject.toml` — and the download happens on first use.
+    `add` writes the manifest entry and downloads the file right away
+    (pass `skip_download=True` to only declare it).
 
 === "Julia"
 
     ```julia
     using DataManifest
 
-    DataManifest.add("https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv"; name="co2")
+    db = read_dataset("datamanifest.toml")
+    add(db, "https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv"; name="co2")
     ```
 
-    In an activated project (`using Pkg; Pkg.activate(...)`), `add` writes the
-    manifest entry next to your `Project.toml` and downloads the file right
-    away (pass `skip_download=true` to only declare it).
+    `add` writes the manifest entry and downloads the file right away
+    (pass `skip_download=true` to only declare it).
 
 === "Manifest"
 
@@ -53,10 +54,9 @@ TOML file you can read and edit by hand (the "Manifest" tab shows the entry).
 The `checksum` is a content hash of the file; every later download or
 verification is checked against it, so everyone gets byte-identical data.
 
-The default manifest filename differs per client — the CLI and the Python
-library create and discover `datamanifest.toml` in the project directory,
-while Julia uses `Datasets.toml` next to your `Project.toml` — but all read
-the same format, and each accepts an explicit path.
+All clients follow the same filename rule: new manifests are created as the
+canonical `datamanifest.toml`, and an existing `DataManifest.toml`,
+`datasets.toml` or `Datasets.toml` is discovered too, in that order.
 
 **Commit the manifest** — it's the recipe (what to fetch and how). It is
 the only file to commit: the private `.datamanifest/` directory, which records
@@ -82,7 +82,8 @@ declares — files already present and matching their checksum are skipped:
     ```python
     import datamanifest
 
-    datamanifest.download_datasets()
+    db = datamanifest.Database("datamanifest.toml")
+    db.download_datasets()
     ```
 
 === "Julia"
@@ -90,7 +91,8 @@ declares — files already present and matching their checksum are skipped:
     ```julia
     using DataManifest
 
-    download_datasets()
+    db = read_dataset("datamanifest.toml")
+    download_datasets(db)
     ```
 
 ## Get a path
@@ -107,13 +109,13 @@ file path:
 === "Python"
 
     ```python
-    path = datamanifest.get_dataset_path("co2")
+    path = db.get_dataset_path("co2")
     ```
 
 === "Julia"
 
     ```julia
-    path = get_dataset_path("co2")
+    path = get_dataset_path(db, "co2")
     ```
 
 ## Load it
@@ -124,15 +126,15 @@ in-memory object (the CLI stops at the path — loading is a library concern):
 === "Python"
 
     ```python
-    df = datamanifest.load_dataset("co2")   # download on first use, then load
-                                            # (pandas/xarray/… per format)
+    df = db.load_dataset("co2")     # download on first use, then load
+                                    # (pandas/xarray/… per format)
     ```
 
 === "Julia"
 
     ```julia
-    tbl = load_dataset("co2")   # needs a loader declared for the dataset or its
-                                # format, e.g. csv = "CSV:read"
+    tbl = load_dataset(db, "co2")   # needs a loader declared for the dataset or
+                                    # its format, e.g. csv = "CSV:read"
     ```
 
     How loaders are declared in the manifest is covered in

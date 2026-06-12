@@ -12,9 +12,11 @@ which reads the same manifest.
     ```python
     import datamanifest
 
-    df = datamanifest.load_dataset("co2")          # download on first use, then load
-                                                   # (pandas/xarray/… per format)
-    path = datamanifest.get_dataset_path("co2")    # just the on-disk path
+    db = datamanifest.Database("datamanifest.toml")
+
+    df = db.load_dataset("co2")          # download on first use, then load
+                                         # (pandas/xarray/… per format)
+    path = db.get_dataset_path("co2")    # just the on-disk path
     ```
 
 === "Julia"
@@ -22,8 +24,10 @@ which reads the same manifest.
     ```julia
     using DataManifest
 
-    df = load_dataset("co2")            # download on first use, then load
-    path = get_dataset_path("co2")      # just the on-disk path
+    db = read_dataset("datamanifest.toml")
+
+    df = load_dataset(db, "co2")         # download on first use, then load
+    path = get_dataset_path(db, "co2")   # just the on-disk path
     ```
 
 `load_dataset` downloads on first use, verifies the checksum, then returns the
@@ -102,14 +106,11 @@ The recommended style is to load the database once and call its methods:
     ```julia
     using DataManifest
 
-    db = Database("Datasets.toml")
+    db = read_dataset("datamanifest.toml")
 
     df = load_dataset(db, "co2")
     path = get_dataset_path(db, "co2")
     ```
-
-(`Datasets.toml` is the conventional manifest name on the Julia side; either
-tool reads the file you point it at.)
 
 This is explicit about which project's manifest the code uses, lets several
 databases coexist in one program, and pins the configuration: a `Database`
@@ -117,11 +118,15 @@ takes its [configuration snapshot](configuration.md) — config files,
 environment, host — once, when it is created.
 
 The module-level functions are shortcuts over a **default database**. On first
-use they locate the project's manifest (walking up from the working directory;
-`DATAMANIFEST_TOML` overrides), build the default `Database` from it, and keep
-it for the rest of the process — the manifest is read once, not on every call.
-Every `datamanifest.X(...)` is the method `X` on that default database, or on
-the database you pass explicitly:
+use they locate the project's manifest — walking up from the working directory
+for the canonical `datamanifest.toml` or one of the alternate names
+(`DataManifest.toml`, `datasets.toml`, `Datasets.toml`); `DATAMANIFEST_TOML`
+overrides — build the default `Database` from it, and keep it for the rest of
+the process — the manifest is read once, not on every call. A no-argument
+`Database()` runs the same discovery, so you can hold an explicit `db` without
+naming the file. Every `datamanifest.X(...)` is the method `X` on that default
+database, or on the database you pass explicitly — `add` included, which
+registers **and downloads** either way:
 
 === "Python"
 
@@ -158,7 +163,7 @@ the database's methods do everything the module-level functions do:
 
     db = Database(datasets_folder="$user_data_dir/mylib", persist=False)
     db.add("https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv", name="co2")
-    path = db.download_dataset("co2")   # → ~/.local/share/mylib/gml.noaa.gov/…/co2_annmean_mlo.csv
+    path = db.get_dataset_path("co2")   # → ~/.local/share/mylib/gml.noaa.gov/…/co2_annmean_mlo.csv
     ```
 
 === "Julia"
@@ -168,6 +173,6 @@ the database's methods do everything the module-level functions do:
 
     db = Database(datasets_folder=raw"$user_data_dir/mylib", persist=false)   # raw"": keep Julia
                                                                               # from interpolating $
-    DataManifest.add(db, "https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv"; name="co2")
-    path = download_dataset(db, "co2")  # → ~/.local/share/mylib/gml.noaa.gov/…/co2_annmean_mlo.csv
+    add(db, "https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv"; name="co2")
+    path = get_dataset_path(db, "co2")  # → ~/.local/share/mylib/gml.noaa.gov/…/co2_annmean_mlo.csv
     ```
