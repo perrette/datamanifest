@@ -14,7 +14,9 @@ datamanifest import dvc path-or-dir                   # *.dvc / dvc.lock (+ .dvc
 ```
 
 Per-source detail, and the `add`-side sources (direct URLs, Zenodo and PANGAEA
-DOIs), are on the [adding datasets](adding-datasets.md) page.
+DOIs), are on the [adding datasets](adding-datasets.md) page. Importing is a
+CLI operation: the importers are not part of the public
+[Python API](python-api.md).
 
 ## Coming from Pooch
 

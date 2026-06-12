@@ -1,33 +1,187 @@
-# Adding datasets from external sources
+# Adding datasets
 
-datamanifest has two commands for bringing datasets into the manifest,
-distinguished by what you hand them:
+This page covers how datasets get into the manifest: the principle, which
+sources are supported (and which are not), and the per-source detail for the
+`add` and `import` commands.
 
-| Verb | You give it… | Yields | Examples |
-|---|---|---|---|
-| `add` | a **reference to data** (URL, DOI) | one dataset, or all files of a record | direct URL, Zenodo DOI, PANGAEA DOI |
-| `import` | **another tool's catalog file** | many datasets | pooch, intake, DVC |
+## A dataset is a URI plus a checksum
 
-If the argument is another tool's manifest, use `import`; if it is a pointer
-to data, use `add`.
+A dataset is declared by a **URI** — where the bytes live — and verified by a
+**checksum** — a content hash, written as `<algo>:<hex>`. Adding a dataset
+means writing one entry to the manifest; download, verification and sharing
+all follow from that entry.
 
-Both commands produce standard `datamanifest.toml` entries (`uri`, `checksum`,
-optional `doi`/`description`/`extract`). Where a local copy of a file already
-exists — for example in another tool's download cache — it is **adopted**:
-verified against its checksum and recorded in the state file (the
-machine-generated record of where each dataset lives on disk), so nothing is
-re-downloaded.
+=== "CLI"
 
-A note on checksums: the `checksum` field carries its algorithm as
-`<algo>:<hex>`. A digest published by the source (an md5 from a pooch
-registry, a DVC file, a Zenodo or PANGAEA file listing) is recorded as
-`checksum = "md5:…"` and verified in md5 — not re-hashed to sha256. When the
-source publishes no digest, one is computed (as `sha256:…`) on the first
-download or adoption.
+    ```bash
+    datamanifest add https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv --name co2
+    ```
 
----
+=== "Python"
 
-## `add` — add dataset(s) from a reference
+    ```python
+    import datamanifest
+
+    db = datamanifest.Database("datamanifest.toml")
+    db.add("https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv", name="co2")
+    ```
+
+=== "Julia"
+
+    ```julia
+    using DataManifest
+
+    db = Database("datamanifest.toml")
+    add(db, "https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv"; name="co2")
+    ```
+
+=== "Manifest"
+
+    ```toml
+    [co2]
+    checksum = "sha256:0058b3788040b5c27b2b5c1dd6d26226b7e4deef85e34c153e64806c37df7c75"
+    uri = "https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv"
+    ```
+
+When the download happens differs slightly per client: the CLI downloads right
+away (pass `--no-download` to only declare), Julia's `add` does too (pass
+`skip_download=true`), while Python's `db.add` only writes the entry — the
+download happens on first use (`db.load_dataset` / `db.download_dataset`).
+Without an explicit `db`, the module-level `datamanifest.add(...)` /
+`DataManifest.add(...)` write to the default database.
+
+The `checksum` carries its algorithm. A digest published by the source (an md5
+from a Zenodo or PANGAEA file listing, a pooch registry, a DVC file) is
+recorded as `checksum = "md5:…"` and verified in md5 — never re-hashed to
+sha256. When the source publishes no digest, one is computed (as `sha256:…`)
+on the first download or adoption and written back to the manifest.
+
+Since the manifest is plain TOML, you can also write the entry by hand —
+`[name]` plus `uri = "…"` — and let the checksum fill in on first download.
+
+## Supported sources
+
+### Direct downloads (https / http)
+
+Any plain `https://` or `http://` URL works out of the box. Downloads are
+streamed with a standard HTTP client, redirects are followed, and an
+interrupted download resumes from the partial file.
+
+### DOIs
+
+Two repositories have fine-tuned importers behind `add`: **Zenodo**
+(`10.5281/zenodo.<id>` or a `zenodo.org/records/<id>` URL) and **PANGAEA**
+(`10.1594/PANGAEA.<id>` or a `doi.pangaea.de` URL). Both resolve the record
+through the repository's API, declare its files (one bundled dataset by
+default, one dataset per file with `--split`), and attach the DOI and title to
+each entry. See the [reference below](#a-zenodo-doi-or-record-url) for the
+options.
+
+Any other DOI is **not** auto-resolved. Follow the DOI yourself and `add` the
+direct file URL it leads to.
+
+### Object stores
+
+Object-store URIs — `s3://`, `gs://`/`gcs://`, `az://`/`abfs://`/`abfss://`,
+`adl://`, `gdrive://` — are valid dataset URIs, but they are not handled by
+the core HTTP downloader:
+
+- **Python / CLI** can fetch them through [fsspec](https://filesystem-spec.readthedocs.io/),
+  an *optional* dependency (`pip install 'datamanifest[fsspec]'` plus the
+  scheme's backend, e.g. `s3fs` / `gcsfs` / `adlfs`). A single object or a
+  whole prefix (e.g. a zarr store) is mirrored, then verified by sha256 like
+  any download. Credentials follow fsspec's normal resolution (environment
+  variables, config files, instance metadata).
+- **`add --lazy`** never downloads: it marks the entry `lazy_access = true`
+  and binds the built-in fsspec loader (a Python-only binding), so the URI is
+  opened in place. No local copy means no checksum.
+- **Julia** has no native object-store fetcher: a `lazy_access` entry with a
+  scheme-aware loader works, or the fetch is
+  [delegated](language-bindings.md) to a peer datamanifest tool that
+  implements the scheme.
+
+### Local, SSH and git sources
+
+- `file:///path/to/data` — a local file or folder, copied into the store.
+- `ssh://host/path` — fetched with `rsync`; when `host` is the local machine
+  it is treated as a local file.
+- `git://`, `ssh+git://`, or an `https://…/*.git` URL — the repository is
+  cloned. Folders (clones, extracted archives) get a checksum computed over
+  the whole tree.
+
+### Other tools' catalogs
+
+When the datasets are already listed in another tool's catalog file — a pooch
+registry, an intake catalog, DVC metadata, or a plain CSV/URL list — `import`
+converts the whole catalog to manifest entries in one go, adopting
+already-downloaded files in place. See the
+[reference below](#reference-import-another-tools-catalog) and
+[importing from other tools](importing.md).
+
+### Summary
+
+| Source type | Example | How it's added | Checksum | Notes |
+|---|---|---|---|---|
+| Direct URL | `https://host/file.nc` | `add URL` | computed (`sha256:…`) on first download | redirects followed; interrupted downloads resume |
+| Zenodo record | `10.5281/zenodo.1234567` | `add DOI` (declare-only) | published md5 per file with `--split`, else computed | one bundle by default; `--split`, `--pick` |
+| PANGAEA dataset | `10.1594/PANGAEA.930590` | `add DOI` (declare-only) | published md5 per file with `--split`, else computed | tabular / file / collection / series detected |
+| Other DOI | `10.1029/…` | not auto-resolved — `add` the file URL it leads to | computed on first download | only Zenodo and PANGAEA resolvers are built in |
+| Object store | `s3://bucket/key` | `add s3://…` (needs the `fsspec` extra) or `add --lazy` | sha256 after fetch; none when lazy | lazy entries open in place; Julia needs a loader or delegation |
+| Local file / folder | `file:///data/file.nc` | `add file://…` | computed on adoption | copied into the store |
+| SSH host | `ssh://host/path` | `add ssh://…` | computed on fetch | rsync; the local hostname resolves to `file` |
+| Git repository | `https://host/repo.git` | `add URL` | computed over the cloned tree | folder checksums can be disabled (`skip_checksum_folders`) |
+| Another tool's catalog | `registry.txt`, `catalog.yml`, `*.dvc` | `import pooch/intake/dvc/csv/urls` | taken from the catalog when it publishes one | adopts existing download caches |
+
+## What can get in the way
+
+Some sources cannot be fetched by a generic downloader. The manifest can still
+*declare* them — the limits below are about who produces the bytes.
+
+### Hosts behind bot protection
+
+Downloads use a plain HTTP client. A host behind Cloudflare or similar
+bot protection may answer it with a challenge page or an outright refusal,
+even though the same URL works in a browser. The dataset can still be
+recorded:
+
+```bash
+datamanifest add https://protected.example.org/data.csv --name data --no-download
+datamanifest path data        # where the file is expected
+```
+
+Fetch the file yourself (browser, `wget` with cookies, …) and place it at
+that path — the next `datamanifest download` adopts the existing copy and
+records its checksum instead of re-fetching. Alternatively, bind a
+[fetcher](language-bindings.md) that knows how to talk to the host, and
+`download` runs it.
+
+### Services that require authentication
+
+Credentials are never stored in the manifest; you provision them on each
+machine. Two patterns:
+
+- **Object stores** — credentials resolve through fsspec's normal chain
+  (environment variables, config files, instance metadata); nothing
+  datamanifest-specific.
+- **API-gated services** — wrap the service's own client in a **fetcher
+  binding**: a function that produces the dataset's bytes, declared in the
+  manifest in place of a downloadable `uri`. For example, Copernicus CDS data
+  needs an account key in `~/.cdsapirc`; a small function calling the
+  `cdsapi` client, bound as the dataset's fetcher, makes the dataset
+  reproducible for anyone who has their own key. Any API client can be
+  wrapped this way — see [language bindings](language-bindings.md).
+
+### Rate limits and very large datasets
+
+Zenodo and PANGAEA records are declared without downloading for a reason:
+records can hold many gigabytes, and repositories rate-limit bulk access. Use
+`--pick` to declare only the files you need, and run `datamanifest download`
+when you actually want the bytes — HTTP downloads stream to disk and resume
+from a partial file after an interruption. An object-store prefix (e.g. a
+zarr store) is mirrored recursively: mind its total size before fetching
+rather than using `--lazy`.
+
+## Reference: `add` sources in detail
 
 ### A direct URL
 
@@ -103,13 +257,12 @@ A reference that already pins a representation — e.g.
 `https://doi.pangaea.de/10.1594/PANGAEA.930512?format=zip` — is treated as a
 plain URL (you chose that file), not re-resolved.
 
----
+## Reference: `import` — another tool's catalog
 
-## `import` — bulk-import another tool's catalog
-
-All importers share `--cache-dir` (adopt already-downloaded files in place,
-checksum-verified), `--base-url` (root URL for entries without one),
-`--dry-run`, and `--overwrite`.
+Where `add` takes a pointer to data, `import` takes **another tool's catalog
+file** and converts every entry. All importers share `--cache-dir` (adopt
+already-downloaded files in place, checksum-verified), `--base-url` (root URL
+for entries without one), `--dry-run`, and `--overwrite`.
 
 ### pooch registries
 
@@ -155,17 +308,3 @@ datamanifest import urls list.txt --base-url URL   # one path/URL per line
 
 For exporting from anything else. These use the same pipeline as the pooch
 importer, including `--cache-dir` adoption.
-
----
-
-## What maps where (summary)
-
-| Source | Verb | URL | Checksum | Adopt local cache |
-|---|---|---|---|---|
-| direct URL | `add` | given | computed on download | — |
-| Zenodo DOI | `add` | API | md5 (with `--split`), else computed | — |
-| PANGAEA DOI | `add` | web services | md5 (with `--split`), else computed | — |
-| pooch registry | `import` | base_url + filename / 3rd column | sha256 or md5 from the registry | `--cache-dir` (`os_cache`) |
-| intake catalog | `import` | urlpath | computed on download | `--cache-dir` |
-| DVC | `import` | import-url dep / remote config | md5 from the `.dvc` file | `.dvc/cache` (by hash) |
-| CSV / URL list | `import` | the file | optional sha256 column | `--cache-dir` |

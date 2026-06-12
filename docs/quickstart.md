@@ -1,58 +1,155 @@
 # Quickstart
 
-After [installing](installation.md), declare your first dataset and load it.
+After [installing](installation.md), declare your first dataset, download it,
+and use it. Each step below comes in tabs — pick your client once and the
+whole site follows.
 
-```bash
-datamanifest init                  # create datamanifest.toml here
-datamanifest add https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv --name co2
-datamanifest list                  # what's tracked, and where it lives
-datamanifest path co2              # resolve the on-disk path (for a script)
-```
+## Declare a dataset
 
-The `add` above downloaded the Mauna Loa CO₂ record and wrote one entry to
-`datamanifest.toml` — the *manifest*, a plain TOML file you can read and edit
-by hand:
+=== "CLI"
 
-```toml
-[co2]
-checksum = "sha256:0058b3788040b5c27b2b5c1dd6d26226b7e4deef85e34c153e64806c37df7c75"
-uri = "https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv"
-```
+    ```bash
+    datamanifest init                  # create datamanifest.toml here
+    datamanifest add https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv --name co2
+    datamanifest list                  # what's tracked, and where it lives
+    ```
 
+    `add` writes the manifest entry and downloads the file right away
+    (pass `--no-download` to only declare it).
+
+=== "Python"
+
+    ```python
+    import datamanifest
+
+    datamanifest.add("https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv", name="co2")
+    ```
+
+    `add` writes the manifest entry — at the project root, located via your
+    `pyproject.toml` — and the download happens on first use.
+
+=== "Julia"
+
+    ```julia
+    using DataManifest
+
+    DataManifest.add("https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv"; name="co2")
+    ```
+
+    In an activated project (`using Pkg; Pkg.activate(...)`), `add` writes the
+    manifest entry next to your `Project.toml` and downloads the file right
+    away (pass `skip_download=true` to only declare it).
+
+=== "Manifest"
+
+    ```toml
+    [co2]
+    checksum = "sha256:0058b3788040b5c27b2b5c1dd6d26226b7e4deef85e34c153e64806c37df7c75"
+    uri = "https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv"
+    ```
+
+The step above declared the Mauna Loa CO₂ record in the *manifest* — a plain
+TOML file you can read and edit by hand (the "Manifest" tab shows the entry).
 The `checksum` is a content hash of the file; every later download or
 verification is checked against it, so everyone gets byte-identical data.
 
-**Commit `datamanifest.toml`** — it's the recipe (what to fetch and how). It is
+The default manifest filename differs per client — the CLI and the Python
+library create and discover `datamanifest.toml` in the project directory,
+while Julia uses `Datasets.toml` next to your `Project.toml` — but all read
+the same format, and each accepts an explicit path.
+
+**Commit the manifest** — it's the recipe (what to fetch and how). It is
 the only file to commit: the private `.datamanifest/` directory, which records
 *where* each file landed on this machine, writes its own `.gitignore` and stays
-out of git. A collaborator clones the repo and runs `datamanifest download` to
-materialize everything. Data lives in a machine-wide shared store by default —
+out of git. Data lives in a machine-wide shared store by default —
 shared across your projects, deduplicated by dataset key — and the produced
 cache in a per-project folder under your OS cache dir; point either elsewhere
 with the [storage model](storage.md).
 
-## The CLI / API split
+## Download
 
-The tool separates managing data from consuming it:
+A collaborator clones the repo and materializes everything the manifest
+declares — files already present and matching their checksum are skipped:
+
+=== "CLI"
+
+    ```bash
+    datamanifest download
+    ```
+
+=== "Python"
+
+    ```python
+    import datamanifest
+
+    datamanifest.download_datasets()
+    ```
+
+=== "Julia"
+
+    ```julia
+    using DataManifest
+
+    download_datasets()
+    ```
+
+## Get a path
+
+Resolve a dataset's on-disk location, for a script or any tool that wants a
+file path:
+
+=== "CLI"
+
+    ```bash
+    datamanifest path co2
+    ```
+
+=== "Python"
+
+    ```python
+    path = datamanifest.get_dataset_path("co2")
+    ```
+
+=== "Julia"
+
+    ```julia
+    path = get_dataset_path("co2")
+    ```
+
+## Load it
+
+Going one step further than the path, `load_dataset` returns the data as an
+in-memory object (the CLI stops at the path — loading is a library concern):
+
+=== "Python"
+
+    ```python
+    df = datamanifest.load_dataset("co2")   # download on first use, then load
+                                            # (pandas/xarray/… per format)
+    ```
+
+=== "Julia"
+
+    ```julia
+    tbl = load_dataset("co2")   # needs a loader declared for the dataset or its
+                                # format, e.g. csv = "CSV:read"
+    ```
+
+    How loaders are declared in the manifest is covered in
+    [language bindings](language-bindings.md).
+
+## The CLI / library split
+
+The tooling separates managing data from consuming it:
 
 - the **CLI manages** the project's data — set it up, share it, maintain it;
-- the **API consumes** it — your analysis code resolves and loads what the
-  manifest declares, and never edits it.
+- the **libraries consume** it — your analysis code resolves and loads what
+  the manifest declares, and never edits it.
 
 So you set things up once on the command line, then your scripts just ask for
 data by name.
 
-## Load it from your code
-
-```python
-import datamanifest
-
-df = datamanifest.load_dataset("co2")          # download on first use, then load
-                                               # (pandas/xarray/… per format)
-path = datamanifest.get_dataset_path("co2")    # just the on-disk path
-```
-
-That is the whole loop: declare on the CLI, consume from code. From here:
+That is the whole loop: declare, download, consume. From here:
 
 - [Using it from your code](api.md) — `load_dataset`, the `@cached` decorator,
   and the file-less `Database`.

@@ -73,6 +73,11 @@ targets the manifest's `[_STORAGE._HOST."<glob>"]`; combined with `--local` or
 native TOML types for the typed variables: `canonical` becomes a boolean,
 `lock_stale_age` a number; everything else is stored as a string.
 
+DataManifest.jl has no config-editing command, but it reads the same files and
+the same resolution ladder, and likewise freezes the resolved values per
+`Database`; `freeze_config!(db)` re-reads the files and environment into an
+existing session.
+
 ## The variables
 
 | Variable | Type | Default | What it does |

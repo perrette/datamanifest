@@ -1,16 +1,30 @@
 # Using it from your code
 
-Where the [CLI](cli.md) *manages* a project's data, the Python API *consumes*
+Where the [CLI](cli.md) *manages* a project's data, the in-code API *consumes*
 it: your analysis code resolves and loads what the manifest declares, and never
-edits it.
+edits it. This page is the narrative guide; the complete list of functions and
+classes is in the [Python API reference](python-api.md). The Julia tabs show
+the equivalent calls in [DataManifest.jl](https://awi-esc.github.io/DataManifest.jl/),
+which reads the same manifest.
 
-```python
-import datamanifest
+=== "Python"
 
-df = datamanifest.load_dataset("co2")          # download on first use, then load
-                                               # (pandas/xarray/… per format)
-path = datamanifest.get_dataset_path("co2")    # just the on-disk path
-```
+    ```python
+    import datamanifest
+
+    df = datamanifest.load_dataset("co2")          # download on first use, then load
+                                                   # (pandas/xarray/… per format)
+    path = datamanifest.get_dataset_path("co2")    # just the on-disk path
+    ```
+
+=== "Julia"
+
+    ```julia
+    using DataManifest
+
+    df = load_dataset("co2")            # download on first use, then load
+    path = get_dataset_path("co2")      # just the on-disk path
+    ```
 
 `load_dataset` downloads on first use, verifies the checksum, then returns the
 loaded object using the backend for the dataset's format (install the matching
@@ -21,18 +35,40 @@ when you want to open the file yourself.
 
 Cache an expensive computation, keyed by its keyword arguments:
 
-```python
-from datamanifest.cache import cached
+=== "Python"
 
-@cached
-def load_anomaly(*, grid="5x5"):
-    ...        # expensive; returns e.g. an xarray.Dataset
-    return ds
+    ```python
+    from datamanifest.cache import cached
 
-ds = load_anomaly(grid="5x5")                # first call: computes and stores
-ds = load_anomaly(grid="5x5")                # later calls: loads and returns
-ds = load_anomaly(grid="5x5", cached=False)  # force recompute
-```
+    @cached
+    def load_anomaly(*, grid="5x5"):
+        ...        # expensive; returns e.g. an xarray.Dataset
+        return ds
+
+    ds = load_anomaly(grid="5x5")                # first call: computes and stores
+    ds = load_anomaly(grid="5x5")                # later calls: loads and returns
+    ds = load_anomaly(grid="5x5", cached=False)  # force recompute
+    ```
+
+=== "Julia"
+
+    ```julia
+    using DataManifest
+
+    @cached key=(a -> (; a.grid,)) function load_anomaly(; grid::String = "5x5")
+        # … expensive computation …
+        return ds
+    end
+
+    ds = load_anomaly(grid="5x5")                # first call: computes and stores
+    ds = load_anomaly(grid="5x5")                # later calls: loads and returns
+    ds = load_anomaly(grid="5x5", cached=false)  # run the body, no disk I/O
+    ```
+
+    Julia's `@cached` takes the cache key explicitly (`key=` maps the keyword
+    arguments to the parameters that identify the result) and saves with the
+    stdlib `Serialization` (`jls`) by default — see the
+    [Julia caching page](https://awi-esc.github.io/DataManifest.jl/caching/).
 
 Each distinct keyword combination is stored separately. The result is saved
 with `pickle` by default; pass `format="nc"`/`"csv"`/… to pick a serialization,
@@ -50,14 +86,30 @@ artifact's identity (`cachetype`, `version`, parameter hash) is derived.
 
 The recommended style is to load the database once and call its methods:
 
-```python
-import datamanifest
+=== "Python"
 
-db = datamanifest.Database("datamanifest.toml")
+    ```python
+    import datamanifest
 
-df = db.load_dataset("co2")
-path = db.get_dataset_path("co2")
-```
+    db = datamanifest.Database("datamanifest.toml")
+
+    df = db.load_dataset("co2")
+    path = db.get_dataset_path("co2")
+    ```
+
+=== "Julia"
+
+    ```julia
+    using DataManifest
+
+    db = Database("Datasets.toml")
+
+    df = load_dataset(db, "co2")
+    path = get_dataset_path(db, "co2")
+    ```
+
+(`Datasets.toml` is the conventional manifest name on the Julia side; either
+tool reads the file you point it at.)
 
 This is explicit about which project's manifest the code uses, lets several
 databases coexist in one program, and pins the configuration: a `Database`
@@ -71,27 +123,25 @@ it for the rest of the process — the manifest is read once, not on every call.
 Every `datamanifest.X(...)` is the method `X` on that default database, or on
 the database you pass explicitly:
 
-```python
-datamanifest.download_dataset("co2")            # the auto-discovered default
-datamanifest.download_dataset("co2", db=mydb)   # a specific database
-```
+=== "Python"
 
-See the docstrings (`help(datamanifest)`) and the
-[design notes](https://github.com/perrette/datamanifest/blob/main/design/design-notes.md).
+    ```python
+    datamanifest.download_dataset("co2")            # the auto-discovered default
+    datamanifest.download_dataset("co2", db=mydb)   # a specific database
+    ```
 
-The full public surface, beyond `load_dataset` / `get_dataset_path`:
+=== "Julia"
 
-- `add(...)` / `register_dataset(...)` — register a dataset (with / without
-  downloading), like the CLI's [`add`](cli.md#set-up-and-add-data);
-- `download_dataset(name)` / `download_datasets()` — fetch one / all;
-- `delete_dataset(name, keep_cache=False)` — drop a manifest entry and, unless
-  `keep_cache`, its files (the CLI's `remove`);
-- `resolve_db(db)` / `get_default_database()` — the database behind the
-  module-level functions;
-- `Database`, `DatasetEntry` — the underlying classes;
-- `validate_loader` / `validate_loaders` — resolve one / every loader binding
-  to its callable, raising on failure, without loading any data;
-- `datamanifest.cache.cached` — the [caching decorator](#caching-computed-results).
+    ```julia
+    download_dataset("co2")          # the active project's manifest
+    download_dataset(mydb, "co2")    # a specific database
+    ```
+
+The rest of the surface — registering and deleting datasets, downloading in
+bulk, validating loader bindings — is in the
+[Python API reference](python-api.md); the
+[design notes](https://github.com/perrette/datamanifest/blob/main/design/design-notes.md)
+cover the rationale.
 
 ## A file-less database (no manifest)
 
@@ -101,10 +151,23 @@ entirely: no `datamanifest.toml`, no state file, nothing written but the data.
 The folder accepts the same `$`-symbols as the [storage model](storage.md), and
 the database's methods do everything the module-level functions do:
 
-```python
-from datamanifest import Database
+=== "Python"
 
-db = Database(datasets_folder="$user_data_dir/mylib", persist=False)
-db.add("https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv", name="co2")
-path = db.download_dataset("co2")   # → ~/.local/share/mylib/gml.noaa.gov/…/co2_annmean_mlo.csv
-```
+    ```python
+    from datamanifest import Database
+
+    db = Database(datasets_folder="$user_data_dir/mylib", persist=False)
+    db.add("https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv", name="co2")
+    path = db.download_dataset("co2")   # → ~/.local/share/mylib/gml.noaa.gov/…/co2_annmean_mlo.csv
+    ```
+
+=== "Julia"
+
+    ```julia
+    using DataManifest
+
+    db = Database(datasets_folder=raw"$user_data_dir/mylib", persist=false)   # raw"": keep Julia
+                                                                              # from interpolating $
+    DataManifest.add(db, "https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv"; name="co2")
+    path = download_dataset(db, "co2")  # → ~/.local/share/mylib/gml.noaa.gov/…/co2_annmean_mlo.csv
+    ```

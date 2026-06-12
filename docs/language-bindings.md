@@ -7,6 +7,13 @@ loader for its `format`. Both are declared in the manifest as **bindings**: a
 binding names a function by a `module:function` reference (a **ref**, resolved
 via `importlib`) — never inline code — and may optionally carry arguments.
 
+The same manifest drives both tools: the Python `datamanifest` package and
+Julia's [DataManifest.jl](https://awi-esc.github.io/DataManifest.jl/) read one
+file, each running only the bindings written for its own language. This page
+describes how the Python tool reads bindings; the Julia-side rules and API are
+on the
+[Julia documentation site](https://awi-esc.github.io/DataManifest.jl/language-bindings/).
+
 This page covers the binding forms from the common case to the advanced ones:
 bare bindings for a single-language project, parameterized bindings,
 the per-language `_LANG` namespace for manifests shared across languages, the
@@ -97,7 +104,7 @@ fetcher = "mypkg.fetch:download_mydata"
 loader  = "mypkg.load:load_mydata"
 
 [mydata._LANG.julia]
-fetcher = "MyPkg.fetch_mydata"            # preserved verbatim; Python never touches it
+fetcher = "MyPkg:fetch_mydata"            # preserved verbatim; Python never touches it
 
 [_LANG.python.loaders]                    # project-wide format → loader defaults
 csv = "pandas.io.parsers:read_csv"
@@ -108,6 +115,22 @@ nc  = { ref = "myclimate.loaders:load_nc", kwargs = { decode_times = false } }
   language `<lang>` (each a binding in either form).
 - `[_LANG.python.loaders]` is the per-language counterpart of `[_LOADERS]`:
   project-wide `format → loader` defaults for Python.
+
+Each language has its own ref flavor; a ref is only ever resolved by the tool
+whose `_LANG` subtree it sits in:
+
+=== "Python"
+
+    A ref names an importable function, `"package.module:function"`, resolved
+    via `importlib`. The project root is added to `sys.path`, so a module file
+    next to the manifest works as well as an installed package.
+
+=== "Julia"
+
+    A ref is `"Module:function"`, resolved by `using Module` followed by a
+    function lookup — no `eval` of manifest content. The project root is added
+    to the load path, so a module file next to the manifest works as well as a
+    package dependency.
 
 Foreign `_LANG.<other>` subtrees (e.g. `_LANG.julia`) are preserved verbatim
 on every read→write cycle; Python never modifies them. Unknown structural
@@ -149,24 +172,37 @@ in the other languages.
 
 ## Cross-language fetch
 
-The rare case: a dataset whose only fetcher is defined in another language
-(e.g. `[<ds>._LANG.julia].fetcher`), with no Python fetcher, no shell fetcher,
-and no `uri`. Running a foreign fetcher on a dataset's behalf is called
-**delegation**.
+The rare case: a dataset whose only fetcher is defined in another language,
+with no own-language fetcher, no shell fetcher, and no `uri`. Running a
+foreign fetcher on a dataset's behalf is called **delegation**. Loading never
+crosses languages; only bytes on disk do — the delegating tool reads from the
+shared store what the peer wrote there.
 
-Python materializes such a dataset by invoking the local Julia `DataManifest`
-environment directly —
-`julia --project=<env> -e 'using DataManifest; download_dataset(Database("<datasets.toml>"), "<name>")'`
-— which writes the bytes into the shared store; Python then reads them from
-disk. Loading never crosses languages; only bytes on disk do.
+=== "Python"
 
-The Julia environment is discovered at `$JULIA_PROJECT`, else by walking up
-from the manifest directory for a `Project.toml` whose `[deps]` lists
-`DataManifest`; the rung also requires `julia` on `PATH`. When the toolchain
-is absent or the invocation fails, the rung logs a warning and the ladder
-advances to the `uri` download. Cross-language fetch applies to fetched
+    Python materializes a dataset whose only fetcher is
+    `[<ds>._LANG.julia].fetcher` by invoking the local Julia `DataManifest`
+    environment directly —
+    `julia --project=<env> -e 'using DataManifest; download_dataset(Database("<datasets.toml>"), "<name>")'`.
+    The Julia environment is discovered at `$JULIA_PROJECT`, else by walking
+    up from the manifest directory for a `Project.toml` whose `[deps]` lists
+    `DataManifest`; the rung also requires `julia` on `PATH`. When the
+    toolchain is absent or the invocation fails, the rung logs a warning and
+    the ladder advances to the `uri` download.
+
+=== "Julia"
+
+    DataManifest.jl delegates the opposite direction: a dataset whose only
+    fetcher is `[<ds>._LANG.python].fetcher` is fetched by running
+    `datamanifest download <name>` — the Python CLI, when it is on `PATH` —
+    with `DATAMANIFEST_TOML` pointing at the same manifest. When the CLI is
+    absent, disabled, or fails, the fetch ends in the ordinary "no fetcher"
+    error. See the
+    [Julia documentation](https://awi-esc.github.io/DataManifest.jl/language-bindings/).
+
+Cross-language fetch applies to fetched
 datasets only (never `@cached` produced datasets); it is on by default and a
-no-op unless a foreign fetcher and a usable Julia environment are both
+no-op unless a foreign fetcher and a usable peer toolchain are both
 present. Turn it off per dataset with `delegate = false` in the manifest, or
 per run with the `--delegate` / `--no-delegate` flags on
 `datamanifest download`.
@@ -185,6 +221,9 @@ Accepted on read; deprecated:
   during ref resolution (obsolete; the project root is added automatically).
 
 A single manifest can be consumed by several tools: each reads the common
-fields and ignores the others' extension keys. See
+fields and ignores the others' extension keys. The Julia-side API —
+`load_dataset`, `download_dataset`, and the rest of DataManifest.jl — is
+documented on the
+[Julia documentation site](https://awi-esc.github.io/DataManifest.jl/). See
 [conformance.md](conformance.md) for the shared manifest format and what this
 implementation supports.

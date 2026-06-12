@@ -14,6 +14,11 @@ with two implementations:
 Both read and write the same manifest, so one file can serve a mixed
 Python/Julia project — see [language bindings](language-bindings.md).
 
+This site is the main documentation for the ecosystem: the manifest format,
+the CLI, the Python library, and the cross-language pages. The
+[DataManifest.jl site](https://awi-esc.github.io/DataManifest.jl/) hosts the
+Julia API reference and a Julia-specific quickstart.
+
 ## From the same author
 
 A few other open-source tools I maintain.

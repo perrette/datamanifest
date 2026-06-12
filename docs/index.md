@@ -10,9 +10,17 @@
   </picture>
 </p>
 
-# datamanifest[py]
+# datamanifest
 
-Keep track of the datasets used in a scientific project.
+Keep track of the datasets used in a scientific project. You declare each
+dataset in a **manifest** — a plain TOML file committed alongside your code —
+and three clients read and write it the same way: the `datamanifest`
+command line and the Python library (both in the PyPI package
+[datamanifestpy](https://pypi.org/project/datamanifestpy/)), and the Julia
+package [DataManifest.jl](https://github.com/awi-esc/DataManifest.jl). The
+manifest format itself is defined by a shared, language-agnostic
+[spec](https://github.com/perrette/datamanifest.toml), so a project's manifest
+works across all three.
 
 {%
   include-markdown "../README.md"
@@ -22,21 +30,60 @@ Keep track of the datasets used in a scientific project.
 
 ## Get started
 
-```bash
-pip install datamanifestpy
-datamanifest init
-datamanifest add https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv --name co2
-```
+Code examples across this site come in tabs — pick your client once (CLI,
+Python or Julia) and every page follows.
 
-```python
-import datamanifest
-df = datamanifest.load_dataset("co2")   # download on first use, then load
-```
+=== "CLI"
 
-- **[Installation](installation.md)** — the package and its optional loader backends.
-- **[Quickstart](quickstart.md)** — declare your first dataset and load it.
-- **[Using it from your code](api.md)** — `load_dataset`, the `@cached` decorator, the file-less `Database`.
-- **[CLI reference](cli.md)** — every command and flag.
+    ```bash
+    pipx install datamanifestpy
+    datamanifest init
+    datamanifest add https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv --name co2
+    datamanifest path co2              # the on-disk path, downloaded and verified
+    ```
+
+=== "Python"
+
+    ```python
+    # pip install datamanifestpy
+    import datamanifest
+
+    datamanifest.add("https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv", name="co2")
+    df = datamanifest.load_dataset("co2")   # download on first use, then load
+    ```
+
+=== "Julia"
+
+    ```julia
+    # using Pkg; Pkg.add("DataManifest")
+    using DataManifest
+
+    DataManifest.add("https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv"; name="co2")
+    path = get_dataset_path("co2")          # the on-disk path, downloaded and verified
+    ```
+
+=== "Manifest"
+
+    ```toml
+    [co2]
+    checksum = "sha256:0058b3788040b5c27b2b5c1dd6d26226b7e4deef85e34c153e64806c37df7c75"
+    uri = "https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv"
+    ```
+
+Three ways in, one manifest:
+
+- **Use it from the shell** — [install the CLI](installation.md) and follow the
+  [quickstart](quickstart.md); the [CLI reference](cli.md) covers every command
+  and flag.
+- **Use it from Python** — [Using it from your code](api.md) walks through
+  `load_dataset`, the `@cached` decorator and the file-less `Database`; the
+  [Python API reference](python-api.md) lists everything.
+- **Use it from Julia** — the quickstart and guide pages carry Julia tabs for
+  the essentials; the full Julia API reference lives at
+  [awi-esc.github.io/DataManifest.jl](https://awi-esc.github.io/DataManifest.jl/).
+
+This site documents the CLI and the Python library in full, and the essentials
+for Julia.
 
 ## Guide
 

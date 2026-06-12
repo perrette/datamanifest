@@ -30,6 +30,30 @@ The layout under each folder is flat — the folder you set **is** the location:
 - fetched dataset → `<datasets_dir>/<key>`
 - cached result → `<datacache_dir>/<cachetype>/[<version>/]<hash>`
 
+To see where a dataset resolves on this machine:
+
+=== "CLI"
+
+    ```bash
+    datamanifest path co2        # print the resolved on-disk path
+    ```
+
+=== "Python"
+
+    ```python
+    import datamanifest
+
+    datamanifest.get_dataset_path("co2")   # or db.get_dataset_path("co2")
+    ```
+
+=== "Julia"
+
+    ```julia
+    using DataManifest
+
+    get_dataset_path(db, "co2")   # or get_dataset_path("co2") for the default db
+    ```
+
 ## Changing the folders
 
 Set either folder with `datamanifest config set`:
@@ -45,7 +69,9 @@ $ datamanifest config show                                    # resolved values 
 A value can be set per checkout (the default — the git-ignored
 `.datamanifest/config.toml`), in the committed manifest's `[_STORAGE]` table
 (`--project`, shared with collaborators), per host (`--host GLOB`), or
-user-wide (`--global`, in `~/.config/datamanifest/config.toml`). An
+user-wide (`--global`, in `~/.config/datamanifest/config.toml`). `config set`
+is a CLI convenience over plain TOML files — you can also edit them by hand,
+and peer implementations such as DataManifest.jl read the same files. An
 environment variable `DATAMANIFEST_DATASETS_DIR` / `DATAMANIFEST_DATACACHE_DIR`
 overrides them all for one process. The full set of scopes, the resolution
 order, and every variable are documented in [Configuration](configuration.md).

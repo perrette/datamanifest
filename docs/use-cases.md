@@ -1,25 +1,58 @@
 # Use cases
 
-A tour of what the CLI does day to day. Each section links to the reference page
-with the full flag set; the [CLI reference](cli.md) has them all in one place.
+A tour of day-to-day use. Most of it is CLI commands; where the Python or
+Julia API has an equivalent, it is shown in a tab. Each section links to the
+reference page with the full flag set; the [CLI reference](cli.md) has them
+all in one place.
 
-## Manage datasets from the CLI
+## Manage datasets
 
-```bash
-datamanifest add https://host/path/file.nc                     # a direct URL
-datamanifest add 10.5281/zenodo.1234567 --pick "*.csv"         # a Zenodo record's files
-datamanifest add "https://github.com/u/repo/archive/v2.1.zip" --extract
-datamanifest add s3://bucket/key.zarr --lazy                   # open in place, no download
+=== "CLI"
 
-datamanifest list                       # one styled line each, clickable locations
-datamanifest show co2                   # full entry detail
-datamanifest remove old_entry           # drop an entry
+    ```bash
+    datamanifest add https://host/path/file.nc                     # a direct URL
+    datamanifest add 10.5281/zenodo.1234567 --pick "*.csv"         # a Zenodo record's files
+    datamanifest add "https://github.com/u/repo/archive/v2.1.zip" --extract
+    datamanifest add s3://bucket/key.zarr --lazy                   # open in place, no download
 
-datamanifest verify                     # re-check all checksums (e.g. before submission)
-datamanifest update-checksums           # recompute them after regenerating data
+    datamanifest list                       # one styled line each, clickable locations
+    datamanifest show co2                   # full entry detail
+    datamanifest remove old_entry           # drop an entry
 
-python analysis.py --data "$(datamanifest path co2)"   # composable in shell
-```
+    datamanifest verify                     # re-check all checksums (e.g. before submission)
+    datamanifest update-checksums           # recompute them after regenerating data
+
+    python analysis.py --data "$(datamanifest path co2)"   # composable in shell
+    ```
+
+=== "Python"
+
+    ```python
+    import datamanifest as dm
+
+    dm.add("https://host/path/file.nc")     # register in the manifest
+    dm.download_datasets()                  # fetch everything not yet present
+
+    data = dm.load_dataset("co2")           # download if needed, then load
+    path = dm.get_dataset_path("co2")       # just the on-disk path
+    dm.delete_dataset("old_entry")          # drop an entry
+    ```
+
+=== "Julia"
+
+    ```julia
+    using DataManifest
+
+    add("https://host/path/file.nc")        # register in the manifest + download
+
+    data = load_dataset("co2")              # download if needed, then load
+    path = get_dataset_path("co2")          # just the on-disk path
+    delete_dataset("old_entry")             # drop an entry
+    ```
+
+The CLI-only commands (`list`, `show`, `verify`, `update-checksums`, …) manage
+the project's data; the libraries consume it from code (see the
+[CLI / library split](quickstart.md#the-cli-library-split)).
 
 A concrete run — continuing from the [quickstart](quickstart.md)'s CO₂ record,
 add the HadCRUT5 global temperature series next to it:
@@ -85,6 +118,10 @@ datamanifest config set datasets_dir "/scratch/$USER/data"                 # thi
 datamanifest config set datacache_dir "$user_cache_dir/myproj" --project   # committed default
 datamanifest config                                                        # show resolved config
 ```
+
+`config set` writes plain TOML files that can also be edited by hand; every
+implementation (including DataManifest.jl) reads the same files — see
+[Configuration](configuration.md).
 
 Pointing the folders at a machine directory (instead of the repo) shares data
 across clones and projects. Path expressions, per-host rules, per-dataset
