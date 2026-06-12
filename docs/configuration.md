@@ -34,6 +34,12 @@ Two refinements:
   its own, the main checkout's file is read instead. A config file created in
   the worktree itself takes precedence.
 
+In code, the manifest scope can also be supplied directly:
+`Database(storage_config={...})` (Julia: `storage_config=Dict(...)`) injects a
+`[_STORAGE]`-shaped dict as the manifest layer — how an in-memory database
+with no manifest file names its
+[cache bundle](api.md#library-cache-bundles-database-scoped-caching).
+
 ## How a value is resolved
 
 For a variable `name`, the first match wins, top to bottom:

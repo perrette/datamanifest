@@ -30,7 +30,8 @@ Database(;
     persist::Bool=true,
     skip_checksum::Bool=false,
     skip_checksum_folders::Bool=false,
-    datasets::Dict{String, DatasetEntry}=Dict{String, DatasetEntry}()
+    datasets::Dict{String, DatasetEntry}=Dict{String, DatasetEntry}(),
+    storage_config::Union{Nothing,AbstractDict}=nothing
 ) -> Database
 
 Database(datasets_toml::String, datasets_folder::String=""; kwargs...) -> Database
@@ -50,6 +51,11 @@ manifest.
 - If the TOML file exists, datasets are loaded from it.
 - The configuration (storage fields, environment, host) is frozen at
   construction; see [`freeze_config!`](#freeze_config) to re-read it.
+- An **in-memory** database (`persist=false`: nothing is ever written back to
+  a manifest, and `db.datasets_toml == ""`) keeps its state-file inventories
+  under the storage roots it describes — the datasets folder for fetched
+  datasets, the resolved `datacache_dir` for produced artifacts — never under
+  the caller's project or working directory.
 
 **Arguments:**
 - `datasets_toml::String`: Path to the TOML file for persistence.
@@ -58,6 +64,13 @@ manifest.
 - `skip_checksum::Bool`: Skip checksum verification.
 - `skip_checksum_folders::Bool`: Skip checksum verification for folders.
 - `datasets::Dict{String, DatasetEntry}`: Initial datasets.
+- `storage_config`: an optional `Dict` setting the manifest-layer `[_STORAGE]`
+  table directly — the way to name an in-memory database's cache bundle, e.g.
+  `Database(datasets_folder=..., persist=false, storage_config=Dict("project" => "mylib"))`
+  puts produced artifacts under `…/projects/mylib/cached`. It overrides a
+  `[_STORAGE]` table read from `datasets_toml`, sits below the checkout config
+  and `DATAMANIFEST_*` environment variables, and is never written back to the
+  manifest. See the `db=` option of [`@cached`](#caching-the-cached-macro).
 
 **Returns:**
 A `Database` object.
@@ -587,7 +600,7 @@ Storage.ConfigSnapshot
 ## Caching: the `@cached` macro
 
 ```
-@cached key=(args -> (; …)) [cachetype="…"] [version="…"] [ext="jls"] [basename="data"] function fn(; kw…) … end
+@cached key=(args -> (; …)) [cachetype="…"] [version="…"] [ext="jls"] [basename="data"] [db=DB] function fn(; kw…) … end
 ```
 
 Wrap a **keyword-only** function with produce-or-load disk caching: the result
@@ -602,7 +615,7 @@ tools, so caches are shared across languages. Key-table values may be strings,
 integers, booleans, finite floats, and arrays/objects of those; `NaN`, `±Inf`,
 and nulls (`nothing`/`missing`) raise an error.
 
-**Macro options** (all literals except `key`):
+**Macro options** (all literals except `key` and `db`):
 
 - `key` (required): a function receiving the call's keyword arguments as a
   NamedTuple (every declared keyword except `_`-prefixed runtime knobs) and
@@ -621,6 +634,23 @@ and nulls (`nothing`/`missing`) raise an error.
   `DataManifest.Cache.register_format!(ext, save, load)` where `save(data,
   path)` writes and `load(path)` reads.
 - `basename` (default `"data"`): the artifact's file name (`<basename>.<ext>`).
+- `db` (optional): an expression whose value is a `Database`, evaluated in the
+  caller's scope at **call** time (so a `const LIBDB = Database(...)` defined
+  after the `@cached` function works). The entire cache context then derives
+  from the database's frozen configuration: artifacts land under *its*
+  `datacache_dir` (keyed with *its* `$project`), locks use *its*
+  `lock_stale_age`, and the produced variation registers in *its* state file.
+  An in-memory database (`persist=false`) keeps that inventory under the
+  resolved datacache root itself
+  (`<datacache_dir>/.datamanifest/state.toml`) — the caller's project / cwd
+  never gains a `.datamanifest/` from it. See the
+  [`Database`](#database) `storage_config` argument for naming the bundle.
+
+Without `db=`, the bare form resolves over the **default database** when a
+manifest is discoverable (environment override or active project) — which
+anchors at the same project, so behavior there is unchanged — and falls back
+to the ambient derivation when none is, so caching keeps working in
+manifest-less projects.
 
 **Per-call behaviour and special keyword arguments.** The macro injects a
 `cached::Bool=true` keyword: pass `cached=false` to run the body directly,
@@ -642,11 +672,12 @@ arguments with these names, they get extra meaning:
 
 ## State file
 
-The state file (`.datamanifest/state.toml`, next to the manifest) records
-where each fetched dataset and produced artifact landed on *this* machine. It
-is maintained automatically by `download_dataset` and `@cached`; the following
-exported helpers read and write it directly (e.g. for custom maintenance
-tooling).
+The state file (`.datamanifest/state.toml`, next to the manifest; for an
+in-memory database, under its storage roots — see [`Database`](#database))
+records where each fetched dataset and produced artifact landed on *this*
+machine. It is maintained automatically by `download_dataset` and `@cached`;
+the following exported helpers read and write it directly (e.g. for custom
+maintenance tooling).
 
 ### `CachedIndex`
 

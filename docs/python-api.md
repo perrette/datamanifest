@@ -110,7 +110,8 @@ no manifest can be found. See [Configuration](configuration.md).
 
 ```python
 Database(datasets_toml="", datasets_folder="", persist=True,
-         skip_checksum=False, skip_checksum_folders=False, datasets=None)
+         skip_checksum=False, skip_checksum_folders=False, datasets=None,
+         storage_config=None)
 ```
 
 The in-memory registry of dataset entries, tied to a manifest file.
@@ -128,6 +129,14 @@ The in-memory registry of dataset entries, tied to a manifest file.
 - `skip_checksum` / `skip_checksum_folders` — disable checksum verification
   globally / for directory datasets.
 - `datasets` — an initial `{name: DatasetEntry}` mapping.
+- `storage_config` — an optional `[_STORAGE]`-shaped dict applied as the
+  manifest layer of the database's [scoped configuration](configuration.md):
+  its keys (`project`, `datacache_dir`, `datasets_dir`, `lock_stale_age`, …)
+  override the manifest's own `[_STORAGE]` values but sit below the checkout
+  config and the `DATAMANIFEST_*` environment variables. Runtime-only — never
+  written back to the manifest. The main use is an in-memory library database
+  naming its [cache bundle](api.md#library-cache-bundles-database-scoped-caching):
+  `Database(persist=False, storage_config={"project": "mylib"})`.
 
 Useful methods beyond the everyday functions above:
 
@@ -216,3 +225,35 @@ Main options:
 The decorated function gains two per-call escape hatches: `cached=False`
 (force a recompute) and `cache_dir="..."` (explicit cache directory for this
 call).
+
+The module-level form resolves its cache context over the
+[default database](#resolve_db-get_default_database) when a manifest is
+discoverable (which anchors at the same project, so paths are unchanged), and
+falls back to the ambient working-directory derivation when none is — caching
+works in projects without a manifest.
+
+### `Database.cached`
+
+```python
+@db.cached(cachetype=None, format=None, key=None, basename="", version="",
+           storage_path="", cached_toml="", name="")
+```
+
+The same produce-or-load decorator, bound to a specific
+[`Database`](#the-database-class): the cache context comes from the
+database's frozen configuration instead of the working directory — artifacts
+land under *its* `datacache_dir` (keyed by *its* `project`), locks use *its*
+`lock_stale_age`, and produced artifacts register in *its* state file (for an
+in-memory database, under the `datacache_dir` root itself). The context is
+read at call time. Accepts the same options as `datamanifest.cache.cached`
+except `project_root` / `storage_config` / `context` — those are exactly what
+the database supplies. See
+[library cache bundles](api.md#library-cache-bundles-database-scoped-caching).
+
+Advanced, for code building its own context instead of a `Database`:
+`datamanifest.cache.CacheContext(project_root="", storage_config=None,
+state_file="")` is the plain value a `Database` hands down into the cache
+layer (pass it, or a zero-arg callable returning one, as `cached(...,
+context=)`); `datamanifest.cache.set_default_context_provider(provider)`
+registers the callable the bare form uses to resolve the default database's
+context (installed by the fetch layer at import time).

@@ -91,6 +91,71 @@ lands under [`datacache_dir`](storage.md) (default:
 alongside your datasets. The [design notes](https://github.com/perrette/datamanifest/blob/main/design/design-notes.md) cover how an
 artifact's identity (`cachetype`, `version`, parameter hash) is derived.
 
+### Library cache bundles (database-scoped caching)
+
+A library that ships `@cached` functions should not write into whatever
+project happens to call it. Binding the cache to a `Database` gives the
+library its own cache bundle — its own cache folder, name, and bookkeeping —
+without touching the host project's folders or state:
+
+=== "Python"
+
+    ```python
+    # mylib/_data.py
+    from datamanifest import Database
+
+    _DB = Database(datasets_folder="$user_data_dir/mylib",  # fetched bytes
+                   storage_config={"project": "mylib"},     # names the cache bundle
+                   persist=False)
+
+    @_DB.cached(key=["grid"])
+    def landmask(*, grid):
+        ...
+    ```
+
+=== "Julia"
+
+    ```julia
+    # MyLib.jl
+    using DataManifest
+
+    const LIBDB = Database(datasets_folder=raw"$user_data_dir/mylib",
+                           storage_config=Dict("project" => "mylib"),
+                           persist=false)
+
+    @cached key=(a -> (; a.grid)) db=LIBDB function landmask(; grid::String)
+        ...
+    end
+    ```
+
+    The `db=` option takes any expression evaluating to a `Database`,
+    evaluated at **call** time — so the database may be defined after the
+    `@cached` function.
+
+`storage_config` supplies the `[_STORAGE]`-shaped
+[configuration](configuration.md) a manifest would normally carry — here
+`project = "mylib"` names the bundle, so produced artifacts land under
+`…/projects/mylib/cached` — and the whole cache context (`datacache_dir`,
+`$project`, `lock_stale_age`, the state file) comes from the database's
+frozen configuration instead of the working directory.
+
+An **in-memory** database (`persist=False`) never creates a `.datamanifest/`
+outside its own storage roots: the fetched-dataset inventory lives under the
+datasets folder and the produced-artifact inventory under the resolved
+`datacache_dir` (`<root>/.datamanifest/state.toml` in each), so the caller's
+project and working directory stay clean.
+
+The bare forms — Python's module-level `cached`, Julia's `@cached` without
+`db=` — resolve over the **default database** when a manifest is discoverable,
+which anchors at the same project as before, so behavior in a normal project
+is unchanged; when no manifest is discoverable they fall back to the ambient
+derivation, so caching keeps working in projects without a manifest.
+
+Collision and identity checks are per database (one project's inventory). Two
+databases share artifacts exactly when they resolve the same `datacache_dir`;
+the tools make no cross-project claims about caches that happen to share a
+directory.
+
 ## The `Database` object, and the module-level shortcuts
 
 The recommended style is to load the database once and call its methods:
@@ -163,9 +228,10 @@ cover the rationale.
 
 For library code that wants checksummed downloads into a folder it controls —
 an OS-appropriate data dir, say — a **file-less database** skips the manifest
-entirely: no `datamanifest.toml`, no state file, nothing written but the data.
-The folder accepts the same `$`-symbols as the [storage model](storage.md), and
-the database's methods do everything the module-level functions do:
+entirely: no `datamanifest.toml`, and nothing written outside the folders the
+database owns (its inventory lives under the data folder itself). The folder
+accepts the same `$`-symbols as the [storage model](storage.md), and the
+database's methods do everything the module-level functions do:
 
 === "Python"
 
@@ -187,3 +253,6 @@ the database's methods do everything the module-level functions do:
     add(db, "https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv"; name="co2")
     path = get_dataset_path(db, "co2")  # → ~/.local/share/mylib/gml.noaa.gov/…/co2_annmean_mlo.csv
     ```
+
+To give such a library its own `@cached` bundle as well, see
+[library cache bundles](#library-cache-bundles-database-scoped-caching).
