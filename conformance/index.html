@@ -1188,10 +1188,10 @@ this Python implementation supports, and which version of the shared format it t
 </table>
 <h2 id="conformance-tests-and-the-pinned-spec-version">Conformance tests and the pinned spec version<a class="headerlink" href="#conformance-tests-and-the-pinned-spec-version" title="Permanent link">&para;</a></h2>
 <p>The conformance claim is anchored in <code>tests/conformance_pin.toml</code>, which pins a
-tag of the shared specification repository (currently <code>spec-v1.1</code>) and records
-a SHA-256 hash for every fixture file of that tag. The pin may lag the latest
-spec tag — it is advanced deliberately, when this implementation is verified
-against the newer fixtures, not automatically on every spec release.</p>
+tag of the shared specification repository (currently <code>spec-v5.6</code>) and records
+a SHA-256 hash for every fixture file of that tag. The pin is advanced
+deliberately, when this implementation is verified against the newer fixtures,
+not automatically on every spec release.</p>
 <p><code>tests/test_conformance.py</code> downloads the pinned fixture tarball, verifies every
 file against its recorded hash, and runs only the fixtures whose declared
 capabilities are a subset of those implemented above, skipping the rest with a
