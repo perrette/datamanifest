@@ -53,8 +53,6 @@
       
     
     
-      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
-    
     <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -405,10 +403,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#optional-loader-backends-python" class="md-nav__link">
+  <a href="#the-command-line-client" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Optional loader backends (Python)
+        The command-line client
       
     </span>
   </a>
@@ -416,10 +414,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#requirements" class="md-nav__link">
+  <a href="#python-library" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Requirements
+        Python library
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#julia-package" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Julia package
       
     </span>
   </a>
@@ -889,6 +898,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../julia-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Julia API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1038,10 +1075,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#optional-loader-backends-python" class="md-nav__link">
+  <a href="#the-command-line-client" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Optional loader backends (Python)
+        The command-line client
       
     </span>
   </a>
@@ -1049,10 +1086,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#requirements" class="md-nav__link">
+  <a href="#python-library" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Requirements
+        Python library
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#julia-package" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Julia package
       
     </span>
   </a>
@@ -1091,17 +1139,12 @@ Julia support is the separate package
 <div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">CLI</label><label for="__tabbed_1_2">Python</label><label for="__tabbed_1_3">Julia</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pipx<span class="w"> </span>install<span class="w"> </span>datamanifestpy<span class="w">   </span><span class="c1"># the `datamanifest` command, in its own environment</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># or</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>pip<span class="w"> </span>install<span class="w"> </span>datamanifestpy
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pipx<span class="w"> </span>install<span class="w"> </span>datamanifestpy
 </code></pre></div>
-<p><code>pipx</code> keeps the command isolated from your project environments; <code>pip</code>
-installs the CLI and the Python library into the current environment.</p>
 </div>
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pip<span class="w"> </span>install<span class="w"> </span>datamanifestpy
 </code></pre></div>
-<p>This also puts the <code>datamanifest</code> command on your path.</p>
 </div>
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">using</span><span class="w"> </span><span class="n">Pkg</span>
@@ -1110,29 +1153,48 @@ installs the CLI and the Python library into the current environment.</p>
 </div>
 </div>
 </div>
-<h2 id="optional-loader-backends-python">Optional loader backends (Python)<a class="headerlink" href="#optional-loader-backends-python" title="Permanent link">&para;</a></h2>
-<p>The core package fetches, verifies, extracts and tracks your datasets and caches
-your computed results. The data <em>loaders</em> (turning a file into a
+<p>The sections below cover each client in full.</p>
+<h2 id="the-command-line-client">The command-line client<a class="headerlink" href="#the-command-line-client" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pipx<span class="w"> </span>install<span class="w"> </span>datamanifestpy<span class="w">   </span><span class="c1"># the `datamanifest` command, in its own environment</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># or</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>pip<span class="w"> </span>install<span class="w"> </span>datamanifestpy
+</code></pre></div>
+<p><code>pipx</code> keeps the command isolated from your project environments; <code>pip</code>
+installs the CLI (and the Python library) into the current environment.</p>
+<p>Requirements: Python ≥ 3.10. The core dependencies (<code>httpx</code>, <code>tqdm</code>,
+<code>tomli_w</code>, <code>platformdirs</code>) install automatically. Nothing else is needed to
+fetch, verify, extract and track datasets from the shell — the optional
+extras below only matter when you load data from Python.</p>
+<h2 id="python-library">Python library<a class="headerlink" href="#python-library" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pip<span class="w"> </span>install<span class="w"> </span>datamanifestpy
+</code></pre></div>
+<p>This installs the library and also puts the <code>datamanifest</code> command on your
+path. Requirements: Python ≥ 3.10.</p>
+<p>The core package fetches, verifies, extracts and tracks your datasets and
+caches your computed results. The data <em>loaders</em> (turning a file into a
 <code>pandas</code>/<code>xarray</code>/… object) are optional, so you only install the backends you
 actually use:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;datamanifestpy[csv]&quot;</span><span class="w">       </span><span class="c1"># pandas CSV</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;datamanifestpy[parquet]&quot;</span><span class="w">   </span><span class="c1"># pandas + pyarrow</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;datamanifestpy[nc]&quot;</span><span class="w">        </span><span class="c1"># xarray + netcdf4</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;datamanifestpy[yaml]&quot;</span><span class="w">      </span><span class="c1"># pyyaml (intake / DVC import)</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;datamanifestpy[fsspec]&quot;</span><span class="w">    </span><span class="c1"># object-store access (s3://, gs://, …)</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;datamanifestpy[all]&quot;</span><span class="w">       </span><span class="c1"># all of the above</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;datamanifestpy[csv]&quot;</span><span class="w">       </span><span class="c1"># pandas CSV</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;datamanifestpy[parquet]&quot;</span><span class="w">   </span><span class="c1"># pandas + pyarrow</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;datamanifestpy[nc]&quot;</span><span class="w">        </span><span class="c1"># xarray + netcdf4</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;datamanifestpy[yaml]&quot;</span><span class="w">      </span><span class="c1"># pyyaml (intake / DVC import)</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;datamanifestpy[fsspec]&quot;</span><span class="w">    </span><span class="c1"># object-store access (s3://, gs://, …)</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;datamanifestpy[all]&quot;</span><span class="w">       </span><span class="c1"># all of the above</span>
 </code></pre></div>
 <p>Without an extra, <code>datamanifest</code> still downloads, verifies and tracks data and
-hands you the on-disk path — <code>load_dataset</code> only needs the matching backend for
-the format you ask it to load. In Julia, loaders are ordinary packages (e.g.
-<code>CSV.jl</code>) that you <code>Pkg.add</code> yourself and reference from the manifest — see
-<a href="../language-bindings/">language bindings</a>.</p>
-<h2 id="requirements">Requirements<a class="headerlink" href="#requirements" title="Permanent link">&para;</a></h2>
-<ul>
-<li>CLI and Python library: Python ≥ 3.10; core dependencies (<code>httpx</code>, <code>tqdm</code>,
-  <code>tomli_w</code>, <code>platformdirs</code>) install automatically.</li>
-<li>Julia package: Julia ≥ 1.10.</li>
-</ul>
+hands you the on-disk path — <code>load_dataset</code> only needs the matching backend
+for the format you ask it to load.</p>
+<h2 id="julia-package">Julia package<a class="headerlink" href="#julia-package" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">using</span><span class="w"> </span><span class="n">Pkg</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">Pkg</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s">&quot;DataManifest&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p>Requirements: Julia ≥ 1.10.</p>
+<p>In Julia, data loaders are ordinary packages (e.g. <code>CSV.jl</code>) that you
+<code>Pkg.add</code> yourself and reference from the manifest — see
+<a href="../language-bindings/">language bindings</a>. The
+<a href="../julia-api/">Julia API reference</a> is mirrored on this site; the full Julia
+documentation lives at
+<a href="https://awi-esc.github.io/DataManifest.jl/">awi-esc.github.io/DataManifest.jl</a>.</p>
 <p>Once installed, head to the <a href="../quickstart/">quickstart</a>.</p>
 
 

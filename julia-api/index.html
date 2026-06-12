@@ -1,0 +1,2109 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Declare and manage the datasets used in a scientific project — download, verify, cache, and share them">
+      
+      
+      
+        <link rel="canonical" href="https://perrette.github.io/datamanifest/julia-api/">
+      
+      
+        <link rel="prev" href="../python-api/">
+      
+      
+        <link rel="next" href="../conformance/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Julia API - datamanifest</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#api-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="datamanifest" class="md-header__button md-logo" aria-label="datamanifest" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            datamanifest
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Julia API
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/perrette/datamanifest" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    perrette/datamanifest
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="datamanifest" class="md-nav__button md-logo" aria-label="datamanifest" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    datamanifest
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/perrette/datamanifest" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    perrette/datamanifest
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adding-datasets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adding datasets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using it from code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../use-cases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use cases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../importing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importing from other tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../language-bindings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Language bindings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../related/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Related projects
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manifest-format/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Manifest format
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../python-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Julia API
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Julia API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#core" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#database" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Database
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#read_dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read_dataset
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#add" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        add
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#download_dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        download_dataset
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#download_datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        download_datasets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_dataset_path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_dataset_path
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#load_dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_dataset
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#delete_dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        delete_dataset
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#searching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Searching
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Searching">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#search_datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        search_datasets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#search_dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        search_dataset
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#registering-and-editing-entries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Registering and editing entries
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Registering and editing entries">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#register_dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        register_dataset
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#datasetentry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DatasetEntry
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#requires-datasetentry-field" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        requires (DatasetEntry field)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#write" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        write
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#freeze_config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        freeze_config!
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#storage-helpers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage helpers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#migration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Migration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#migrate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        migrate
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Development
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../conformance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conformance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#core" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#database" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Database
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#read_dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        read_dataset
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#add" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        add
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#download_dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        download_dataset
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#download_datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        download_datasets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get_dataset_path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        get_dataset_path
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#load_dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        load_dataset
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#delete_dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        delete_dataset
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#searching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Searching
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Searching">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#search_datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        search_datasets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#search_dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        search_dataset
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#registering-and-editing-entries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Registering and editing entries
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Registering and editing entries">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#register_dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        register_dataset
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#datasetentry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DatasetEntry
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#requires-datasetentry-field" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        requires (DatasetEntry field)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#write" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        write
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#freeze_config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        freeze_config!
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#storage-helpers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage helpers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#migration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Migration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#migrate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        migrate
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/perrette/datamanifest/edit/main/julia-api.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="api-reference">API reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h1>
+<!-- Generated by docs/_sync_julia_api.py — do not edit by hand. -->
+
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This page mirrors the DataManifest.jl API reference; the source of
+truth lives in the
+<a href="https://github.com/awi-esc/DataManifest.jl/blob/main/docs/api.md">DataManifest.jl repository</a>.
+It is regenerated from that repository on every deploy of this site.</p>
+</div>
+<p>This page lists the public functions and types with their signatures. The
+long-form walkthrough is in <a href="https://awi-esc.github.io/DataManifest.jl/doc/">doc.md</a>; the storage layout and
+configuration model in <a href="https://awi-esc.github.io/DataManifest.jl/storage/">storage.md</a>; produce-or-load caching in
+<a href="https://awi-esc.github.io/DataManifest.jl/caching/">caching.md</a>; loaders and fetchers in
+<a href="https://awi-esc.github.io/DataManifest.jl/language-bindings/">language-bindings.md</a>.</p>
+<p><strong>Default database:</strong> wherever the <code>db::Database</code> argument is shown in
+brackets, it may be omitted. The default database is then used, which requires
+an activated Julia project with a datasets TOML file that exists or can be
+inferred.</p>
+<h2 id="core">Core<a class="headerlink" href="#core" title="Permanent link">&para;</a></h2>
+<h3 id="database"><code>Database</code><a class="headerlink" href="#database" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Database(;
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    datasets_toml::String=&quot;&quot;,
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    datasets_folder::String=&quot;&quot;,
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    persist::Bool=true,
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    skip_checksum::Bool=false,
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    skip_checksum_folders::Bool=false,
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    datasets::Dict{String, DatasetEntry}=Dict{String, DatasetEntry}()
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>) -&gt; Database
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>Database(datasets_toml::String, datasets_folder::String=&quot;&quot;; kwargs...) -&gt; Database
+</code></pre></div>
+<p>Create a dataset database — the in-memory counterpart of a <code>datamanifest.toml</code>
+manifest.</p>
+<ul>
+<li>If <code>datasets_folder</code> is not provided, the fetched-datasets folder is resolved
+  via <code>Storage.datasets_dir</code> (default: the machine-global shared store,
+  <code>$user_data_dir/datamanifest/shared/datasets</code>). To override, set the
+  <code>datasets_dir</code> config field or the <code>DATAMANIFEST_DATASETS_DIR</code> environment
+  variable, or pass <code>datasets_folder=</code> explicitly. See <a href="https://awi-esc.github.io/DataManifest.jl/storage/">storage.md</a>
+  for the full resolution ladder.</li>
+<li>If <code>datasets_toml</code> is not provided and <code>persist</code> is <code>true</code>, a TOML file is
+  inferred from the project or environment.</li>
+<li>If the TOML file exists, datasets are loaded from it.</li>
+<li>The configuration (storage fields, environment, host) is frozen at
+  construction; see <a href="#freeze_config"><code>freeze_config!</code></a> to re-read it.</li>
+</ul>
+<p><strong>Arguments:</strong>
+- <code>datasets_toml::String</code>: Path to the TOML file for persistence.
+- <code>datasets_folder::String</code>: Path to the datasets folder.
+- <code>persist::Bool</code>: Whether to persist changes to disk.
+- <code>skip_checksum::Bool</code>: Skip checksum verification.
+- <code>skip_checksum_folders::Bool</code>: Skip checksum verification for folders.
+- <code>datasets::Dict{String, DatasetEntry}</code>: Initial datasets.</p>
+<p><strong>Returns:</strong>
+A <code>Database</code> object.</p>
+<hr />
+<h3 id="read_dataset"><code>read_dataset</code><a class="headerlink" href="#read_dataset" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>read_dataset(datasets_toml::String, datasets_folder::String=&quot;&quot;; kwargs...) -&gt; Database
+</code></pre></div>
+<p>Read a manifest TOML file into a <code>Database</code>. Equivalent to
+<code>Database(datasets_toml, datasets_folder; kwargs...)</code>; keyword arguments are
+the same as for <a href="#database"><code>Database</code></a>.</p>
+<hr />
+<h3 id="add"><code>add</code><a class="headerlink" href="#add" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>add([db::Database], uri::String=&quot;&quot;; skip_download::Bool=false, kwargs...) -&gt; Pair{String, DatasetEntry}
+</code></pre></div>
+<p>Add a dataset to the database and download it.</p>
+<p>This is a convenience function that calls
+<a href="#register_dataset"><code>register_dataset</code></a> to register the dataset, then
+<a href="#download_dataset"><code>download_dataset</code></a> unless <code>skip_download=true</code>. All other
+keyword arguments are passed to <code>register_dataset</code> — see there for the list.</p>
+<p><code>add_dataset</code> is an alias for <code>add</code>.</p>
+<p><strong>Returns:</strong>
+A pair <code>(name =&gt; entry)</code> where <code>entry</code> is the registered <code>DatasetEntry</code>.</p>
+<hr />
+<h3 id="download_dataset"><code>download_dataset</code><a class="headerlink" href="#download_dataset" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>download_dataset([db::Database], name::String; extract::Union{Nothing,Bool}=nothing, overwrite::Bool=false, kwargs...) -&gt; String
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>download_dataset([db::Database], entry::DatasetEntry; extract::Union{Nothing,Bool}=nothing, overwrite::Bool=false) -&gt; String
+</code></pre></div>
+<p>Download a dataset by name or entry, and return the local path.</p>
+<ul>
+<li>If the dataset is already present on disk, it is not downloaded again
+  (unless <code>overwrite=true</code>).</li>
+<li>If <code>overwrite=true</code>, skips existence checks and re-downloads (overwrites in
+  place; git and extracted dirs require removal first).</li>
+<li>If <code>extract=true</code>, the dataset is extracted after download (if applicable).</li>
+<li>Checksum verification is performed unless disabled (see <code>skip_checksum</code> on
+  the entry or the database).</li>
+<li>Datasets listed in the entry's <a href="#requires-datasetentry-field"><code>requires</code></a>
+  field are downloaded first.</li>
+</ul>
+<p><strong>Returns:</strong>
+The local path as a <code>String</code>.</p>
+<hr />
+<h3 id="download_datasets"><code>download_datasets</code><a class="headerlink" href="#download_datasets" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>download_datasets([db::Database], names::Union{Nothing,Vector{&lt;:Any}}=nothing; kwargs...) -&gt; Nothing
+</code></pre></div>
+<p>Download multiple datasets by name.</p>
+<ul>
+<li>If <code>names</code> is <code>nothing</code>, all datasets in the database are downloaded.</li>
+<li>Each dataset is downloaded using <a href="#download_dataset"><code>download_dataset</code></a>,
+  with the same keyword arguments.</li>
+<li>Datasets already present on disk are not downloaded again.</li>
+</ul>
+<p><strong>Returns:</strong>
+Nothing.</p>
+<hr />
+<h3 id="get_dataset_path"><code>get_dataset_path</code><a class="headerlink" href="#get_dataset_path" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>get_dataset_path([db::Database], name::String; extract::Union{Nothing,Bool}=nothing) -&gt; String
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>get_dataset_path([db::Database], entry::DatasetEntry; extract::Union{Nothing,Bool}=nothing) -&gt; String
+</code></pre></div>
+<p>Return the local path for a dataset, based on its <code>storage_path</code> (or the keyed
+default <code>$datasets_dir/$key</code>) — see <a href="https://awi-esc.github.io/DataManifest.jl/storage/">storage.md</a> for path
+resolution.</p>
+<ul>
+<li>You can provide either the dataset name or a <code>DatasetEntry</code> object.</li>
+<li>The <code>extract</code> keyword controls whether the path points to the extracted
+  folder (if applicable).</li>
+</ul>
+<p><strong>Returns:</strong>
+The local path as a <code>String</code>.</p>
+<hr />
+<h3 id="load_dataset"><code>load_dataset</code><a class="headerlink" href="#load_dataset" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>load_dataset([db::Database], name::String; loader=nothing, kwargs...)
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>load_dataset([db::Database], entry::DatasetEntry; loader=nothing, kwargs...)
+</code></pre></div>
+<p>Download a dataset if needed, then open it and return the loaded value.</p>
+<ul>
+<li><code>loader</code> may be a function <code>path -&gt; value</code>, the name of a loader defined in
+  the manifest, or a built-in format name (<code>csv</code>, <code>parquet</code>, <code>nc</code>, <code>dimstack</code>,
+  <code>md</code>, <code>txt</code>, <code>json</code>, <code>yaml</code>, <code>yml</code>, <code>toml</code>, <code>zip</code>, <code>tar</code>, <code>tar.gz</code>).</li>
+<li>When <code>loader</code> is not given, the loader is resolved from the manifest: the
+  dataset's own loader binding, then the manifest's per-format loaders, then
+  the built-in format default. See
+  <a href="https://awi-esc.github.io/DataManifest.jl/language-bindings/">language-bindings.md</a>.</li>
+<li>For a dataset with <code>lazy_access=true</code>, the URI is opened in place by the
+  loader (no download); a loader is required in that case.</li>
+</ul>
+<hr />
+<h3 id="delete_dataset"><code>delete_dataset</code><a class="headerlink" href="#delete_dataset" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>delete_dataset([db::Database], name::String; keep_cache::Bool=false, persist::Bool=true)
+</code></pre></div>
+<p>Remove a dataset from the database (and optionally from disk).</p>
+<ul>
+<li>Removes the entry from the manifest TOML (or the in-memory db).</li>
+<li>If <code>keep_cache=false</code> (default), also removes the dataset files/directories
+  from disk. For extracted datasets, removes both the archive and the
+  extracted directory.</li>
+<li>If <code>keep_cache=true</code>, keeps the dataset on disk but removes the entry from
+  the database.</li>
+<li>Datasets with <code>skip_download</code> or <code>lazy_access</code> set, and datasets with a
+  user-managed <code>storage_path</code> (an exact path without <code>$key</code>), are never
+  removed from disk.</li>
+</ul>
+<hr />
+<h2 id="searching">Searching<a class="headerlink" href="#searching" title="Permanent link">&para;</a></h2>
+<h3 id="search_datasets"><code>search_datasets</code><a class="headerlink" href="#search_datasets" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>search_datasets([db::Database], name::String; alt=true, partial=false) -&gt; Vector{Pair{String, DatasetEntry}}
+</code></pre></div>
+<p>Search for datasets in the database by name or alternative keys, returning all
+matches as a vector of <code>(name =&gt; entry)</code> pairs.</p>
+<p>The search is <strong>case-insensitive</strong> and proceeds in the following order:</p>
+<ol>
+<li><strong>Exact match on dataset name</strong> (the main key in the database).</li>
+<li><strong>Exact match on alternative keys</strong> (if <code>alt=true</code>):<ul>
+<li>Any value in the <code>aliases</code> field (alternative names).</li>
+<li>The <code>doi</code> field (if present).</li>
+<li>The <code>key</code> field (unique key for the dataset).</li>
+<li>The <code>path</code> field.</li>
+</ul>
+</li>
+<li><strong>Partial match on dataset name</strong> (if <code>partial=true</code>):
+   Checks if <code>name</code> is a substring of any dataset name.</li>
+<li><strong>Partial match on alternative keys</strong> (if <code>alt=true</code> and <code>partial=true</code>):
+   Checks if <code>name</code> is a substring of any value in the alternative keys listed
+   above.</li>
+</ol>
+<p>All matches found in the above order are returned.</p>
+<p><strong>Arguments:</strong>
+- <code>db::Database</code> (optional): The database to search in.
+- <code>name::String</code>: The name, alias, DOI, key, or path of the dataset.
+- <code>alt::Bool</code>: Whether to search alternative keys (default: <code>true</code>).
+- <code>partial::Bool</code>: Whether to allow partial (substring) matches (default: <code>false</code>).</p>
+<p><strong>Returns:</strong>
+A vector of <code>(name =&gt; entry)</code> pairs for all matching datasets.</p>
+<hr />
+<h3 id="search_dataset"><code>search_dataset</code><a class="headerlink" href="#search_dataset" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>search_dataset([db::Database], name::String; raise=true, alt=true, partial=false) -&gt; Tuple{String, DatasetEntry}
+</code></pre></div>
+<p>Search for a dataset by name or alternative keys in the database, returning the
+first match as a tuple <code>(name, entry)</code>.</p>
+<ul>
+<li>The search logic and field priority are the same as in
+  <a href="#search_datasets"><code>search_datasets</code></a>.</li>
+<li>If no match is found and <code>raise=true</code> (default), an error is thrown. If
+  <code>raise=false</code>, returns <code>nothing</code>.</li>
+<li>If multiple matches are found, an error is thrown (or a warning if
+  <code>raise=false</code>).</li>
+</ul>
+<p><strong>Returns:</strong>
+A tuple <code>(name, entry)</code> where <code>entry</code> is the found <code>DatasetEntry</code>.</p>
+<p><strong>Note:</strong>
+You can also access a dataset entry directly by name using indexing syntax:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">entry</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">db</span><span class="p">[</span><span class="s">&quot;dataset_name&quot;</span><span class="p">]</span>
+</code></pre></div>
+This is equivalent to <code>search_dataset(db, "dataset_name")[2]</code>.</p>
+<hr />
+<h2 id="registering-and-editing-entries">Registering and editing entries<a class="headerlink" href="#registering-and-editing-entries" title="Permanent link">&para;</a></h2>
+<h3 id="register_dataset"><code>register_dataset</code><a class="headerlink" href="#register_dataset" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>register_dataset([db::Database], uri::String=&quot;&quot;;
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>    name::String=&quot;&quot;,
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>    overwrite::Bool=false,
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>    persist::Bool=true,
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>    check_duplicate::Bool=true,
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>    kwargs...
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>) -&gt; Pair{String, DatasetEntry}
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>
+<a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>register_dataset([db::Database], uris::Vector{String}; ...) -&gt; Pair{String, DatasetEntry}
+</code></pre></div>
+<p>Register a dataset in the database, without downloading it.</p>
+<ul>
+<li>If <code>name</code> is not provided, it is inferred from the URI or dataset entry.</li>
+<li><code>uri</code> may be passed as a <code>Vector{String}</code> (equivalent to the <code>uris=</code> keyword)
+  to register a multi-file dataset; the key is auto-derived from the common
+  host + path prefix, or can be set explicitly via <code>key=</code>.</li>
+<li>The remaining keyword arguments set <a href="#datasetentry"><code>DatasetEntry</code></a> fields:
+  <code>version</code>, <code>branch</code>, <code>doi</code>, <code>aliases</code>, <code>key</code>, <code>checksum</code> (a legacy <code>sha256=</code>
+  hex value is also accepted), <code>skip_checksum</code>, <code>skip_download</code>, <code>extract</code>,
+  <code>format</code>, <code>storage_path</code>, and so on.</li>
+<li>Duplicate entries are checked by default; set <code>check_duplicate=false</code> to
+  disable.</li>
+<li>If an entry with the same name or key exists, it is updated or overwritten
+  according to the <code>overwrite</code> flag.</li>
+</ul>
+<p><strong>Returns:</strong>
+A pair <code>(name =&gt; entry)</code> where <code>entry</code> is the registered <code>DatasetEntry</code>.</p>
+<hr />
+<h3 id="datasetentry"><code>DatasetEntry</code><a class="headerlink" href="#datasetentry" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>struct DatasetEntry
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>    uri::String = &quot;&quot;
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>    uris::Vector{String} = []     # Multi-file dataset: several URIs under one key
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>    version::String = &quot;&quot;
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>    branch::String = &quot;&quot;           # For git repositories
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>    doi::String = &quot;&quot;
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>    aliases::Vector{String} = []
+<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>    description::String = &quot;&quot;      # Free-text description
+<a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>    key::String = &quot;&quot;              # Unique key for the dataset, usually the DOI or a unique name
+<a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>    storage_path::String = &quot;&quot;     # Per-dataset path expression; empty = &quot;$datasets_dir/$key&quot;
+<a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a>    checksum::String = &quot;&quot;         # Expected content digest, &quot;&lt;algo&gt;:&lt;hex&gt;&quot;
+<a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a>    skip_checksum::Bool = false   # Skip checksum checks for this dataset
+<a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a>    skip_download::Bool = false   # Never download (user-managed or custom-fetched files)
+<a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a>    lazy_access::Bool = false     # Open the uri in place via a loader; no local copy
+<a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a>    extract::Bool = false         # Extract the dataset after downloading
+<a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a>    format::String = &quot;&quot;           # File format (e.g., &quot;zip&quot;, &quot;tar&quot;)
+<a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a>    shell::String = &quot;&quot;            # Run this shell command instead of the built-in download
+<a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a>    julia::String = &quot;&quot;            # Run this Julia code instead (takes precedence over shell)
+<a id="__codelineno-12-19" name="__codelineno-12-19" href="#__codelineno-12-19"></a>    julia_modules::Vector{String} = []
+<a id="__codelineno-12-20" name="__codelineno-12-20" href="#__codelineno-12-20"></a>    loader::String = &quot;&quot;           # Per-dataset loader (Julia shorthand)
+<a id="__codelineno-12-21" name="__codelineno-12-21" href="#__codelineno-12-21"></a>    requires::Vector{String} = [] # Datasets that must be present first
+<a id="__codelineno-12-22" name="__codelineno-12-22" href="#__codelineno-12-22"></a>    # Julia bindings, parsed from [&lt;ds&gt;._LANG.julia] (see language-bindings.md):
+<a id="__codelineno-12-23" name="__codelineno-12-23" href="#__codelineno-12-23"></a>    lang_julia_fetcher::String = &quot;&quot;
+<a id="__codelineno-12-24" name="__codelineno-12-24" href="#__codelineno-12-24"></a>    lang_julia_fetcher_args::Vector{Any} = []
+<a id="__codelineno-12-25" name="__codelineno-12-25" href="#__codelineno-12-25"></a>    lang_julia_fetcher_kwargs::Dict{String,Any} = Dict()
+<a id="__codelineno-12-26" name="__codelineno-12-26" href="#__codelineno-12-26"></a>    lang_julia_loader::String = &quot;&quot;
+<a id="__codelineno-12-27" name="__codelineno-12-27" href="#__codelineno-12-27"></a>    lang_julia_loader_args::Vector{Any} = []
+<a id="__codelineno-12-28" name="__codelineno-12-28" href="#__codelineno-12-28"></a>    lang_julia_loader_kwargs::Dict{String,Any} = Dict()
+<a id="__codelineno-12-29" name="__codelineno-12-29" href="#__codelineno-12-29"></a>    extra::Dict{String,Any} = Dict()  # Unknown keys, preserved verbatim for round-trip
+<a id="__codelineno-12-30" name="__codelineno-12-30" href="#__codelineno-12-30"></a>end
+</code></pre></div>
+<p>A <code>DatasetEntry</code> holds metadata and configuration for a dataset.
+It is initialized via the <code>add</code> method (and internally, <code>register_dataset</code> and
+<code>init_dataset_entry</code>).</p>
+<p><strong>Fields:</strong>
+- <code>uri::String</code>: The dataset URI (required, unless the dataset is produced by a
+  fetcher or is user-managed).
+- <code>uris::Vector{String}</code>: URIs of a multi-file dataset, stored under one key.
+- <code>version::String</code>: Version or tag for the dataset.
+- <code>branch::String</code>: Branch for git repositories.
+- <code>doi::String</code>: DOI for the dataset.
+- <code>aliases::Vector{String}</code>: Alternative names for the dataset.
+- <code>description::String</code>: Free-text description.
+- <code>key::String</code>: Unique key for the dataset.
+- <code>storage_path::String</code>: A path expression for where this dataset lives,
+  defaulting to <code>$datasets_dir/$key</code>. A value containing <code>$key</code> is a
+  tool-managed keyed location; an exact path without <code>$key</code> is a user-managed
+  location used verbatim (maintenance never touches it, and a relative path
+  resolves against the project root). The expression may interpolate
+  <code>$</code>-symbols, environment variables, and <code>~</code> — see <a href="https://awi-esc.github.io/DataManifest.jl/storage/">storage.md</a>.
+- <code>checksum::String</code>: Expected content digest as <code>&lt;algo&gt;:&lt;hex&gt;</code> (e.g.
+  <code>sha256:…</code>, <code>md5:…</code>); a bare hex value is read as sha256, and the legacy
+  <code>sha256</code> key is still accepted. Empty means the checksum is computed on
+  first download. Used for fetch-time verification and change detection.
+- <code>skip_checksum::Bool</code>: Skip checksum verification for this dataset.
+- <code>skip_download::Bool</code>: Skip downloading this dataset — for files that must
+  never be fetched, or entries materialized by custom <code>shell</code>/<code>julia</code> code
+  that does not need a download step. For pointing at a user-managed local
+  file, prefer an exact <code>storage_path</code>.
+- <code>lazy_access::Bool</code>: Open the <code>uri</code> in place via a loader (typically a
+  remote object store) instead of materializing a local copy — no download, no
+  checksum. Requires a loader. See
+  <a href="https://awi-esc.github.io/DataManifest.jl/language-bindings/">language-bindings.md</a>.
+- <code>extract::Bool</code>: Extract the dataset after download.
+- <code>format::String</code>: File format (e.g., "zip", "tar").
+- <code>shell::String</code>: When set, run this shell command instead of the built-in
+  download. Template placeholders: <code>$download_path</code>, <code>$project_root</code>, <code>$uri</code>,
+  <code>$key</code>, <code>$version</code>, <code>$doi</code>, <code>$format</code>, <code>$branch</code>, plus <code>$requires_paths</code> and
+  <code>$path_&lt;n&gt;</code> for <a href="#requires-datasetentry-field">dependencies</a>. The command
+  runs with working directory = project root when available.
+- <code>julia::String</code>: When set, run this Julia code in an isolated module (takes
+  precedence over <code>shell</code>). Use <code>julia_modules</code> to load modules before the
+  code. The code sees <code>download_path</code>, <code>project_root</code>, <code>entry</code>, <code>uri</code>, <code>key</code>,
+  <code>version</code>, <code>doi</code>, <code>format</code>, <code>branch</code>, and <code>requires</code> (same names as the
+  shell template placeholders).
+- <code>julia_modules::Vector{String}</code>: Module names for <code>using X</code> before running
+  <code>julia</code>.
+- <code>loader::String</code>: Per-dataset loader — a name, a <code>module:function</code> ref, or
+  inline code. Shorthand for the Julia binding in
+  <a href="https://awi-esc.github.io/DataManifest.jl/language-bindings/">language-bindings.md</a>.
+- <code>requires::Vector{String}</code>: Datasets that must be present before this one;
+  see <a href="#requires-datasetentry-field">below</a>.
+- <code>lang_julia_*</code>: Julia fetcher/loader bindings parsed from
+  <code>[&lt;ds&gt;._LANG.julia]</code>, with optional <code>args</code>/<code>kwargs</code> payloads for
+  parameterized bindings — see <a href="https://awi-esc.github.io/DataManifest.jl/language-bindings/">language-bindings.md</a>.
+- <code>extra::Dict{String,Any}</code>: Unknown per-dataset keys, kept verbatim so the
+  manifest round-trips losslessly.</p>
+<p><strong>Note:</strong>
+Fields such as <code>host</code>, <code>path</code>, and <code>scheme</code> are internal and not documented
+here.</p>
+<hr />
+<h3 id="requires-datasetentry-field"><code>requires</code> (DatasetEntry field)<a class="headerlink" href="#requires-datasetentry-field" title="Permanent link">&para;</a></h3>
+<p>The <code>requires</code> field specifies other datasets that must be present before this
+one. Each entry is resolved by name, DOI, or key via <code>search_dataset</code>. When
+downloading, dependencies are fetched first (in topological order). <code>overwrite</code>
+applies only to the main dataset, not to dependencies. Circular dependencies
+raise an error.</p>
+<p><strong>TOML example:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">[downstream]</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">uri</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://...&quot;</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="n">requires</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;upstream_dataset&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;10.1594/PANGAEA.123456&quot;</span><span class="p">]</span>
+</code></pre></div></p>
+<hr />
+<h3 id="write"><code>write</code><a class="headerlink" href="#write" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>write(db::Database, datasets_toml::String; canonical::Union{Bool,Nothing}=nothing)
+</code></pre></div>
+<p>Write the database to a manifest TOML file. Functions that modify the database
+call this automatically when <code>persist=true</code>; use it directly to write an
+in-memory database to disk.</p>
+<ul>
+<li>The output is sorted: structural <code>_*</code> tables first, then datasets, both
+  alphabetical.</li>
+<li><code>canonical=true</code> pipes the output through the Python <code>datamanifest format</code>
+  CLI for cross-tool byte-identical files; <code>canonical=false</code> forces native
+  TOML output. When the keyword is omitted (<code>nothing</code>), the <code>canonical</code> config
+  field decides (default <code>false</code>) — resolved on the ordinary ladder, see
+  <a href="#storage-helpers"><code>Storage.canonical_write</code></a> and the
+  <a href="https://awi-esc.github.io/DataManifest.jl/doc/#maintaining-the-manifest-file">write section in doc.md</a>. If the
+  CLI is not found, native TOML is written with a warning.</li>
+</ul>
+<hr />
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
+<h3 id="freeze_config"><code>freeze_config!</code><a class="headerlink" href="#freeze_config" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>freeze_config!(db::Database) -&gt; db
+</code></pre></div>
+<p>Re-read a Database's frozen configuration snapshot.</p>
+<p>Configuration (the checkout config <code>.datamanifest/config.toml</code>, the manifest's
+<code>[_STORAGE]</code>, the user-global config, the environment, and the host name) is
+captured <strong>once</strong>, when the Database is created, so every config variable has
+one well-defined value for the Database's lifetime. Call <code>freeze_config!(db)</code>
+to re-read the config files and environment for an existing Database — e.g.
+after editing a config file. See <a href="https://awi-esc.github.io/DataManifest.jl/storage/">storage.md</a> for the resolution
+ladder.</p>
+<hr />
+<h3 id="storage-helpers">Storage helpers<a class="headerlink" href="#storage-helpers" title="Permanent link">&para;</a></h3>
+<p>The <code>Storage</code> submodule resolves storage paths and config fields. The main
+entry points (all take the optional keywords <code>storage_config=</code>, <code>env=ENV</code>,
+<code>host=gethostname()</code>, and where relevant <code>project_root=</code>; see
+<a href="https://awi-esc.github.io/DataManifest.jl/storage/">storage.md</a> for the resolution ladder):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>Storage.datasets_dir(; ...) -&gt; String
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>Storage.datacache_dir(; ...) -&gt; String
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>Storage.dataset_storage_path(storage_path, key; ...) -&gt; String
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>Storage.canonical_write(; ...) -&gt; Bool
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>Storage.lock_stale_age(; ...) -&gt; Float64
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>Storage.ConfigSnapshot
+</code></pre></div>
+<ul>
+<li><code>datasets_dir</code>: The resolved fetched-datasets folder (default
+  <code>$user_data_dir/datamanifest/shared/datasets</code>). Overridable by
+  <code>DATAMANIFEST_DATASETS_DIR</code> or the <code>datasets_dir</code> config field.</li>
+<li><code>datacache_dir</code>: The resolved produced-cache folder (default
+  <code>$user_cache_dir/datamanifest/projects/$project/cached</code>). Overridable by
+  <code>DATAMANIFEST_DATACACHE_DIR</code> or the <code>datacache_dir</code> config field. See
+  <a href="https://awi-esc.github.io/DataManifest.jl/caching/">caching.md</a>.</li>
+<li><code>dataset_storage_path(storage_path, key; ...)</code>: Resolve a dataset's on-disk
+  path from its <code>storage_path</code> field (empty means <code>$datasets_dir/$key</code>).</li>
+<li><code>canonical_write</code>: The <code>canonical</code> manifest-write directive (default
+  <code>false</code>) — whether persisted manifests are piped through the Python
+  <code>datamanifest format</code> CLI for byte-identical output. Resolved from
+  <code>DATAMANIFEST_CANONICAL</code> or the <code>canonical</code> config field; truthy strings are
+  <code>"1"</code>/<code>"true"</code>/<code>"yes"</code>/<code>"on"</code> (case-insensitive).</li>
+<li><code>lock_stale_age</code>: The age in seconds (default 30) after which another
+  process's materialization lock is considered stale and may be broken.
+  Resolved from <code>DATAMANIFEST_LOCK_STALE_AGE</code> or the <code>lock_stale_age</code> config
+  field; non-positive or unparsable values fall back to the default.</li>
+<li><code>ConfigSnapshot</code>: A frozen configuration — the file-backed config layers
+  together with the environment and host they are resolved against, captured
+  at Database creation (see <a href="#freeze_config"><code>freeze_config!</code></a>). Accepted
+  anywhere <code>storage_config</code> is, making every lookup deterministic for the
+  snapshot's lifetime.</li>
+</ul>
+<hr />
+<h2 id="migration">Migration<a class="headerlink" href="#migration" title="Permanent link">&para;</a></h2>
+<h3 id="migrate"><code>migrate</code><a class="headerlink" href="#migrate" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>migrate(path::String) -&gt; Nothing
+</code></pre></div>
+<p>Rewrite a v0 manifest at <code>path</code> to schema v1 format, in-place.</p>
+<ul>
+<li>Reads the TOML, detects the schema version, and exits early if the file is
+  already v1 (<code>_META.schema ≥ 1</code>).</li>
+<li>Moves <code>[_LOADERS]</code> entries that are <code>module:function</code> refs into
+  <code>[_LANG.julia.loaders]</code> (format → ref map).</li>
+<li>Moves per-dataset <code>julia=</code> / <code>loader=</code> fields that are refs into
+  <code>[&lt;ds&gt;._LANG.julia]</code> (<code>fetcher</code> / <code>loader</code>).</li>
+<li>Inline code that cannot be expressed as a ref is preserved verbatim with a
+  log note — it is the user's responsibility to extract it into a module
+  function.</li>
+<li>Sets <code>[_META].schema = 1</code> in the rewritten file.</li>
+<li>Foreign keys and non-Julia <code>_LANG</code> subtrees are never modified.</li>
+<li>The call is idempotent: running <code>migrate</code> on an already-v1 file is a no-op.</li>
+</ul>
+<p><strong>Returns:</strong>
+Nothing.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.tabs.link", "content.action.edit"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

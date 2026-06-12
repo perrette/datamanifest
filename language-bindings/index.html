@@ -53,8 +53,6 @@
       
     
     
-      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
-    
     <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -933,6 +931,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../julia-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Julia API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1333,7 +1359,7 @@ shared store what the peer wrote there.</p>
 <p>Python materializes a dataset whose only fetcher is
 <code>[&lt;ds&gt;._LANG.julia].fetcher</code> by invoking the local Julia <code>DataManifest</code>
 environment directly —
-<code>julia --project=&lt;env&gt; -e 'using DataManifest; download_dataset(Database("&lt;datasets.toml&gt;"), "&lt;name&gt;")'</code>.
+<code>julia --project=&lt;env&gt; -e 'using DataManifest; download_dataset(Database("&lt;manifest path&gt;"), "&lt;name&gt;")'</code>.
 The Julia environment is discovered at <code>$JULIA_PROJECT</code>, else by walking
 up from the manifest directory for a <code>Project.toml</code> whose <code>[deps]</code> lists
 <code>DataManifest</code>; the rung also requires <code>julia</code> on <code>PATH</code>. When the

@@ -53,8 +53,6 @@
       
     
     
-      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
-    
     <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -1122,6 +1120,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../julia-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Julia API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1575,7 +1601,7 @@ all follow from that entry.</p>
 <div class="tabbed-block">
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">using</span><span class="w"> </span><span class="n">DataManifest</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">db</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Database</span><span class="p">(</span><span class="s">&quot;datamanifest.toml&quot;</span><span class="p">)</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">db</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">read_dataset</span><span class="p">(</span><span class="s">&quot;datamanifest.toml&quot;</span><span class="p">)</span>
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">add</span><span class="p">(</span><span class="n">db</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv&quot;</span><span class="p">;</span><span class="w"> </span><span class="n">name</span><span class="o">=</span><span class="s">&quot;co2&quot;</span><span class="p">)</span>
 </code></pre></div>
 </div>
@@ -1587,12 +1613,10 @@ all follow from that entry.</p>
 </div>
 </div>
 </div>
-<p>When the download happens differs slightly per client: the CLI downloads right
-away (pass <code>--no-download</code> to only declare), Julia's <code>add</code> does too (pass
-<code>skip_download=true</code>), while Python's <code>db.add</code> only writes the entry — the
-download happens on first use (<code>db.load_dataset</code> / <code>db.download_dataset</code>).
-Without an explicit <code>db</code>, the module-level <code>datamanifest.add(...)</code> /
-<code>DataManifest.add(...)</code> write to the default database.</p>
+<p>In every client, <code>add</code> writes the entry and downloads right away. Pass
+<code>--no-download</code> (CLI), <code>skip_download=True</code> (Python) or <code>skip_download=true</code>
+(Julia) to only declare it — the download then happens on first use
+(<code>load_dataset</code> / <code>download_dataset</code>) or with <code>datamanifest download</code>.</p>
 <p>The <code>checksum</code> carries its algorithm. A digest published by the source (an md5
 from a Zenodo or PANGAEA file listing, a pooch registry, a DVC file) is
 recorded as <code>checksum = "md5:…"</code> and verified in md5 — never re-hashed to
@@ -1621,7 +1645,7 @@ direct file URL it leads to.</p>
 the core HTTP downloader:</p>
 <ul>
 <li><strong>Python / CLI</strong> can fetch them through <a href="https://filesystem-spec.readthedocs.io/">fsspec</a>,
-  an <em>optional</em> dependency (<code>pip install 'datamanifest[fsspec]'</code> plus the
+  an <em>optional</em> dependency (<code>pip install 'datamanifestpy[fsspec]'</code> plus the
   scheme's backend, e.g. <code>s3fs</code> / <code>gcsfs</code> / <code>adlfs</code>). A single object or a
   whole prefix (e.g. a zarr store) is mirrored, then verified by sha256 like
   any download. Credentials follow fsspec's normal resolution (environment
@@ -1848,7 +1872,7 @@ for entries without one), <code>--dry-run</code>, and <code>--overwrite</code>.<
 URL becomes a dataset (<code>uri = urlpath</code>). intake catalogs carry no checksums,
 so <code>checksum</code> is computed (as <code>sha256:…</code>) on first download. Sources whose
 urlpath is a glob, a template, or a list are reported and skipped. Requires
-the <code>yaml</code> extra (<code>pip install 'datamanifest[yaml]'</code>).</p>
+the <code>yaml</code> extra (<code>pip install 'datamanifestpy[yaml]'</code>).</p>
 <h3 id="dvc">DVC<a class="headerlink" href="#dvc" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>datamanifest<span class="w"> </span>import<span class="w"> </span>dvc<span class="w"> </span>&lt;path-or-dir&gt;<span class="w"> </span><span class="o">[</span>--cache-dir<span class="w"> </span>.dvc/cache<span class="o">]</span>
 </code></pre></div>

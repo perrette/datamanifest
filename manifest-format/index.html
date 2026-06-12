@@ -53,8 +53,6 @@
       
     
     
-      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
-    
     <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -955,6 +953,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../julia-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Julia API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1223,8 +1249,9 @@ page is a practical reference for the Python implementation. The format itself
 is shared across languages and defined normatively in the
 <a href="https://perrette.github.io/datamanifest.toml"><code>datamanifest.toml</code> specification</a>;
 see <a href="../conformance/">Conformance</a> for which parts this implementation supports.</p>
-<p>The canonical filename is <code>datamanifest.toml</code>; <code>datasets.toml</code> and
-<code>Datasets.toml</code> are also recognized when walking up from the working directory.</p>
+<p>The canonical filename is <code>datamanifest.toml</code>; <code>DataManifest.toml</code>,
+<code>datasets.toml</code> and <code>Datasets.toml</code> are also recognized, in that order, when
+walking up from the working directory.</p>
 <h2 id="a-minimal-entry">A minimal entry<a class="headerlink" href="#a-minimal-entry" title="Permanent link">&para;</a></h2>
 <p>A manifest holds <strong>one table per dataset</strong>, keyed by the dataset name. The
 smallest useful entry is a source and a checksum:</p>

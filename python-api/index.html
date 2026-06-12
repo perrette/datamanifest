@@ -16,7 +16,7 @@
         <link rel="prev" href="../cli/">
       
       
-        <link rel="next" href="../conformance/">
+        <link rel="next" href="../julia-api/">
       
       
         
@@ -52,8 +52,6 @@
         <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
       
     
-    
-      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
     
     <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
@@ -859,29 +857,19 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#module-level-functions" class="md-nav__link">
+  <a href="#everyday-functions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Module-level functions
+        Everyday functions
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        datamanifest
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.add" class="md-nav__link">
+    <nav class="md-nav" aria-label="Everyday functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#add" class="md-nav__link">
     <span class="md-ellipsis">
       
         add
@@ -890,42 +878,9 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.register_dataset" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        register_dataset
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.download_dataset" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        download_dataset
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.download_datasets" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        download_datasets
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.load_dataset" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#load_dataset" class="md-nav__link">
     <span class="md-ellipsis">
       
         load_dataset
@@ -934,9 +889,9 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.get_dataset_path" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#get_dataset_path" class="md-nav__link">
     <span class="md-ellipsis">
       
         get_dataset_path
@@ -945,9 +900,31 @@
   </a>
   
 </li>
+        
+          <li class="md-nav__item">
+  <a href="#download_dataset-download_datasets" class="md-nav__link">
+    <span class="md-ellipsis">
       
-        <li class="md-nav__item">
-  <a href="#datamanifest.delete_dataset" class="md-nav__link">
+        download_dataset / download_datasets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#register_dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        register_dataset
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#delete_dataset" class="md-nav__link">
     <span class="md-ellipsis">
       
         delete_dataset
@@ -956,48 +933,37 @@
   </a>
   
 </li>
+        
+      </ul>
+    </nav>
+  
+</li>
       
         <li class="md-nav__item">
-  <a href="#datamanifest.resolve_db" class="md-nav__link">
+  <a href="#default-database-resolution" class="md-nav__link">
     <span class="md-ellipsis">
       
-        resolve_db
+        Default database resolution
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Default database resolution">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#resolve_db-get_default_database" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        resolve_db / get_default_database
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.get_default_database" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        get_default_database
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.validate_loader" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        validate_loader
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.validate_loaders" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        validate_loaders
-      
-    </span>
-  </a>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1013,117 +979,7 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#datamanifest.Database" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Database
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.Database.get_project_root" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        get_project_root
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.Database.add" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        add
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.Database.download_dataset" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        download_dataset
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.Database.download_datasets" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        download_datasets
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.Database.load_dataset" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        load_dataset
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.Database.get_dataset_path" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        get_dataset_path
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.Database.delete_dataset" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        delete_dataset
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.Database.register_loaders" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        register_loaders
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#dataset-entries" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Dataset entries
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.DatasetEntry" class="md-nav__link">
+  <a href="#datasetentry" class="md-nav__link">
     <span class="md-ellipsis">
       
         DatasetEntry
@@ -1134,10 +990,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#datamanifest.DatasetEntry.hash_algo" class="md-nav__link">
+  <a href="#loader-validation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        hash_algo
+        Loader validation
       
     </span>
   </a>
@@ -1145,55 +1001,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#datamanifest.DatasetEntry.hash_value" class="md-nav__link">
+  <a href="#caching-computed-results" class="md-nav__link">
     <span class="md-ellipsis">
       
-        hash_value
+        Caching computed results
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.DatasetEntry.sha256" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        sha256
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#caching" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Caching
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.cache.cached" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        cached
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="cached">
+    <nav class="md-nav" aria-label="Caching computed results">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#datamanifest.cache.cached--parameters" class="md-nav__link">
+  <a href="#datamanifestcachecached" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Parameters
+        datamanifest.cache.cached
       
     </span>
   </a>
@@ -1209,6 +1032,34 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../julia-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Julia API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -1363,29 +1214,19 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#module-level-functions" class="md-nav__link">
+  <a href="#everyday-functions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Module-level functions
+        Everyday functions
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        datamanifest
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.add" class="md-nav__link">
+    <nav class="md-nav" aria-label="Everyday functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#add" class="md-nav__link">
     <span class="md-ellipsis">
       
         add
@@ -1394,42 +1235,9 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.register_dataset" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        register_dataset
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.download_dataset" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        download_dataset
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.download_datasets" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        download_datasets
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.load_dataset" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#load_dataset" class="md-nav__link">
     <span class="md-ellipsis">
       
         load_dataset
@@ -1438,9 +1246,9 @@
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.get_dataset_path" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#get_dataset_path" class="md-nav__link">
     <span class="md-ellipsis">
       
         get_dataset_path
@@ -1449,9 +1257,31 @@
   </a>
   
 </li>
+        
+          <li class="md-nav__item">
+  <a href="#download_dataset-download_datasets" class="md-nav__link">
+    <span class="md-ellipsis">
       
-        <li class="md-nav__item">
-  <a href="#datamanifest.delete_dataset" class="md-nav__link">
+        download_dataset / download_datasets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#register_dataset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        register_dataset
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#delete_dataset" class="md-nav__link">
     <span class="md-ellipsis">
       
         delete_dataset
@@ -1460,48 +1290,37 @@
   </a>
   
 </li>
+        
+      </ul>
+    </nav>
+  
+</li>
       
         <li class="md-nav__item">
-  <a href="#datamanifest.resolve_db" class="md-nav__link">
+  <a href="#default-database-resolution" class="md-nav__link">
     <span class="md-ellipsis">
       
-        resolve_db
+        Default database resolution
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Default database resolution">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#resolve_db-get_default_database" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        resolve_db / get_default_database
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.get_default_database" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        get_default_database
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.validate_loader" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        validate_loader
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.validate_loaders" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        validate_loaders
-      
-    </span>
-  </a>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1517,117 +1336,7 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#datamanifest.Database" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Database
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.Database.get_project_root" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        get_project_root
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.Database.add" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        add
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.Database.download_dataset" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        download_dataset
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.Database.download_datasets" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        download_datasets
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.Database.load_dataset" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        load_dataset
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.Database.get_dataset_path" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        get_dataset_path
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.Database.delete_dataset" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        delete_dataset
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.Database.register_loaders" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        register_loaders
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#dataset-entries" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Dataset entries
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.DatasetEntry" class="md-nav__link">
+  <a href="#datasetentry" class="md-nav__link">
     <span class="md-ellipsis">
       
         DatasetEntry
@@ -1638,10 +1347,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#datamanifest.DatasetEntry.hash_algo" class="md-nav__link">
+  <a href="#loader-validation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        hash_algo
+        Loader validation
       
     </span>
   </a>
@@ -1649,55 +1358,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#datamanifest.DatasetEntry.hash_value" class="md-nav__link">
+  <a href="#caching-computed-results" class="md-nav__link">
     <span class="md-ellipsis">
       
-        hash_value
+        Caching computed results
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.DatasetEntry.sha256" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        sha256
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#caching" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Caching
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#datamanifest.cache.cached" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        cached
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="cached">
+    <nav class="md-nav" aria-label="Caching computed results">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#datamanifest.cache.cached--parameters" class="md-nav__link">
+  <a href="#datamanifestcachecached" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Parameters
+        datamanifest.cache.cached
       
     </span>
   </a>
@@ -1735,635 +1411,172 @@
 
 
 <h1 id="python-api-reference">Python API reference<a class="headerlink" href="#python-api-reference" title="Permanent link">&para;</a></h1>
-<p>The public surface of the <code>datamanifest</code> package, generated from the
-docstrings. The narrative guide is <a href="../api/">Using it from code</a>.</p>
-<h2 id="module-level-functions">Module-level functions<a class="headerlink" href="#module-level-functions" title="Permanent link">&para;</a></h2>
-
-
-<div class="doc doc-object doc-module">
-
-
-
-<a id="datamanifest"></a>
-    <div class="doc doc-contents first">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="datamanifest.add" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">add</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">db</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#datamanifest.add" class="headerlink" title="Permanent link">&para;</a></h2>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Register a dataset — alias for register_dataset (default db unless <code>db=</code>).</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="datamanifest.register_dataset" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">register_dataset</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">db</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#datamanifest.register_dataset" class="headerlink" title="Permanent link">&para;</a></h2>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Register a dataset (the default db unless <code>db=</code> is given).</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="datamanifest.download_dataset" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">download_dataset</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">db</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#datamanifest.download_dataset" class="headerlink" title="Permanent link">&para;</a></h2>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Download a dataset; return its path — default db unless <code>db=</code>.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="datamanifest.download_datasets" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">download_datasets</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">db</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#datamanifest.download_datasets" class="headerlink" title="Permanent link">&para;</a></h2>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Download several/all datasets — default db unless <code>db=</code>.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="datamanifest.load_dataset" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">load_dataset</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">db</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#datamanifest.load_dataset" class="headerlink" title="Permanent link">&para;</a></h2>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Download and load a dataset — default db unless <code>db=</code>.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="datamanifest.get_dataset_path" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">get_dataset_path</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">db</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#datamanifest.get_dataset_path" class="headerlink" title="Permanent link">&para;</a></h2>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Resolve a dataset's on-disk path — default db unless <code>db=</code>.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="datamanifest.delete_dataset" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">delete_dataset</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">db</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#datamanifest.delete_dataset" class="headerlink" title="Permanent link">&para;</a></h2>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Delete a dataset entry (and its cached files) — default db unless <code>db=</code>.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="datamanifest.resolve_db" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">resolve_db</span><span class="p">(</span><span class="n">db</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
-
-<a href="#datamanifest.resolve_db" class="headerlink" title="Permanent link">&para;</a></h2>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Return <em>db</em> if given, else the auto-discovered default database.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="datamanifest.get_default_database" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">get_default_database</span><span class="p">()</span></code>
-
-<a href="#datamanifest.get_default_database" class="headerlink" title="Permanent link">&para;</a></h2>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Return the process-wide default :class:<code>Database</code>, creating it lazily.</p>
-<p>The database is constructed from :func:<code>~datamanifest.config.get_default_toml</code>
-(env-var / cwd-walk logic). Raises <code>RuntimeError</code> when no <code>datasets.toml</code>
-can be located, so callers get a clear message rather than a silent no-op.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="datamanifest.validate_loader" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">validate_loader</span><span class="p">(</span><span class="n">db</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span></code>
-
-<a href="#datamanifest.validate_loader" class="headerlink" title="Permanent link">&para;</a></h2>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Resolve loader <em>name</em> to its callable, raising if it cannot (Databases.jl:751-754).</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="datamanifest.validate_loaders" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">validate_loaders</span><span class="p">(</span><span class="n">db</span><span class="p">)</span></code>
-
-<a href="#datamanifest.validate_loaders" class="headerlink" title="Permanent link">&para;</a></h2>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Eagerly resolve every registered loader (Databases.jl:756-762).</p>
-
-
-    </div>
-
-</div>
-
-
-
-  </div>
-
-    </div>
-
-</div><h2 id="the-database-class">The <code>Database</code> class<a class="headerlink" href="#the-database-class" title="Permanent link">&para;</a></h2>
-
-
-<div class="doc doc-object doc-class">
-
-
-
-<a id="datamanifest.Database"></a>
-    <div class="doc doc-contents first">
-
-
-
-        <p>Registry of :class:<code>DatasetEntry</code> objects, with TOML persistence.</p>
-<p>Port of Julia's <code>Database</code> (Databases.jl:147-172). The loader registry
-fields are present here as empty stubs; actual loader resolution behaviour
-is added in a later item. Without inline code execution there is no
-<code>loaders_*_modules</code> field (see roadmap §C): user-local modules are made
-importable via <code>loaders_python_includes</code> (paths prepended to <code>sys.path</code>).</p>
-
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="datamanifest.Database.get_project_root" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">get_project_root</span><span class="p">()</span></code>
-
-<a href="#datamanifest.Database.get_project_root" class="headerlink" title="Permanent link">&para;</a></h2>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Return the project root derived from <code>datasets_toml</code> (Config.jl:98-131).</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="datamanifest.Database.add" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">add</span><span class="p">(</span><span class="n">uri</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#datamanifest.Database.add" class="headerlink" title="Permanent link">&para;</a></h2>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Register a dataset (alias for :meth:<code>register_dataset</code>).</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="datamanifest.Database.download_dataset" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">download_dataset</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#datamanifest.Database.download_dataset" class="headerlink" title="Permanent link">&para;</a></h2>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Download a dataset declared in this database; return its path.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="datamanifest.Database.download_datasets" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">download_datasets</span><span class="p">(</span><span class="n">names</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#datamanifest.Database.download_datasets" class="headerlink" title="Permanent link">&para;</a></h2>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Download several (or all) of this database's datasets.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="datamanifest.Database.load_dataset" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">load_dataset</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">loader</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#datamanifest.Database.load_dataset" class="headerlink" title="Permanent link">&para;</a></h2>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Download and load a dataset, returning the loaded value.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="datamanifest.Database.get_dataset_path" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">get_dataset_path</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#datamanifest.Database.get_dataset_path" class="headerlink" title="Permanent link">&para;</a></h2>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Resolve the on-disk path for a dataset in this database.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="datamanifest.Database.delete_dataset" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">delete_dataset</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></code>
-
-<a href="#datamanifest.Database.delete_dataset" class="headerlink" title="Permanent link">&para;</a></h2>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Remove a dataset entry and (optionally) its cached files.</p>
-
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-function">
-
-
-<h2 id="datamanifest.Database.register_loaders" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">register_loaders</span><span class="p">(</span><span class="n">loaders</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">python_includes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">persist</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
-
-<a href="#datamanifest.Database.register_loaders" class="headerlink" title="Permanent link">&para;</a></h2>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Register named loaders / python include paths (Databases.jl:734-749).</p>
-<p>Loader values are <code>"pkg.mod:func"</code> entry-point references (or the name
-of another loader, treated as an alias) — never inline code. Resetting
-the registry clears the resolution cache.</p>
-
-
-    </div>
-
-</div>
-
-
-
-  </div>
-
-    </div>
-
-</div><h2 id="dataset-entries">Dataset entries<a class="headerlink" href="#dataset-entries" title="Permanent link">&para;</a></h2>
-
-
-<div class="doc doc-object doc-class">
-
-
-
-<a id="datamanifest.DatasetEntry"></a>
-    <div class="doc doc-contents first">
-
-
-
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-<div class="doc doc-object doc-attribute">
-
-
-
-<h2 id="datamanifest.DatasetEntry.hash_algo" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">hash_algo</span></code>
-
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-property"><code>property</code></small>
-  </span>
-
-<a href="#datamanifest.DatasetEntry.hash_algo" class="headerlink" title="Permanent link">&para;</a></h2>
-
-
-    <div class="doc doc-contents ">
-
-        <p>The checksum's algorithm (<code>sha256</code> for a bare/empty-prefixed value),
-or <code>""</code> when no checksum is set.</p>
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-attribute">
-
-
-
-<h2 id="datamanifest.DatasetEntry.hash_value" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">hash_value</span></code>
-
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-property"><code>property</code></small>
-  </span>
-
-<a href="#datamanifest.DatasetEntry.hash_value" class="headerlink" title="Permanent link">&para;</a></h2>
-
-
-    <div class="doc doc-contents ">
-
-        <p>The checksum's hex digest (without the <code>algo:</code> prefix), or <code>""</code>.</p>
-
-    </div>
-
-</div>
-
-<div class="doc doc-object doc-attribute">
-
-
-
-<h2 id="datamanifest.DatasetEntry.sha256" class="doc doc-heading">
-            <code class="highlight language-python"><span class="n">sha256</span></code>
-
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-property"><code>property</code></small>
-      <small class="doc doc-label doc-label-writable"><code>writable</code></small>
-  </span>
-
-<a href="#datamanifest.DatasetEntry.sha256" class="headerlink" title="Permanent link">&para;</a></h2>
-
-
-    <div class="doc doc-contents ">
-
-        <p>Back-compat view: the hex digest when the checksum algorithm is sha256,
-else <code>""</code>. Setting it stores <code>checksum = "sha256:&lt;hex&gt;"</code> (or clears it).</p>
-
-    </div>
-
-</div>
-
-
-
-
-
-
-  </div>
-
-    </div>
-
-</div><h2 id="caching">Caching<a class="headerlink" href="#caching" title="Permanent link">&para;</a></h2>
-
-
-<div class="doc doc-object doc-function">
-
-
-
-<a id="datamanifest.cache.cached"></a>
-    <div class="doc doc-contents first">
-
-        <p>Produce-or-load decorator for a function that returns a cacheable value.</p>
-<p>Usable bare (<code>@cached</code>, all defaults) or configured (<code>@cached(...)</code>).</p>
-<p>The wrapped function is <strong>keyword-only</strong> (the spec's produced-dataset rule):
-its keyword arguments are the hash inputs. On each call the key table is
-derived from those kwargs (minus <code>_</code>-prefixed control keys, or via the
-<em>key</em> selector), :func:<code>param_hash</code>-ed, and composed (spec-v3) under the
-manifest's <code>datacache_dir</code> folder (default <code>cached</code> ⇒ repo-local
-<code>./cached/</code>) as <code>&lt;datacache_dir&gt;/&lt;cachetype&gt;/[&lt;version&gt;/]&lt;hash&gt;</code>. If a
-complete, hash-valid artifact already exists it is <strong>loaded</strong> (via <em>format</em>'s
-default loader) and returned; otherwise the function <strong>runs</strong>, its result is
-serialized into the artifact directory next to the <code>config.toml</code> /
-<code>metadata.toml</code> sidecars, and the freshly-computed result is returned.</p>
-<p>The wrapper gains two per-call escape hatches: <code>cached: bool = True</code>
-(<code>cached=False</code> forces a recompute regardless of an existing hit) and
-<code>cache_dir: str = ""</code> (an explicit directory used <strong>verbatim</strong> as
-<code>&lt;cache_dir&gt;/&lt;cachetype&gt;/[&lt;version&gt;/]&lt;hash&gt;</code>, bypassing folder
-resolution). Positional arguments are rejected (produced datasets are
-identified by their keyword parameters).</p>
-<h3 id="datamanifest.cache.cached--parameters">Parameters<a class="headerlink" href="#datamanifest.cache.cached--parameters" title="Permanent link">&para;</a></h3>
-<p>cachetype:
-    Namespace for the produced artifact (the first path component under the
-    cache scope). Appears in the on-disk path and <code>config.toml</code> <code>[_META]</code>.
-    <strong>Defaults to the function's fully-qualified importable name</strong>
-    (<code>module.qualname</code>) so distinct functions never collide; an explicit
-    value overrides it (a stable hand-picked name, or to group several
-    functions). Auto and explicit cachetypes share one namespace, and two
-    <em>distinct</em> functions claiming the same <code>(cachetype, version)</code> while live
-    in one process raise :class:<code>CacheTypeConflict</code> at decoration. A function
-    defined in <code>__main__</code> resolves via <code>python -m pkg.mod</code> (→
-    <code>pkg.mod.func</code>); a loose script / <code>python -c</code> / REPL / notebook has no
-    importable identity, so an explicit <em>cachetype</em> is <strong>required</strong> there.
-format:
-    Serialization format (e.g. <code>"txt"</code>, <code>"json"</code>, <code>"nc"</code>) — drives the
-    default writer and the matching default loader.
-key:
-    Optional key-table selector (a callable <code>kwargs -&gt; table</code> or a sequence
-    of names) narrowing the hash-affecting parameters.
-basename:
-    Filename stem of the serialized value (default <code>"data"</code>).
-version:
-    Optional recipe version (spec-v3). When set it becomes a
-    <code>&lt;cachetype&gt;/&lt;version&gt;/&lt;hash&gt;</code> path segment and is recorded in
-    <code>config.toml</code> (<code>[_META].version</code>) and the <code>cached.toml</code> entry, but
-    is <strong>never</strong> part of the parameter hash — same kwargs hash to the same
-    <code>&lt;hash&gt;</code> with or without a version. Bumping it isolates artifacts
-    across recipe revisions (e.g. preventing stale cross-branch hits).
-storage_path:
-    The recipe's location — the <strong>direct parent of the hash dirs</strong>, version
-    already baked in; the artifact lands at <code>&lt;storage_path&gt;/&lt;hash&gt;</code> (no
-    auto-appended version, so a new <code>version=</code> may point somewhere
-    entirely different). Used <strong>verbatim</strong> (resolved: relative ⇒ manifest
-    dir, absolute as-is), unlike the per-call <code>cache_dir=</code> which composes
-    <code>&lt;cache_dir&gt;/&lt;cachetype&gt;[/&lt;version&gt;]</code>. The resolved value is recorded
-    in <code>cached.toml</code> and preferred on the next hit. Default <code>""</code> ⇒
-    <code>&lt;datacache_dir&gt;/&lt;cachetype&gt;[/&lt;version&gt;]</code>.
-project_root, storage_config:
-    Threaded through to the <code>$</code>-symbol resolver / git provenance (optional;
-    no <code>Database</code> is required).
-cached_toml:
-    Explicit path to the <code>cached.toml</code> index this artifact is registered
-    in on produce. Defaults to <code>&lt;project_root&gt;/cached.toml</code> (the manifest
-    sibling), else <code>&lt;cwd&gt;/cached.toml</code> (see :func:<code>_locate_cached_toml</code>).
-name:
-    Portable registry name under which the produced artifact is listed in
-    <code>cached.toml</code>. Defaults to the wrapped function's <code>__name__</code>.</p>
-<p>On a <strong>produce</strong> (miss), the artifact is registered into the resolved
-<code>cached.toml</code> (<code>cachetype</code> / <code>hash</code> / <code>ref</code> = <code>module:qualname</code> /
-<code>format</code> / the <code>version</code> when set), that index is recorded in the depot
-usage log, and
-<code>metadata.toml</code>'s <code>[origin].cached_toml</code> back-pointer names it.
-A cache <strong>hit</strong> does not re-stamp <code>metadata.toml</code>, but it <strong>self-heals the
-registry</strong>: if the artifact is present yet its <code>cached.toml</code> entry is
-missing (the index was deleted by hand, or never written), the hit
-re-registers it, so the index rebuilds itself simply by re-running.</p>
-
-
-    </div>
-
-</div>
+<p>A hand-curated reference of the public <code>datamanifest</code> surface. For a guided
+tour with worked examples, read <a href="../api/">Using it from code</a> first.</p>
+<p>Most functions exist in two equivalent forms: as a method on a
+<a href="#the-database-class"><code>Database</code></a> (<code>db.load_dataset(...)</code>) and as a
+module-level shortcut (<code>datamanifest.load_dataset(...)</code>). The module-level
+form takes an extra keyword-only <code>db=None</code> argument and operates on the
+<a href="#resolve_db-get_default_database">default database</a> when it is omitted.</p>
+<h2 id="everyday-functions">Everyday functions<a class="headerlink" href="#everyday-functions" title="Permanent link">&para;</a></h2>
+<p>These are the calls most scripts need. Each is shown with its <code>Database</code>
+method signature; the module-level twin accepts the same arguments plus
+<code>db=</code>.</p>
+<h3 id="add"><code>add</code><a class="headerlink" href="#add" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">db</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">uri</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">skip_download</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">entry</span><span class="p">)</span>
+</code></pre></div>
+<p>Register a dataset in the manifest <strong>and download it</strong> in one step — the same
+path the CLI's <code>add</code> command uses. Pass <code>skip_download=True</code> to register
+only. Entries that are never fetched (<code>lazy_access=True</code>, or a
+<code>skip_download=true</code> entry field) are registered and left in place. Extra
+keyword arguments become <a href="#datasetentry"><code>DatasetEntry</code></a> fields. See
+<a href="../adding-datasets/">Adding datasets</a> for what <code>uri</code> can be.</p>
+<h3 id="load_dataset"><code>load_dataset</code><a class="headerlink" href="#load_dataset" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">db</span><span class="o">.</span><span class="n">load_dataset</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">loader</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</code></pre></div>
+<p>Download a dataset (if not already present) and load it into memory,
+returning the loaded value. <code>loader</code> is a callable (<code>path -&gt; value</code>), a
+loader name declared in the manifest, or a built-in format name (<code>csv</code>,
+<code>parquet</code>, <code>nc</code>, <code>json</code>, <code>yaml</code>, <code>toml</code>, ...); when omitted, the loader is
+resolved from the entry's bindings and <code>format</code>. See
+<a href="../api/">Using it from code</a>.</p>
+<h3 id="get_dataset_path"><code>get_dataset_path</code><a class="headerlink" href="#get_dataset_path" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">db</span><span class="o">.</span><span class="n">get_dataset_path</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">extract</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+</code></pre></div>
+<p>Resolve a dataset's on-disk path without downloading anything. The location
+follows the entry's <code>storage_path</code> expression (default
+<code>$datasets_dir/$key</code>); <code>skip_download</code> and <code>lazy_access</code> entries return
+their <code>uri</code> directly. How paths are resolved is described in the
+<a href="../storage/">storage model</a>.</p>
+<h3 id="download_dataset-download_datasets"><code>download_dataset</code> / <code>download_datasets</code><a class="headerlink" href="#download_dataset-download_datasets" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">db</span><span class="o">.</span><span class="n">download_dataset</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">extract</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">db</span><span class="o">.</span><span class="n">download_datasets</span><span class="p">(</span><span class="n">names</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</code></pre></div>
+<p>Fetch one dataset (returning its local path) or several — all of them when
+<code>names</code> is <code>None</code>. Dependencies declared via <code>requires=</code> are downloaded
+first; an existing verified copy (including one found in a
+<a href="../storage/#read-pools">read pool</a>) is reused instead of re-downloaded.
+<code>overwrite=True</code> forces a fresh fetch.</p>
+<h3 id="register_dataset"><code>register_dataset</code><a class="headerlink" href="#register_dataset" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">db</span><span class="o">.</span><span class="n">register_dataset</span><span class="p">(</span><span class="n">uri</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">persist</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>                    <span class="n">check_duplicate</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">uris</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">entry</span><span class="p">)</span>
+</code></pre></div>
+<p>Add an entry to the manifest <strong>without downloading</strong>. When <code>name</code> is empty
+it is derived from the URI. Registering an identical entry twice is a no-op;
+a conflicting one raises unless <code>overwrite=True</code>. With <code>persist=True</code> (the
+default) the manifest file is rewritten immediately. Extra keyword arguments
+become <a href="#datasetentry"><code>DatasetEntry</code></a> fields.</p>
+<h3 id="delete_dataset"><code>delete_dataset</code><a class="headerlink" href="#delete_dataset" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">db</span><span class="o">.</span><span class="n">delete_dataset</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">keep_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">persist</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</code></pre></div>
+<p>Remove a dataset entry from the manifest and, unless <code>keep_cache=True</code>,
+delete its downloaded files and state record as well.</p>
+<h2 id="default-database-resolution">Default database resolution<a class="headerlink" href="#default-database-resolution" title="Permanent link">&para;</a></h2>
+<h3 id="resolve_db-get_default_database"><code>resolve_db</code> / <code>get_default_database</code><a class="headerlink" href="#resolve_db-get_default_database" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">datamanifest</span><span class="o">.</span><span class="n">resolve_db</span><span class="p">(</span><span class="n">db</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Database</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">datamanifest</span><span class="o">.</span><span class="n">get_default_database</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Database</span>
+</code></pre></div>
+<p><code>resolve_db</code> returns <code>db</code> if given, else the process-wide default database —
+which <code>get_default_database</code> creates lazily on first use and then reuses.
+The default manifest is located from the <code>DATAMANIFEST_TOML</code> (or legacy
+<code>DATASETS_TOML</code>) environment variable, else by walking up from the current
+directory looking for <code>datamanifest.toml</code> &gt; <code>DataManifest.toml</code> &gt;
+<code>datasets.toml</code> &gt; <code>Datasets.toml</code> (a directory with <code>pyproject.toml</code> also
+counts as project root). <code>get_default_database</code> raises <code>RuntimeError</code> when
+no manifest can be found. See <a href="../configuration/">Configuration</a>.</p>
+<h2 id="the-database-class">The <code>Database</code> class<a class="headerlink" href="#the-database-class" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">Database</span><span class="p">(</span><span class="n">datasets_toml</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">datasets_folder</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">persist</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>         <span class="n">skip_checksum</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">skip_checksum_folders</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">datasets</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+<p>The in-memory registry of dataset entries, tied to a manifest file.</p>
+<ul>
+<li><code>datasets_toml</code> — path to the manifest. When empty and <code>persist=True</code>,
+  the default manifest is discovered as above. The file, if it exists, is
+  read on construction.</li>
+<li><code>datasets_folder</code> — overrides the <code>datasets_dir</code> storage variable (where
+  downloads land) for this database. Default: resolved from the
+  <a href="../configuration/">scoped configuration</a>.</li>
+<li><code>persist</code> — when <code>True</code> (default), registry changes (<code>add</code>,
+  <code>register_dataset</code>, <code>delete_dataset</code>) rewrite the manifest file.
+  <code>persist=False</code> gives a file-less, in-memory database (see
+  <a href="../api/#a-file-less-database-no-manifest">the guide</a>).</li>
+<li><code>skip_checksum</code> / <code>skip_checksum_folders</code> — disable checksum verification
+  globally / for directory datasets.</li>
+<li><code>datasets</code> — an initial <code>{name: DatasetEntry}</code> mapping.</li>
+</ul>
+<p>Useful methods beyond the everyday functions above:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">db</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>                          <span class="c1"># -&gt; DatasetEntry (also matches aliases)</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">db</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">datasets_toml</span><span class="p">)</span>           <span class="c1"># serialize the registry to a TOML file</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">db</span><span class="o">.</span><span class="n">get_project_root</span><span class="p">()</span>             <span class="c1"># project root derived from datasets_toml</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="n">db</span><span class="o">.</span><span class="n">register_datasets</span><span class="p">(</span><span class="n">datasets</span><span class="p">,</span> <span class="n">persist</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>   <span class="c1"># bulk-register a dict or a .toml path</span>
+</code></pre></div>
+<h2 id="datasetentry"><code>DatasetEntry</code><a class="headerlink" href="#datasetentry" title="Permanent link">&para;</a></h2>
+<p>A dataclass holding one dataset's declaration — the Python form of one
+manifest table (see the <a href="../manifest-format/">manifest format</a>). All fields
+are keyword arguments to the constructor, and to <code>add</code> /
+<code>register_dataset</code>. The main ones:</p>
+<ul>
+<li><code>uri</code> / <code>uris</code> — where the data comes from (one source, or a batch).</li>
+<li><code>key</code> — the storage key (derived from the URI when not set); the default
+  on-disk location is <code>$datasets_dir/$key</code>.</li>
+<li><code>checksum</code> — expected content digest as <code>"&lt;algo&gt;:&lt;hex&gt;"</code> (a bare hex value
+  is read as sha256); computed on first download when empty.</li>
+<li><code>version</code>, <code>branch</code>, <code>doi</code>, <code>aliases</code>, <code>description</code> — metadata; <code>branch</code>
+  selects the branch for git sources.</li>
+<li><code>storage_path</code> — per-dataset location override, a
+  <a href="../storage/#path-expressions">path expression</a>.</li>
+<li><code>extract</code> / <code>format</code> — unpack a <code>zip</code> / <code>tar</code> / <code>tar.gz</code> archive after
+  download; <code>format</code> also drives the default loader.</li>
+<li><code>skip_download</code> — the URI is an existing local file; nothing is fetched.</li>
+<li><code>lazy_access</code> — the URI is opened in place by the loader (e.g. via
+  fsspec), never downloaded.</li>
+<li><code>skip_checksum</code> — exempt this entry from verification.</li>
+<li><code>fetcher</code>, <code>shell</code>, <code>loader</code>, <code>requires</code> — custom download / load hooks
+  and dependencies; see <a href="../adding-datasets/">Adding datasets</a>.</li>
+</ul>
+<p>Convenience accessors: <code>entry.hash_algo</code>, <code>entry.hash_value</code> and the
+back-compat <code>entry.sha256</code> view of <code>checksum</code>.</p>
+<h2 id="loader-validation">Loader validation<a class="headerlink" href="#loader-validation" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">datamanifest</span><span class="o">.</span><span class="n">validate_loader</span><span class="p">(</span><span class="n">db</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>   <span class="c1"># resolve one named loader, raise if it can&#39;t</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">datamanifest</span><span class="o">.</span><span class="n">validate_loaders</span><span class="p">(</span><span class="n">db</span><span class="p">)</span>        <span class="c1"># eagerly resolve every registered loader</span>
+</code></pre></div>
+<p>Loaders declared in the manifest (<code>[_LOADERS]</code>, <code>[_LANG.python.loaders]</code>)
+are <code>"pkg.mod:func"</code> entry-point references resolved lazily at load time;
+these helpers force resolution early so a broken reference fails fast.</p>
+<h2 id="caching-computed-results">Caching computed results<a class="headerlink" href="#caching-computed-results" title="Permanent link">&para;</a></h2>
+<h3 id="datamanifestcachecached"><code>datamanifest.cache.cached</code><a class="headerlink" href="#datamanifestcachecached" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datamanifest.cache</span><span class="w"> </span><span class="kn">import</span> <span class="n">cached</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="nd">@cached</span>                       <span class="c1"># bare, all defaults</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="nd">@cached</span><span class="p">(</span><span class="n">cachetype</span><span class="o">=...</span><span class="p">,</span> <span class="nb">format</span><span class="o">=...</span><span class="p">,</span> <span class="n">key</span><span class="o">=...</span><span class="p">,</span> <span class="n">version</span><span class="o">=...</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+</code></pre></div>
+<p>Produce-or-load decorator for a function returning a cacheable value. The
+wrapped function is <strong>keyword-only</strong>: its keyword arguments are hashed into
+a parameter hash that identifies the artifact, stored under
+<code>&lt;datacache_dir&gt;/&lt;cachetype&gt;/[&lt;version&gt;/]&lt;hash&gt;</code>. On a hit the artifact is
+loaded and returned; on a miss the function runs and its result is
+serialized there. The narrative walk-through is in
+<a href="../api/#caching-computed-results">Using it from code</a>; where the cache
+lives is part of the <a href="../storage/">storage model</a>.</p>
+<p>Main options:</p>
+<ul>
+<li><code>cachetype</code> — namespace for the artifact (first path component under the
+  cache folder). Defaults to the function's fully-qualified importable name
+  (<code>module.qualname</code>); an explicit value is required for functions without
+  one (REPL, notebook, loose script).</li>
+<li><code>format</code> — serialization format (e.g. <code>"txt"</code>, <code>"json"</code>, <code>"nc"</code>); drives
+  the default writer and matching loader.</li>
+<li><code>key</code> — selector narrowing the hash-affecting parameters: a callable
+  <code>kwargs -&gt; table</code> or a sequence of parameter names.</li>
+<li><code>version</code> — recipe version. Becomes a path segment and is recorded in the
+  sidecars, but never enters the parameter hash; bump it to isolate
+  artifacts across recipe revisions.</li>
+<li><code>storage_path</code> — explicit parent directory for the hash dirs, used
+  verbatim instead of <code>&lt;datacache_dir&gt;/&lt;cachetype&gt;[/&lt;version&gt;]</code>.</li>
+</ul>
+<p>The decorated function gains two per-call escape hatches: <code>cached=False</code>
+(force a recompute) and <code>cache_dir="..."</code> (explicit cache directory for this
+call).</p>
 
 
 
