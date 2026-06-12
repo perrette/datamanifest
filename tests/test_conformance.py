@@ -28,14 +28,19 @@ else:
     import tomli as tomllib
 
 from datamanifest import default_loaders
+from datamanifest.cache import CachedIndex, config_key_table, param_hash
 from datamanifest.database import (
     Database,
     resolve_fetcher,
     resolve_loader_rungs,
     _sort_recursive,
 )
+from datamanifest.store.locations import PREDEFINED_SYMBOLS
 
 SELF_LANG = "python"
+# Capabilities this tool implements (see docs/conformance.md); drives which
+# fixtures are run. Fixtures whose `capabilities` are not a subset of this set
+# are skipped with a reason.
 SUPPORTED_CAPABILITIES = {
     "lang-read",
     "lang-write",
@@ -43,6 +48,10 @@ SUPPORTED_CAPABILITIES = {
     "storage",
     "binding-args",
     "byte-identity",
+    "cache-produce",  # @cached produce-or-load layer (datamanifest.cache)
+    "inspect",        # state-file inventory + `datamanifest list` maintenance
+    "delegation",     # cross-language fetch rung via the Julia peer tool
+    "sync",           # cross-machine push/pull (no fixture exercises it yet)
 }
 
 _HERE = Path(__file__).parent
@@ -188,6 +197,77 @@ def test_conformance(fixture_name, fixtures_dir):
     if missing:
         pytest.skip(f"Fixture requires unsupported capabilities: {sorted(missing)}")
 
+    # --- cache-produce: the fixture .toml is a config.toml sidecar, NOT a
+    # datasets.toml. Recompute the param hash from the key table (every root
+    # key except [_META]) and check it equals both the recorded _META.hash
+    # (the re-hashability contract) and the fixture's expected hash + key.
+    cs = expected.get("config_sidecar")
+    if cs is not None:
+        with open(toml_path, "rb") as f:
+            cfg = tomllib.load(f)
+        meta = cfg["_META"]
+        key_table = config_key_table(cfg)
+        ph = param_hash(key_table)
+        assert ph == cs["param_hash"], (
+            f"{fixture_name}: param_hash {ph} != expected {cs['param_hash']}"
+        )
+        assert meta["hash"] == ph, (
+            f"{fixture_name}: sidecar _META.hash {meta['hash']} is not "
+            f"re-hashable to {ph}"
+        )
+        assert meta["cachetype"] == cs["cachetype"]
+        assert f"{meta['cachetype']}/{ph}" == cs["key"]
+        assert key_table == cs["key_table"]
+        return
+
+    # --- inspect: the fixture .toml is a cached.toml produced-dataset index
+    # (legacy schema-2 nested form, still read), NOT a datasets.toml. Check each
+    # recipe's identity + fields + per-variation instances; the index is
+    # self-verifying (each instance hash == the param-hash of its params).
+    ci = expected.get("cached_index")
+    if ci is not None:
+        with open(toml_path, "rb") as f:
+            raw = tomllib.load(f)
+        assert raw["_META"]["schema"] == ci.get("schema", 2)
+        # forbidden_keys: a negative writer-contract assertion against _META
+        # and every recipe (pins removed/renamed keys, e.g. project/scope).
+        forbidden = set(ci.get("forbidden_keys", []))
+        if forbidden:
+            assert not forbidden & set(raw["_META"]), (
+                f"{fixture_name}: forbidden keys in _META: "
+                f"{sorted(forbidden & set(raw['_META']))}"
+            )
+            for rrec in raw.get("produced", []):
+                assert not forbidden & set(rrec), (
+                    f"{fixture_name}: forbidden keys in recipe: "
+                    f"{sorted(forbidden & set(rrec))}"
+                )
+        idx = CachedIndex.from_dict(raw)
+        exp_keys = set()
+        exp_reachable = set()
+        for er in ci["recipes"]:
+            ct, ver = er["cachetype"], er.get("version", "")
+            assert (ct, ver) in idx.recipes, (
+                f"{fixture_name}: recipe ({ct!r}, {ver!r}) not read from index"
+            )
+            rec = idx.recipes[(ct, ver)]
+            assert rec["ref"] == er.get("ref", "")
+            assert rec["format"] == er.get("format", "")
+            for inst in er["instances"]:
+                h = inst["hash"]
+                assert h in rec["instances"], (
+                    f"{fixture_name}/{ct}: instance {h} not read from index"
+                )
+                params = inst.get("params", {})
+                assert param_hash(params) == h, (
+                    f"{fixture_name}/{ct}: params do not re-hash to {h}"
+                )
+                exp_keys.add(f"{ct}/{h}")
+                exp_reachable.add((ct, ver, h))
+        assert idx.keys() == exp_keys
+        assert idx.reachable_keys() == exp_reachable
+        return
+
     # Load manifest (persist=False: no write-on-read; skip_checksum: fixtures use
     # placeholder SHA-256 values that don't correspond to real downloaded files)
     db = Database(datasets_toml=str(toml_path), persist=False, skip_checksum=True)
@@ -295,28 +375,56 @@ def test_conformance(fixture_name, fixtures_dir):
                     f"expected {spec['kwargs']!r}"
                 )
 
-    # --- Storage model (parsed [_STORAGE] roots) ---
-    # The pinned fixture predates spec-v4: its per-dataset ``store`` selection and
-    # ``default_store`` model were retired (spec-v4 replaces them with the
-    # ``datasets_dir`` / ``datacache_dir`` fields + per-dataset ``storage_path``),
-    # so only the structural [_STORAGE] passthrough (roots / _HOST / _PROFILE) is
-    # still asserted here.
+    # --- Storage model (spec-v4/v5: the two folder fields, the user-symbol
+    # namespace, the _HOST patterns, and per-dataset storage_path expressions).
+    # Raw [_STORAGE] values are path expressions; compared verbatim against the
+    # manifest layer (not resolved — resolution is machine-dependent, and the
+    # layered scoped config could be contaminated by this machine's user config).
     storage = expected.get("storage")
     if storage is not None:
-        roots = storage["roots"]
         manifest_storage = db.extra.get("_STORAGE", {})
-        base = sorted(k for k in manifest_storage if not k.startswith("_"))
-        assert base == roots["base"], (
-            f"{fixture_name}: storage roots base {base} != {roots['base']}"
+
+        # The two folder fields + the project name: raw [_STORAGE] values.
+        for fieldname in ("datasets_dir", "datacache_dir", "project"):
+            if fieldname in storage:
+                assert manifest_storage.get(fieldname, "") == storage[fieldname], (
+                    f"{fixture_name}: [_STORAGE].{fieldname} "
+                    f"{manifest_storage.get(fieldname, '')!r} != "
+                    f"{storage[fieldname]!r}"
+                )
+
+        # User-defined symbols: bare [_STORAGE] keys that are neither reserved
+        # fields, nor predefined symbols, nor structural _-tables (_HOST).
+        reserved = {
+            "datasets_dir", "datacache_dir", "datasets_pools",
+            "datacache_pools", "project",
+        }
+        symbols = sorted(
+            k for k in manifest_storage
+            if not k.startswith("_")
+            and k not in reserved
+            and k not in PREDEFINED_SYMBOLS
         )
+        assert symbols == sorted(storage.get("symbols", [])), (
+            f"{fixture_name}: user symbols {symbols} != {storage.get('symbols')}"
+        )
+
+        # _HOST glob patterns.
         host_patterns = sorted(manifest_storage.get("_HOST", {}).keys())
-        assert host_patterns == roots["host_patterns"], (
-            f"{fixture_name}: host_patterns {host_patterns} != {roots['host_patterns']}"
+        assert host_patterns == sorted(storage.get("host_patterns", [])), (
+            f"{fixture_name}: host_patterns {host_patterns} != "
+            f"{storage.get('host_patterns')}"
         )
-        profiles = sorted(manifest_storage.get("_PROFILE", {}).keys())
-        assert profiles == roots["profiles"], (
-            f"{fixture_name}: profiles {profiles} != {roots['profiles']}"
-        )
+
+        # Per-dataset storage_path expressions (raw, pre-expansion).
+        for ds_name, sp_exp in storage.get("storage_paths", {}).items():
+            assert ds_name in db.datasets, (
+                f"{fixture_name}: dataset {ds_name!r} missing"
+            )
+            assert db.datasets[ds_name].storage_path == sp_exp, (
+                f"{fixture_name}/{ds_name}: storage_path "
+                f"{db.datasets[ds_name].storage_path!r} != {sp_exp!r}"
+            )
 
     # --- Self-consistent byte-identity (serialize → parse → serialize stable) ---
     # The canonical structure fed to the dumper is code-point-sorted at every

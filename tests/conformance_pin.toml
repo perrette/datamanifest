@@ -1,20 +1,28 @@
-spec_tag = "spec-v1.1"
+spec_tag = "spec-v5.6"
 
 # Per-file SHA-256 content hashes computed from the actual pinned fixtures.
 # This constitutes the Python tool's conformance claim against the spec.
 # To update: re-download the new tag tarball, recompute hashes, and record them here.
 
 [files]
-"tests/fixtures/README.md" = "97ca6897717d290f723b45fc3e0de6d8079fb0033d186792bfc182baa30b9f58"
-"tests/fixtures/multilang.expected.json" = "e9227a25d704e84da11d18287bda8397dedecef6412d10534b919924dfb6cb43"
-"tests/fixtures/multilang.toml" = "60793653a61563c23dced82da81e6d2b69ae887f84abae659d5a0ab5df6c3014"
+"tests/fixtures/README.md" = "c5afcdff35dcc9dea67a8423a6816d52a5977ede7cc6db28e0cf0df2c1dec6b7"
+"tests/fixtures/cached_index.expected.json" = "93167b5cd82ad295bc7039bfee8b9f512641cab4b144da726115ef1dd6182d3c"
+"tests/fixtures/cached_index.toml" = "6a1728ee164ab7fae843c953b6978c1fc4e30ee162c989d3cbd79762e4248f60"
+"tests/fixtures/config_sidecar.expected.json" = "3f3f34e31df88a44f7bd8b598fba93432b286109c7a1bea31953850aca7cbb0b"
+"tests/fixtures/config_sidecar.toml" = "46df73bb0bf0449018107729b9ea2587bc8d1931be1250f076b490eedc5bed98"
+"tests/fixtures/config_sidecar_float.expected.json" = "c47d76f5f3d66379ac5d1ef8718de008f7aff52e56fff6336174035521dd923a"
+"tests/fixtures/config_sidecar_float.toml" = "ceada3c4baf50cb5c97299f2e1cbe84808a8366f9434dda0d99a4f49b9455bd0"
+"tests/fixtures/lang_implicit.expected.json" = "ea0f367fbeb62fa8cca0f7f2c8543f51409e81533d6fb33bb7bef8b816d61105"
+"tests/fixtures/lang_implicit.toml" = "99b7b62ad67a13558a1ff9bcb0fd4c73b702155f8976147f8b552969ac115936"
+"tests/fixtures/multilang.expected.json" = "77564105d84a5f5d488fc47603cf8401e14acbf18a21727f7115ed4968de5022"
+"tests/fixtures/multilang.toml" = "1d6d7c98bbd733b06b89002db809831c5f68bcf8786d43d60322766e9a3af310"
 "tests/fixtures/parameterized.expected.json" = "7c21ba2374778676c6dfd1ed3d4195380a3c041867a5b218f68edf25e5aa2fa5"
 "tests/fixtures/parameterized.toml" = "124587678d51e41fa224f642dd7f97aa11a5b15b8dc1c078b45c4986cfa2c287"
 "tests/fixtures/single_julia.expected.json" = "ca32e4171da18bcf03df7892deed73ed3ad088fd3da9076f76cd44cbfeccff3c"
 "tests/fixtures/single_julia.toml" = "7fae76fba97b995ca4f8bba204323f0aa5d9bc08e410b54ccbece4b55c39370f"
 "tests/fixtures/single_python.expected.json" = "6a41975b5ce5fd9a0f102dfbed55ece48b3779bee4a6922e21edb18f2da58085"
 "tests/fixtures/single_python.toml" = "9bcab1006d357e3a3875c9c07f2d453785528ea14c7f87fd73675a899fa397a3"
-"tests/fixtures/storage.expected.json" = "e103c62d0c03b56cf000a9c3c5506f7c2258affdabc5cad884d12fc938923742"
-"tests/fixtures/storage.toml" = "ed09dc74e8fbeae6045fd20744f24e9068d88aa7a3ded7cfa4529fbb4f68e9f5"
+"tests/fixtures/storage.expected.json" = "c6926a9b6f0fc55e6564efa4fe566f3632de2bc26dba9944b152fd2822e24d25"
+"tests/fixtures/storage.toml" = "822f327e9c858f8f6f870ddfd01a2117715b7be343f8693371013b3478ed1842"
 "tests/fixtures/unknown_structural.expected.json" = "914001f4d8b6c13911a7f9cbb38ede564a985deb4cca0b1efa55e6996fe08522"
 "tests/fixtures/unknown_structural.toml" = "b794906d29a2d7af6ed1f4edd37d23527bf0890fc693c7811080700f779f3b64"

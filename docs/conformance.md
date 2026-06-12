@@ -34,10 +34,10 @@ A deeper, Python-specific walkthrough of the CLI and language bindings lives in
 ## Conformance tests and the pinned spec version
 
 The conformance claim is anchored in `tests/conformance_pin.toml`, which pins a
-tag of the shared specification repository (currently `spec-v1.1`) and records
-a SHA-256 hash for every fixture file of that tag. The pin may lag the latest
-spec tag — it is advanced deliberately, when this implementation is verified
-against the newer fixtures, not automatically on every spec release.
+tag of the shared specification repository (currently `spec-v5.6`) and records
+a SHA-256 hash for every fixture file of that tag. The pin is advanced
+deliberately, when this implementation is verified against the newer fixtures,
+not automatically on every spec release.
 
 `tests/test_conformance.py` downloads the pinned fixture tarball, verifies every
 file against its recorded hash, and runs only the fixtures whose declared
