@@ -1297,6 +1297,11 @@ belongs in git-ignored config files, so it never leaks into the repository.</p>
   its own, the main checkout's file is read instead. A config file created in
   the worktree itself takes precedence.</li>
 </ul>
+<p>In code, the manifest scope can also be supplied directly:
+<code>Database(storage_config={...})</code> (Julia: <code>storage_config=Dict(...)</code>) injects a
+<code>[_STORAGE]</code>-shaped dict as the manifest layer — how an in-memory database
+with no manifest file names its
+<a href="../api/#library-cache-bundles-database-scoped-caching">cache bundle</a>.</p>
 <h2 id="how-a-value-is-resolved">How a value is resolved<a class="headerlink" href="#how-a-value-is-resolved" title="Permanent link">&para;</a></h2>
 <p>For a variable <code>name</code>, the first match wins, top to bottom:</p>
 <ol>

@@ -1079,6 +1079,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#databasecached" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Database.cached
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1436,6 +1447,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#databasecached" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Database.cached
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1542,7 +1564,8 @@ counts as project root). <code>get_default_database</code> raises <code>RuntimeE
 no manifest can be found. See <a href="../configuration/">Configuration</a>.</p>
 <h2 id="the-database-class">The <code>Database</code> class<a class="headerlink" href="#the-database-class" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">Database</span><span class="p">(</span><span class="n">datasets_toml</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">datasets_folder</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">persist</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>         <span class="n">skip_checksum</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">skip_checksum_folders</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">datasets</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>         <span class="n">skip_checksum</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">skip_checksum_folders</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">datasets</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>         <span class="n">storage_config</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
 </code></pre></div>
 <p>The in-memory registry of dataset entries, tied to a manifest file.</p>
 <ul>
@@ -1559,6 +1582,14 @@ no manifest can be found. See <a href="../configuration/">Configuration</a>.</p>
 <li><code>skip_checksum</code> / <code>skip_checksum_folders</code> — disable checksum verification
   globally / for directory datasets.</li>
 <li><code>datasets</code> — an initial <code>{name: DatasetEntry}</code> mapping.</li>
+<li><code>storage_config</code> — an optional <code>[_STORAGE]</code>-shaped dict applied as the
+  manifest layer of the database's <a href="../configuration/">scoped configuration</a>:
+  its keys (<code>project</code>, <code>datacache_dir</code>, <code>datasets_dir</code>, <code>lock_stale_age</code>, …)
+  override the manifest's own <code>[_STORAGE]</code> values but sit below the checkout
+  config and the <code>DATAMANIFEST_*</code> environment variables. Runtime-only — never
+  written back to the manifest. The main use is an in-memory library database
+  naming its <a href="../api/#library-cache-bundles-database-scoped-caching">cache bundle</a>:
+  <code>Database(persist=False, storage_config={"project": "mylib"})</code>.</li>
 </ul>
 <p>Useful methods beyond the everyday functions above:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">db</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>                          <span class="c1"># -&gt; DatasetEntry (also matches aliases)</span>
@@ -1633,6 +1664,32 @@ lives is part of the <a href="../storage/">storage model</a>.</p>
 <p>The decorated function gains two per-call escape hatches: <code>cached=False</code>
 (force a recompute) and <code>cache_dir="..."</code> (explicit cache directory for this
 call).</p>
+<p>The module-level form resolves its cache context over the
+<a href="#resolve_db-get_default_database">default database</a> when a manifest is
+discoverable (which anchors at the same project, so paths are unchanged), and
+falls back to the ambient working-directory derivation when none is — caching
+works in projects without a manifest.</p>
+<h3 id="databasecached"><code>Database.cached</code><a class="headerlink" href="#databasecached" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nd">@db</span><span class="o">.</span><span class="n">cached</span><span class="p">(</span><span class="n">cachetype</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">basename</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">version</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>           <span class="n">storage_path</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">cached_toml</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p>The same produce-or-load decorator, bound to a specific
+<a href="#the-database-class"><code>Database</code></a>: the cache context comes from the
+database's frozen configuration instead of the working directory — artifacts
+land under <em>its</em> <code>datacache_dir</code> (keyed by <em>its</em> <code>project</code>), locks use <em>its</em>
+<code>lock_stale_age</code>, and produced artifacts register in <em>its</em> state file (for an
+in-memory database, under the <code>datacache_dir</code> root itself). The context is
+read at call time. Accepts the same options as <code>datamanifest.cache.cached</code>
+except <code>project_root</code> / <code>storage_config</code> / <code>context</code> — those are exactly what
+the database supplies. See
+<a href="../api/#library-cache-bundles-database-scoped-caching">library cache bundles</a>.</p>
+<p>Advanced, for code building its own context instead of a <code>Database</code>:
+<code>datamanifest.cache.CacheContext(project_root="", storage_config=None,
+state_file="")</code> is the plain value a <code>Database</code> hands down into the cache
+layer (pass it, or a zero-arg callable returning one, as <code>cached(...,
+context=)</code>); <code>datamanifest.cache.set_default_context_provider(provider)</code>
+registers the callable the bare form uses to resolve the default database's
+context (installed by the fetch layer at import time).</p>
 
 
 

@@ -3065,6 +3065,14 @@ on these conventions:</p>
 </ul>
 <h2 id="produced-datasets-and-caching-companion-layer">Produced datasets and caching (companion layer)<a class="headerlink" href="#produced-datasets-and-caching-companion-layer" title="Permanent link">&para;</a></h2>
 <blockquote>
+<p><strong>Scoping (non-normative).</strong> A produced dataset's cache context (the
+<code>datacache_dir</code> root, the <code>$project</code> namespace, the state-file location) MAY be
+scoped to a manifest/database context chosen by the caller — a library can hold
+its own in-memory context and keep a self-contained cache bundle. An in-memory
+context (no manifest file) SHOULD keep its inventories under the storage roots
+themselves (<code>&lt;root&gt;/.datamanifest/state.toml</code>) rather than writing a project
+state file. Identity and collision checks are per context; two contexts share
+artifacts exactly when they resolve the same cache root.</p>
 <p><strong>Spec-v2.1 — a companion <em>layer</em>, not a core capability.</strong> The produce-or-load
 (<code>@cached</code>) layer sits <strong>outside the core fetch engine</strong> as a distinct capability layer
 built on the shared substrate it reuses (safe-materialization, folder resolution,

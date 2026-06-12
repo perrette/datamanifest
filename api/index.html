@@ -582,6 +582,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Caching computed results">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#library-cache-bundles-database-scoped-caching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Library cache bundles (database-scoped caching)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1139,6 +1156,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Caching computed results">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#library-cache-bundles-database-scoped-caching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Library cache bundles (database-scoped caching)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1273,26 +1307,84 @@ lands under <a href="../storage/"><code>datacache_dir</code></a> (default:
 <code>$user_cache_dir/datamanifest/projects/$project/cached</code>) and shows up in <code>list</code>
 alongside your datasets. The <a href="https://github.com/perrette/datamanifest/blob/main/design/design-notes.md">design notes</a> cover how an
 artifact's identity (<code>cachetype</code>, <code>version</code>, parameter hash) is derived.</p>
-<h2 id="the-database-object-and-the-module-level-shortcuts">The <code>Database</code> object, and the module-level shortcuts<a class="headerlink" href="#the-database-object-and-the-module-level-shortcuts" title="Permanent link">&para;</a></h2>
-<p>The recommended style is to load the database once and call its methods:</p>
+<h3 id="library-cache-bundles-database-scoped-caching">Library cache bundles (database-scoped caching)<a class="headerlink" href="#library-cache-bundles-database-scoped-caching" title="Permanent link">&para;</a></h3>
+<p>A library that ships <code>@cached</code> functions should not write into whatever
+project happens to call it. Binding the cache to a <code>Database</code> gives the
+library its own cache bundle — its own cache folder, name, and bookkeeping —
+without touching the host project's folders or state:</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Python</label><label for="__tabbed_3_2">Julia</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">datamanifest</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">db</span> <span class="o">=</span> <span class="n">datamanifest</span><span class="o">.</span><span class="n">Database</span><span class="p">(</span><span class="s2">&quot;datamanifest.toml&quot;</span><span class="p">)</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">df</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">load_dataset</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="n">path</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">get_dataset_path</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># mylib/_data.py</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datamanifest</span><span class="w"> </span><span class="kn">import</span> <span class="n">Database</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">_DB</span> <span class="o">=</span> <span class="n">Database</span><span class="p">(</span><span class="n">datasets_folder</span><span class="o">=</span><span class="s2">&quot;$user_data_dir/mylib&quot;</span><span class="p">,</span>  <span class="c1"># fetched bytes</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>               <span class="n">storage_config</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;project&quot;</span><span class="p">:</span> <span class="s2">&quot;mylib&quot;</span><span class="p">},</span>     <span class="c1"># names the cache bundle</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>               <span class="n">persist</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="nd">@_DB</span><span class="o">.</span><span class="n">cached</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;grid&quot;</span><span class="p">])</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="k">def</span><span class="w"> </span><span class="nf">landmask</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">grid</span><span class="p">):</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="o">...</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">using</span><span class="w"> </span><span class="n">DataManifest</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">db</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">read_dataset</span><span class="p">(</span><span class="s">&quot;datamanifest.toml&quot;</span><span class="p">)</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">df</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">load_dataset</span><span class="p">(</span><span class="n">db</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;co2&quot;</span><span class="p">)</span>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">path</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">get_dataset_path</span><span class="p">(</span><span class="n">db</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;co2&quot;</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c"># MyLib.jl</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="k">using</span><span class="w"> </span><span class="n">DataManifest</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="k">const</span><span class="w"> </span><span class="n">LIBDB</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Database</span><span class="p">(</span><span class="n">datasets_folder</span><span class="o">=</span><span class="sa">raw</span><span class="s">&quot;$user_data_dir/mylib&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">                       </span><span class="n">storage_config</span><span class="o">=</span><span class="kt">Dict</span><span class="p">(</span><span class="s">&quot;project&quot;</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="s">&quot;mylib&quot;</span><span class="p">),</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">                       </span><span class="n">persist</span><span class="o">=</span><span class="nb">false</span><span class="p">)</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="nd">@cached</span><span class="w"> </span><span class="n">key</span><span class="o">=</span><span class="p">(</span><span class="n">a</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="p">(;</span><span class="w"> </span><span class="n">a</span><span class="o">.</span><span class="n">grid</span><span class="p">))</span><span class="w"> </span><span class="n">db</span><span class="o">=</span><span class="n">LIBDB</span><span class="w"> </span><span class="k">function</span><span class="w"> </span><span class="n">landmask</span><span class="p">(;</span><span class="w"> </span><span class="n">grid</span><span class="o">::</span><span class="kt">String</span><span class="p">)</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">    </span><span class="o">...</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="k">end</span>
+</code></pre></div>
+<p>The <code>db=</code> option takes any expression evaluating to a <code>Database</code>,
+evaluated at <strong>call</strong> time — so the database may be defined after the
+<code>@cached</code> function.</p>
+</div>
+</div>
+</div>
+<p><code>storage_config</code> supplies the <code>[_STORAGE]</code>-shaped
+<a href="../configuration/">configuration</a> a manifest would normally carry — here
+<code>project = "mylib"</code> names the bundle, so produced artifacts land under
+<code>…/projects/mylib/cached</code> — and the whole cache context (<code>datacache_dir</code>,
+<code>$project</code>, <code>lock_stale_age</code>, the state file) comes from the database's
+frozen configuration instead of the working directory.</p>
+<p>An <strong>in-memory</strong> database (<code>persist=False</code>) never creates a <code>.datamanifest/</code>
+outside its own storage roots: the fetched-dataset inventory lives under the
+datasets folder and the produced-artifact inventory under the resolved
+<code>datacache_dir</code> (<code>&lt;root&gt;/.datamanifest/state.toml</code> in each), so the caller's
+project and working directory stay clean.</p>
+<p>The bare forms — Python's module-level <code>cached</code>, Julia's <code>@cached</code> without
+<code>db=</code> — resolve over the <strong>default database</strong> when a manifest is discoverable,
+which anchors at the same project as before, so behavior in a normal project
+is unchanged; when no manifest is discoverable they fall back to the ambient
+derivation, so caching keeps working in projects without a manifest.</p>
+<p>Collision and identity checks are per database (one project's inventory). Two
+databases share artifacts exactly when they resolve the same <code>datacache_dir</code>;
+the tools make no cross-project claims about caches that happen to share a
+directory.</p>
+<h2 id="the-database-object-and-the-module-level-shortcuts">The <code>Database</code> object, and the module-level shortcuts<a class="headerlink" href="#the-database-object-and-the-module-level-shortcuts" title="Permanent link">&para;</a></h2>
+<p>The recommended style is to load the database once and call its methods:</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="4:2"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1">Python</label><label for="__tabbed_4_2">Julia</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">datamanifest</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">db</span> <span class="o">=</span> <span class="n">datamanifest</span><span class="o">.</span><span class="n">Database</span><span class="p">(</span><span class="s2">&quot;datamanifest.toml&quot;</span><span class="p">)</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">df</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">load_dataset</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">path</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">get_dataset_path</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>
+</code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">using</span><span class="w"> </span><span class="n">DataManifest</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">db</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">read_dataset</span><span class="p">(</span><span class="s">&quot;datamanifest.toml&quot;</span><span class="p">)</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="n">df</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">load_dataset</span><span class="p">(</span><span class="n">db</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;co2&quot;</span><span class="p">)</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="n">path</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">get_dataset_path</span><span class="p">(</span><span class="n">db</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;co2&quot;</span><span class="p">)</span>
 </code></pre></div>
 </div>
 </div>
@@ -1311,16 +1403,16 @@ the process — the manifest is read once, not on every call. A no-argument
 naming the file. Every <code>datamanifest.X(...)</code> is the method <code>X</code> on that default
 database, or on the database you pass explicitly — <code>add</code> included, which
 registers <strong>and downloads</strong> either way:</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="4:2"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1">Python</label><label for="__tabbed_4_2">Julia</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="5:2"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1">Python</label><label for="__tabbed_5_2">Julia</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">datamanifest</span><span class="o">.</span><span class="n">download_dataset</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>            <span class="c1"># the auto-discovered default</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">datamanifest</span><span class="o">.</span><span class="n">download_dataset</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">,</span> <span class="n">db</span><span class="o">=</span><span class="n">mydb</span><span class="p">)</span>   <span class="c1"># a specific database</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">datamanifest</span><span class="o">.</span><span class="n">download_dataset</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>            <span class="c1"># the auto-discovered default</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">datamanifest</span><span class="o">.</span><span class="n">download_dataset</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">,</span> <span class="n">db</span><span class="o">=</span><span class="n">mydb</span><span class="p">)</span>   <span class="c1"># a specific database</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">download_dataset</span><span class="p">(</span><span class="s">&quot;co2&quot;</span><span class="p">)</span><span class="w">          </span><span class="c"># the active project&#39;s manifest</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">download_dataset</span><span class="p">(</span><span class="n">mydb</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;co2&quot;</span><span class="p">)</span><span class="w">    </span><span class="c"># a specific database</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">download_dataset</span><span class="p">(</span><span class="s">&quot;co2&quot;</span><span class="p">)</span><span class="w">          </span><span class="c"># the active project&#39;s manifest</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">download_dataset</span><span class="p">(</span><span class="n">mydb</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;co2&quot;</span><span class="p">)</span><span class="w">    </span><span class="c"># a specific database</span>
 </code></pre></div>
 <p>In Julia the default manifest comes from the <strong>active project</strong>
 (<code>julia --project</code> / <code>Pkg.activate</code>): the first of the recognized
@@ -1338,30 +1430,33 @@ cover the rationale.</p>
 <h2 id="a-file-less-database-no-manifest">A file-less database (no manifest)<a class="headerlink" href="#a-file-less-database-no-manifest" title="Permanent link">&para;</a></h2>
 <p>For library code that wants checksummed downloads into a folder it controls —
 an OS-appropriate data dir, say — a <strong>file-less database</strong> skips the manifest
-entirely: no <code>datamanifest.toml</code>, no state file, nothing written but the data.
-The folder accepts the same <code>$</code>-symbols as the <a href="../storage/">storage model</a>, and
-the database's methods do everything the module-level functions do:</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="5:2"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1">Python</label><label for="__tabbed_5_2">Julia</label></div>
+entirely: no <code>datamanifest.toml</code>, and nothing written outside the folders the
+database owns (its inventory lives under the data folder itself). The folder
+accepts the same <code>$</code>-symbols as the <a href="../storage/">storage model</a>, and the
+database's methods do everything the module-level functions do:</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="6:2"><input checked="checked" id="__tabbed_6_1" name="__tabbed_6" type="radio" /><input id="__tabbed_6_2" name="__tabbed_6" type="radio" /><div class="tabbed-labels"><label for="__tabbed_6_1">Python</label><label for="__tabbed_6_2">Julia</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datamanifest</span><span class="w"> </span><span class="kn">import</span> <span class="n">Database</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="n">db</span> <span class="o">=</span> <span class="n">Database</span><span class="p">(</span><span class="n">datasets_folder</span><span class="o">=</span><span class="s2">&quot;$user_data_dir/mylib&quot;</span><span class="p">,</span> <span class="n">persist</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="n">db</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s2">&quot;https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>
-<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="n">path</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">get_dataset_path</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>   <span class="c1"># → ~/.local/share/mylib/gml.noaa.gov/…/co2_annmean_mlo.csv</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datamanifest</span><span class="w"> </span><span class="kn">import</span> <span class="n">Database</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="n">db</span> <span class="o">=</span> <span class="n">Database</span><span class="p">(</span><span class="n">datasets_folder</span><span class="o">=</span><span class="s2">&quot;$user_data_dir/mylib&quot;</span><span class="p">,</span> <span class="n">persist</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="n">db</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s2">&quot;https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="n">path</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">get_dataset_path</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>   <span class="c1"># → ~/.local/share/mylib/gml.noaa.gov/…/co2_annmean_mlo.csv</span>
 </code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">using</span><span class="w"> </span><span class="n">DataManifest</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">db</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Database</span><span class="p">(</span><span class="n">datasets_folder</span><span class="o">=</span><span class="sa">raw</span><span class="s">&quot;$user_data_dir/mylib&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">persist</span><span class="o">=</span><span class="nb">false</span><span class="p">)</span><span class="w">   </span><span class="c"># raw&quot;&quot;: keep Julia</span>
-<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">                                                                          </span><span class="c"># from interpolating $</span>
-<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="n">add</span><span class="p">(</span><span class="n">db</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv&quot;</span><span class="p">;</span><span class="w"> </span><span class="n">name</span><span class="o">=</span><span class="s">&quot;co2&quot;</span><span class="p">)</span>
-<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="n">path</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">get_dataset_path</span><span class="p">(</span><span class="n">db</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;co2&quot;</span><span class="p">)</span><span class="w">  </span><span class="c"># → ~/.local/share/mylib/gml.noaa.gov/…/co2_annmean_mlo.csv</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">using</span><span class="w"> </span><span class="n">DataManifest</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">db</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Database</span><span class="p">(</span><span class="n">datasets_folder</span><span class="o">=</span><span class="sa">raw</span><span class="s">&quot;$user_data_dir/mylib&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">persist</span><span class="o">=</span><span class="nb">false</span><span class="p">)</span><span class="w">   </span><span class="c"># raw&quot;&quot;: keep Julia</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">                                                                          </span><span class="c"># from interpolating $</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="n">add</span><span class="p">(</span><span class="n">db</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv&quot;</span><span class="p">;</span><span class="w"> </span><span class="n">name</span><span class="o">=</span><span class="s">&quot;co2&quot;</span><span class="p">)</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="n">path</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">get_dataset_path</span><span class="p">(</span><span class="n">db</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;co2&quot;</span><span class="p">)</span><span class="w">  </span><span class="c"># → ~/.local/share/mylib/gml.noaa.gov/…/co2_annmean_mlo.csv</span>
 </code></pre></div>
 </div>
 </div>
 </div>
+<p>To give such a library its own <code>@cached</code> bundle as well, see
+<a href="#library-cache-bundles-database-scoped-caching">library cache bundles</a>.</p>
 
 
 
