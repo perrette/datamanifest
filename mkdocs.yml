@@ -38,11 +38,19 @@ theme:
     - search.suggest
     - search.highlight
     - content.code.copy
+    - content.tabs.link
     - content.action.edit
 
 plugins:
   - search
   - include-markdown
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: sphinx
+            show_source: false
+            members_order: source
 
 markdown_extensions:
   - admonition
@@ -54,6 +62,8 @@ markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
   - pymdownx.inlinehilite
   - pymdownx.snippets
   - pymdownx.details
@@ -67,17 +77,18 @@ nav:
       - Installation: installation.md
       - Quickstart: quickstart.md
   - Guide:
-      - Using it from your code: api.md
+      - Adding datasets: adding-datasets.md
+      - Using it from code: api.md
       - Use cases: use-cases.md
       - Storage model: storage.md
       - Configuration: configuration.md
-      - Adding datasets: adding-datasets.md
       - Importing from other tools: importing.md
       - Language bindings: language-bindings.md
       - Related projects: related.md
   - Reference:
       - Manifest format: manifest-format.md
       - CLI reference: cli.md
+      - Python API: python-api.md
   - Development:
       - Conformance: conformance.md
       - Roadmap: roadmap.md
