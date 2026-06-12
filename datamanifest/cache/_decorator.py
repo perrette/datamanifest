@@ -37,7 +37,78 @@ from ._index import CACHED_INDEX_NAME, CachedIndex
 from ._sidecars import config_is_valid, write_config, write_metadata
 from ._usage import record_path
 
-__all__ = ["cached", "Recipe", "registered_recipes", "CacheTypeConflict"]
+__all__ = [
+    "cached",
+    "Recipe",
+    "registered_recipes",
+    "CacheTypeConflict",
+    "CacheContext",
+    "set_default_context_provider",
+]
+
+
+class CacheContext(NamedTuple):
+    """An explicit cache-resolution context — the plain object a ``Database``
+    hands down into the cache layer (``Database``-scoped caching).
+
+    Carries everything a ``@cached`` call otherwise derives ambiently from the
+    working directory:
+
+    - ``project_root`` — the manifest's directory (``""`` for an in-memory
+      ``Database`` with no manifest);
+    - ``storage_config`` — the layered/frozen storage configuration
+      (``datacache_dir``, ``project``, ``lock_stale_age``, …); ``None`` means
+      "no configuration" (the built-in field defaults apply), **not** "discover
+      one ambiently";
+    - ``state_file`` — the state file produced artifacts are registered in.
+      Empty means "derive it from ``project_root``" (the usual
+      ``<root>/.datamanifest/state.toml``); an in-memory ``Database`` sets it
+      explicitly to ``<datacache_root>/.datamanifest/state.toml`` so its
+      inventory stays under the storage root it describes.
+
+    A context is a plain value: the cache layer never imports the fetch layer —
+    the ``Database`` builds one of these and passes it in (layering preserved).
+    """
+
+    project_root: str = ""
+    storage_config: object = None
+    state_file: str = ""
+
+
+# The default-Database context provider (rule 3 of the Database-scoped caching
+# design): a zero-arg callable returning a CacheContext when a default Database
+# is discoverable, or None when not. The *fetch* layer registers it at
+# import time — this module only holds the hook, so the cache layer's hard
+# import invariant (store + stdlib only, never the fetch layer) is preserved.
+_default_context_provider = None
+
+
+def set_default_context_provider(provider) -> None:
+    """Register the callable the bare ``cached`` form uses to resolve the
+    default ``Database``'s cache context.
+
+    *provider* is a zero-arg callable returning a :class:`CacheContext` (when a
+    default manifest/``Database`` is discoverable) or ``None`` (no manifest —
+    the cache layer then falls back to its ambient derivation). It must not
+    raise for the "no manifest" case; any exception it does raise is swallowed
+    and treated as ``None``, so caching keeps working in projects without a
+    manifest. Called by the fetch layer at import time.
+    """
+    global _default_context_provider
+    _default_context_provider = provider
+
+
+def _resolve_default_context():
+    """The default ``Database``'s :class:`CacheContext` via the registered
+    provider, or ``None`` (no provider, no discoverable manifest, or any
+    provider failure — a broken default ``Database`` must never break
+    caching)."""
+    if _default_context_provider is None:
+        return None
+    try:
+        return _default_context_provider()
+    except Exception:  # noqa: BLE001 - fall back to the ambient derivation
+        return None
 
 
 class Recipe(NamedTuple):
@@ -363,6 +434,49 @@ def _locate_cached_toml(cached_toml, project_root) -> str:
     return os.path.join(os.getcwd(), CACHED_INDEX_NAME)
 
 
+def _call_context(context, *, project_root, storage_config, cached_toml):
+    """Resolve one ``@cached`` call's ``(project_root, storage_config,
+    state_file)`` triple. Three sources, most explicit first:
+
+    1. An explicit *context* — a :class:`CacheContext`, or a zero-arg callable
+       returning one (``Database.cached`` passes its bound context builder, so
+       the ``Database``'s configuration is read at **call** time, not
+       decoration time). No ambient discovery happens at all: empty context
+       fields mean "none", not "go look".
+    2. The **default Database**, via the provider the fetch layer registers
+       (:func:`set_default_context_provider`) — consulted only when no
+       explicit *project_root* anchors the call, and only effective when a
+       manifest is actually discoverable (the provider returns ``None``
+       otherwise). In a normal manifest project this resolves to the same
+       project root / storage config as the ambient path, so behavior there is
+       unchanged.
+    3. The ambient derivation: manifest discovery from the working directory
+       (:func:`_discover_manifest`) plus the layered storage config — caching
+       keeps working in directories without any manifest.
+
+    The explicit decorator kwargs (*project_root* / *storage_config* /
+    *cached_toml*) always win over the corresponding context fields.
+    """
+    ctx = context() if callable(context) else context
+    if ctx is None and not project_root:
+        ctx = _resolve_default_context()
+    if ctx is not None:
+        root = project_root or ctx.project_root
+        sconf = storage_config if storage_config is not None else (
+            ctx.storage_config if ctx.storage_config is not None else {})
+        if cached_toml or not ctx.state_file:
+            index_path = _locate_cached_toml(cached_toml, root)
+        else:
+            index_path = ctx.state_file
+        return root, sconf, index_path
+    root, manifest_toml = _discover_manifest(project_root)
+    sconf = (
+        storage_config if storage_config is not None
+        else _load_storage_config(manifest_toml)
+    )
+    return root, sconf, _locate_cached_toml(cached_toml, root)
+
+
 def _register_produced(
     cached_toml_path, *, cachetype, hash_, ref, format, storage_path,
     version="",
@@ -440,6 +554,7 @@ def cached(
     storage_config=None,
     cached_toml="",
     name="",
+    context=None,
 ):
     """Produce-or-load decorator for a function that returns a cacheable value.
 
@@ -511,6 +626,14 @@ def cached(
     name:
         Portable registry name under which the produced artifact is listed in
         ``cached.toml``. Defaults to the wrapped function's ``__name__``.
+    context:
+        An explicit :class:`CacheContext` (or a zero-arg callable returning
+        one, evaluated per call) supplying project root, storage config and
+        state-file location — what ``Database.cached`` passes so the cache
+        context comes from the ``Database`` instead of the working directory.
+        When absent, the bare form resolves over the **default Database** if a
+        manifest is discoverable, and otherwise falls back to the ambient
+        derivation (see :func:`_call_context`).
 
     On a **produce** (miss), the artifact is registered into the resolved
     ``cached.toml`` (``cachetype`` / ``hash`` / ``ref`` = ``module:qualname`` /
@@ -542,18 +665,16 @@ def cached(
 
             key_table = _key_table_for_call(key, kwargs)
             hash_ = param_hash(key_table)
-            root, manifest_toml = _discover_manifest(project_root)
-            # Storage resolution is centralized in the manifest's [_STORAGE]: when
-            # the caller passes no storage_config, load it from the discovered
-            # manifest (the datacache_dir field + $-symbols / _HOST), so the
-            # produced cache lands under the same datacache_dir the rest of the
-            # tool reads.
-            sconf = (
-                storage_config if storage_config is not None
-                else _load_storage_config(manifest_toml)
+            # The call's resolution context — an explicit CacheContext (a
+            # Database's), else the default Database's, else the ambient
+            # derivation (manifest discovery + layered [_STORAGE]); see
+            # _call_context. Either way the produced cache lands under the
+            # same datacache_dir the rest of the tool reads.
+            root, sconf, index_path = _call_context(
+                context, project_root=project_root,
+                storage_config=storage_config, cached_toml=cached_toml,
             )
             ref = f"{fn.__module__}:{fn.__qualname__}"
-            index_path = _locate_cached_toml(cached_toml, root)
             data_filename = _data_name(basename, fmt)
 
             # The artifact directory under the current config (the directive) —

@@ -14,7 +14,14 @@ Phase 2 and are intentionally **not** present here.
 the fetch layer never sees a produced dataset.
 """
 
-from ._decorator import CacheTypeConflict, Recipe, cached, registered_recipes
+from ._decorator import (
+    CacheContext,
+    CacheTypeConflict,
+    Recipe,
+    cached,
+    registered_recipes,
+    set_default_context_provider,
+)
 from ._hash import key_table_from_kwargs, param_hash
 from ._index import CACHED_INDEX_NAME, STATE_FILE_NAME, CachedIndex
 from ._inspect import (
@@ -46,6 +53,8 @@ __all__ = [
     "Recipe",
     "registered_recipes",
     "CacheTypeConflict",
+    "CacheContext",
+    "set_default_context_provider",
     "param_hash",
     "key_table_from_kwargs",
     "write_config",

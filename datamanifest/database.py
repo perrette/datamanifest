@@ -931,14 +931,36 @@ def resolve_existing_path(db: "Database", entry: "DatasetEntry", extract=None) -
 
 
 # ----- state-file (.datamanifest/state.toml) integration for fetched datasets -
-def _state_base(db: "Database") -> str:
-    """The directory the state file is a sibling of — the manifest's directory.
+def _in_memory_datasets_root(db: "Database") -> str:
+    """The datasets root an **in-memory** database owns — its explicit
+    ``datasets_folder`` when set, else the resolved ``datasets_dir`` (the
+    shared store by default) — as an absolute path. This is where its fetched
+    bytes land, and (per the persist=false rule) where its dataset inventory
+    lives."""
+    sconf = db.storage_config
+    if db.datasets_folder:
+        sconf = storage.override_fields(sconf, datasets_dir=db.datasets_folder)
+    return os.path.abspath(storage.datasets_dir(storage_config=sconf))
 
-    Returns ``""`` when the database has no manifest (a transient, manifest-less
-    ``Database``): the state file is defined *relative to a manifest*, so without
-    one there is nothing to record into and resolution stays purely derived.
+
+def _state_base(db: "Database") -> str:
+    """The anchor the dataset state file is located from (a path handed to
+    ``CachedIndex.locate`` / ``read_or_empty``).
+
+    - Manifest-backed database: the manifest's directory — the state file is
+      the usual ``<dir>/.datamanifest/state.toml`` (with the legacy-name and
+      linked-worktree fallbacks).
+    - In-memory database (no ``datasets_toml``): the persist=false rule — the
+      inventory lives under the storage root the database describes, i.e.
+      ``<datasets_root>/.datamanifest/state.toml`` (the explicit file path,
+      so location works even before the root exists). Nothing is recorded in
+      the caller's cwd/project.
     """
-    return os.path.dirname(db.datasets_toml) if db.datasets_toml else ""
+    if db.datasets_toml:
+        return os.path.dirname(db.datasets_toml)
+    from .cache import STATE_FILE_NAME
+
+    return os.path.join(_in_memory_datasets_root(db), STATE_FILE_NAME)
 
 
 def _portable_storage_path(path: str, project_root: str) -> str:
@@ -972,16 +994,22 @@ def state_recorded_dataset_path(db: "Database", entry: "DatasetEntry") -> str:
         return ""
     if os.path.isabs(sp):
         return sp
-    root = db.get_project_root() or _state_base(db)
+    # An in-memory database records absolute paths, so a relative record only
+    # occurs for a manifest-backed database (anchored at the project root);
+    # the datasets-root anchor is a defensive fallback.
+    root = db.get_project_root() or _in_memory_datasets_root(db)
     return os.path.abspath(os.path.join(root, sp))
 
 
 def record_dataset_state(db: "Database", entry: "DatasetEntry", path: str) -> None:
     """Record a fetched dataset's resolved *path* (+ its actual ``sha256`` unless
     checksums are skipped) into the state file — the systematic inventory of
-    where every object lives. Additive and concurrency-safe (re-read + merge +
-    atomic write). Best-effort: a read-only / unwritable state file never breaks
-    a download."""
+    where every object lives. For a manifest-backed database that is the
+    manifest's sibling ``.datamanifest/state.toml``; an in-memory database
+    records under its own datasets root instead (see :func:`_state_base`), with
+    absolute paths (there is no project root to be portable against). Additive
+    and concurrency-safe (re-read + merge + atomic write). Best-effort: a
+    read-only / unwritable state file never breaks a download."""
     if not path or not entry.key:
         return
     base = _state_base(db)
@@ -991,7 +1019,10 @@ def record_dataset_state(db: "Database", entry: "DatasetEntry", path: str) -> No
         from .cache import CachedIndex
 
         idx = CachedIndex.read_or_empty(base)
-        sp = _portable_storage_path(path, db.get_project_root())
+        root = db.get_project_root()
+        sp = _portable_storage_path(path, root)
+        if not root:
+            sp = os.path.abspath(sp)
         sha = "" if (db.skip_checksum or entry.skip_checksum) else (entry.sha256 or "")
         idx.register_dataset(key=entry.key, storage_path=sp, sha256=sha)
         idx.write()
@@ -1325,6 +1356,21 @@ class Database:
     is added in a later item. Without inline code execution there is no
     ``loaders_*_modules`` field (see roadmap §C): user-local modules are made
     importable via ``loaders_python_includes`` (paths prepended to ``sys.path``).
+
+    *storage_config* is an optional ``[_STORAGE]``-shaped dict applied as (part
+    of) the manifest layer of the database's scoped configuration — the way to
+    configure storage on a database that has no manifest file to carry a
+    committed ``[_STORAGE]`` table. The main use is an in-memory library
+    database naming its cache bundle::
+
+        db = Database(persist=False, storage_config={"project": "mylib"})
+
+    Its keys (``project``, ``datacache_dir``, ``datasets_dir``,
+    ``lock_stale_age``, …) override the manifest's own ``[_STORAGE]`` values
+    but still sit below the per-checkout config file and the
+    ``DATAMANIFEST_*`` environment variables on the resolution ladder. It is
+    runtime configuration: it is **not** stored in ``extra`` and never written
+    back to the manifest.
     """
 
     def __init__(
@@ -1335,6 +1381,7 @@ class Database:
         skip_checksum: bool = False,
         skip_checksum_folders: bool = False,
         datasets=None,
+        storage_config=None,
         **kwargs,
     ):
         self.datasets = dict(datasets) if datasets is not None else {}
@@ -1371,10 +1418,16 @@ class Database:
         # Database-level passthrough for unknown _* top-level tables (mirrors
         # per-dataset extra). schema_version comes from [_META].schema; None => v0.
         self.extra: dict = {}
+        # Constructor-supplied [_STORAGE]-shaped overrides (see the class
+        # docstring): merged into the manifest layer of the scoped config,
+        # winning over the manifest's own [_STORAGE] keys. Kept separate from
+        # `extra` so they are never serialized back to the manifest.
+        self._storage_overrides = dict(storage_config) if storage_config else {}
         # The layered scoped config (checkout > manifest [_STORAGE] > user);
         # rebuilt with the manifest layer when a manifest is read.
         self.storage_config = storage.load_scoped_config(
-            project_root=self.get_project_root(), freeze=True,
+            project_root=self.get_project_root(),
+            manifest_config=self._storage_overrides, freeze=True,
         )
         self.schema_version = None
         if datasets_toml and os.path.isfile(datasets_toml):
@@ -1570,6 +1623,72 @@ class Database:
         """Remove a dataset entry and (optionally) its cached files."""
         return delete_dataset(self, name, **kwargs)
 
+    # ----- database-scoped caching ------------------------------------------
+    def _cache_context(self):
+        """The cache-resolution context this database hands down to ``@cached``
+        (a plain :class:`datamanifest.cache.CacheContext` — the cache layer
+        never imports the database; the database builds the value).
+
+        A manifest-backed database contributes its project root and frozen
+        scoped config; the state file is then derived as usual
+        (``<root>/.datamanifest/state.toml``). An **in-memory** database (no
+        ``datasets_toml``) has no project to anchor at, so its
+        produced-artifact inventory is pinned under the resolved
+        ``datacache_dir`` itself (``<datacache_root>/.datamanifest/state.toml``)
+        — nothing is written outside directories the database owns, and in
+        particular the caller's cwd never gains a ``.datamanifest/``.
+        """
+        from .cache import STATE_FILE_NAME, CacheContext
+
+        if self.datasets_toml:
+            return CacheContext(
+                project_root=self.get_project_root(),
+                storage_config=self.storage_config,
+            )
+        cache_root = os.path.abspath(storage.datacache_dir(
+            storage_config=self.storage_config,
+        ))
+        return CacheContext(
+            project_root="",
+            storage_config=self.storage_config,
+            state_file=os.path.join(cache_root, STATE_FILE_NAME),
+        )
+
+    def cached(self, _fn=None, *, cachetype=None, format=None, key=None,
+               basename="", version="", storage_path="", cached_toml="",
+               name=""):
+        """Produce-or-load decorator bound to **this** database.
+
+        ``@db.cached(...)`` is :func:`datamanifest.cache.cached` with the cache
+        context resolved from the database instead of the working directory:
+        artifacts land under the database's resolved ``datacache_dir`` (keyed
+        by its ``project``), the lock staleness comes from its
+        ``lock_stale_age``, and produced artifacts are registered in its state
+        file (for an in-memory database: under the ``datacache_dir`` root
+        itself — see :meth:`_cache_context`). The context is read at **call**
+        time, so later configuration changes on the database are honored.
+
+        Accepts the same options as ``datamanifest.cache.cached`` except
+        ``project_root`` / ``storage_config`` / ``context`` — those are exactly
+        what the database supplies. An explicit *cached_toml* still overrides
+        the state-file location.
+
+        Typical library use::
+
+            _DB = Database(persist=False, storage_config={"project": "mylib"})
+
+            @_DB.cached(format="json")
+            def landmask(*, grid):
+                ...
+        """
+        from .cache import cached as _cached
+
+        return _cached(
+            _fn, cachetype=cachetype, format=format, key=key,
+            basename=basename, version=version, storage_path=storage_path,
+            cached_toml=cached_toml, name=name, context=self._cache_context,
+        )
+
     def register_datasets(self, datasets, persist: bool = True, **kwargs):
         if isinstance(datasets, str):
             ext = os.path.splitext(datasets)[1]
@@ -1649,9 +1768,12 @@ class Database:
         # Expose the layered scoped config — the manifest's [_STORAGE] (verbatim
         # copy stays in extra) sandwiched between the checkout's
         # .datamanifest/config.toml and the user-global config file.
+        # Constructor-supplied storage_config overrides win within this layer.
         self.storage_config = storage.load_scoped_config(
             project_root=self.get_project_root(),
-            manifest_config=dict(self.extra.get("_STORAGE", {})), freeze=True,
+            manifest_config={**dict(self.extra.get("_STORAGE", {})),
+                             **self._storage_overrides},
+            freeze=True,
         )
 
         names = [k for k in datasets if not k.startswith("_")]
@@ -1798,6 +1920,54 @@ def get_default_database() -> "Database":
             )
         _default_db = Database(datasets_toml=toml_path)
     return _default_db
+
+
+def _default_cache_context():
+    """The **default database's** cache context, or ``None`` when no manifest
+    is discoverable — the provider behind the bare ``@cached`` / ``cached``
+    form (database-scoped caching, rule 3).
+
+    Discovery mirrors :func:`~datamanifest.config.get_default_toml`
+    (``DATAMANIFEST_TOML`` / ``DATASETS_TOML`` env override, then the cwd
+    walk-up) but quietly: a missing manifest returns ``None`` instead of
+    warning or raising — :func:`get_default_database`'s ``RuntimeError`` must
+    never leak into caching, which keeps working in manifest-less directories
+    via the cache layer's ambient fallback.
+
+    The existing default-database singleton is reused when it matches the
+    discovered manifest; otherwise a transient :class:`Database` is built for
+    it (the singleton is never created or replaced here — only
+    :func:`get_default_database` does that). Any failure (e.g. a malformed
+    manifest) likewise yields ``None``.
+    """
+    try:
+        toml_path = ""
+        for envvar in ("DATAMANIFEST_TOML", "DATASETS_TOML"):
+            val = os.environ.get(envvar, "")
+            if val:
+                toml_path = val
+                break
+        if not toml_path:
+            from .config import _find_default_toml
+
+            toml_path = _find_default_toml(os.getcwd())
+        if not toml_path or not os.path.isfile(toml_path):
+            return None
+        toml_path = os.path.abspath(toml_path)
+        if _default_db is not None and _default_db.datasets_toml == toml_path:
+            return _default_db._cache_context()
+        return Database(datasets_toml=toml_path)._cache_context()
+    except Exception:  # noqa: BLE001 - never break caching on db resolution
+        logger.debug("default cache context unavailable", exc_info=True)
+        return None
+
+
+# Register the provider with the cache layer (a one-way handoff: the cache
+# module holds only the hook and never imports this module, so its layering
+# invariant — store + stdlib only — is preserved).
+from .cache import set_default_context_provider as _set_cache_context_provider  # noqa: E402
+
+_set_cache_context_provider(_default_cache_context)
 
 
 # ----- loader validation (Databases.jl:751-762) -----
