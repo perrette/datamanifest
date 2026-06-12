@@ -529,10 +529,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#finding-the-manifest-and-targeting-a-specific-database" class="md-nav__link">
+  <a href="#the-database-object-and-the-module-level-shortcuts" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Finding the manifest, and targeting a specific database
+        The Database object, and the module-level shortcuts
       
     </span>
   </a>
@@ -1030,10 +1030,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#finding-the-manifest-and-targeting-a-specific-database" class="md-nav__link">
+  <a href="#the-database-object-and-the-module-level-shortcuts" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Finding the manifest, and targeting a specific database
+        The Database object, and the module-level shortcuts
       
     </span>
   </a>
@@ -1113,14 +1113,29 @@ lands under <a href="../storage/"><code>datacache_dir</code></a> (default:
 <code>$user_cache_dir/datamanifest/projects/$project/cached</code>) and shows up in <code>list</code>
 alongside your datasets. The <a href="https://github.com/perrette/datamanifest/blob/main/design/design-notes.md">design notes</a> cover how an
 artifact's identity (<code>cachetype</code>, <code>version</code>, parameter hash) is derived.</p>
-<h2 id="finding-the-manifest-and-targeting-a-specific-database">Finding the manifest, and targeting a specific database<a class="headerlink" href="#finding-the-manifest-and-targeting-a-specific-database" title="Permanent link">&para;</a></h2>
-<p>The module-level functions find the project's manifest automatically (walking
-up from the working directory; <code>DATAMANIFEST_TOML</code> overrides). To use a specific
-database instead, either call the function with <code>db=</code>
-(<code>datamanifest.download_dataset("co2", db=mydb)</code>) or use the database's own
-methods (<code>mydb.download_dataset("co2")</code>). Every <code>datamanifest.X(...)</code> is just
-<code>resolve_db(db).X(...)</code> — the method on <code>db</code>, or on the default database when
-<code>db</code> is None. See the docstrings (<code>help(datamanifest)</code>) and the
+<h2 id="the-database-object-and-the-module-level-shortcuts">The <code>Database</code> object, and the module-level shortcuts<a class="headerlink" href="#the-database-object-and-the-module-level-shortcuts" title="Permanent link">&para;</a></h2>
+<p>The recommended style is to load the database once and call its methods:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">datamanifest</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">db</span> <span class="o">=</span> <span class="n">datamanifest</span><span class="o">.</span><span class="n">Database</span><span class="p">(</span><span class="s2">&quot;datamanifest.toml&quot;</span><span class="p">)</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">df</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">load_dataset</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">path</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">get_dataset_path</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p>This is explicit about which project's manifest the code uses, lets several
+databases coexist in one program, and pins the configuration: a <code>Database</code>
+takes its <a href="../configuration/">configuration snapshot</a> — config files,
+environment, host — once, when it is created.</p>
+<p>The module-level functions are shortcuts over a <strong>default database</strong>. On first
+use they locate the project's manifest (walking up from the working directory;
+<code>DATAMANIFEST_TOML</code> overrides), build the default <code>Database</code> from it, and keep
+it for the rest of the process — the manifest is read once, not on every call.
+Every <code>datamanifest.X(...)</code> is the method <code>X</code> on that default database, or on
+the database you pass explicitly:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">datamanifest</span><span class="o">.</span><span class="n">download_dataset</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>            <span class="c1"># the auto-discovered default</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">datamanifest</span><span class="o">.</span><span class="n">download_dataset</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">,</span> <span class="n">db</span><span class="o">=</span><span class="n">mydb</span><span class="p">)</span>   <span class="c1"># a specific database</span>
+</code></pre></div>
+<p>See the docstrings (<code>help(datamanifest)</code>) and the
 <a href="https://github.com/perrette/datamanifest/blob/main/design/design-notes.md">design notes</a>.</p>
 <p>The full public surface, beyond <code>load_dataset</code> / <code>get_dataset_path</code>:</p>
 <ul>
@@ -1142,11 +1157,11 @@ an OS-appropriate data dir, say — a <strong>file-less database</strong> skips 
 entirely: no <code>datamanifest.toml</code>, no state file, nothing written but the data.
 The folder accepts the same <code>$</code>-symbols as the <a href="../storage/">storage model</a>, and
 the database's methods do everything the module-level functions do:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datamanifest</span><span class="w"> </span><span class="kn">import</span> <span class="n">Database</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">db</span> <span class="o">=</span> <span class="n">Database</span><span class="p">(</span><span class="n">datasets_folder</span><span class="o">=</span><span class="s2">&quot;$user_data_dir/mylib&quot;</span><span class="p">,</span> <span class="n">persist</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">db</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s2">&quot;https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">path</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">download_dataset</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>   <span class="c1"># → ~/.local/share/mylib/gml.noaa.gov/…/co2_annmean_mlo.csv</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datamanifest</span><span class="w"> </span><span class="kn">import</span> <span class="n">Database</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">db</span> <span class="o">=</span> <span class="n">Database</span><span class="p">(</span><span class="n">datasets_folder</span><span class="o">=</span><span class="s2">&quot;$user_data_dir/mylib&quot;</span><span class="p">,</span> <span class="n">persist</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">db</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s2">&quot;https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_annmean_mlo.csv&quot;</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">path</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">download_dataset</span><span class="p">(</span><span class="s2">&quot;co2&quot;</span><span class="p">)</span>   <span class="c1"># → ~/.local/share/mylib/gml.noaa.gov/…/co2_annmean_mlo.csv</span>
 </code></pre></div>
 
 
