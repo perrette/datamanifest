@@ -38,4 +38,11 @@ jobs:
           repository: awi-esc/DataManifest.jl
           path: _julia_repo
       - run: python docs/_sync_julia_api.py _julia_repo/docs/api.md
+      # Refresh the manifest specification mirror from the datamanifest.toml
+      # repo's main branch (public repo, no token needed).
+      - uses: actions/checkout@v4
+        with:
+          repository: perrette/datamanifest.toml
+          path: _spec_repo
+      - run: python docs/_sync_spec.py _spec_repo/SCHEMA.md
       - run: mkdocs gh-deploy --force

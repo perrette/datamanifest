@@ -107,6 +107,14 @@ the core HTTP downloader:
   cloned. Folders (clones, extracted archives) get a checksum computed over
   the whole tree.
 
+For data hosted on a git forge, prefer a release tarball URL (e.g.
+`https://github.com/owner/repo/archive/refs/tags/v2.1.zip` with
+`extract = true`) over the git repository itself — a plain download is
+platform-independent and needs no git client. Note also that the `uri` may
+be purely informative — pointing at a documentation page, say — when a
+[fetcher binding](language-bindings.md) or `skip_download` provides the
+bytes instead.
+
 ### Other tools' catalogs
 
 When the datasets are already listed in another tool's catalog file — a pooch

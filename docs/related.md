@@ -14,10 +14,12 @@ with two implementations:
 Both read and write the same manifest, so one file can serve a mixed
 Python/Julia project — see [language bindings](language-bindings.md).
 
-This site is the main documentation for the ecosystem: the manifest format,
-the CLI, the Python library, and the cross-language pages. The
-[DataManifest.jl site](https://awi-esc.github.io/DataManifest.jl/) hosts the
-Julia API reference and a Julia-specific quickstart.
+This site is the documentation for the ecosystem: the
+[manifest format](manifest-format.md) and its
+[specification](manifest-spec.md), the CLI, the Python library, the
+cross-language pages, and the [Julia API reference](julia-api.md).
+Julia-specific guides live as Markdown in the
+[DataManifest.jl repository](https://github.com/awi-esc/DataManifest.jl/blob/main/docs/doc.md).
 
 ## From the same author
 
@@ -53,6 +55,31 @@ A few other open-source tools I maintain.
 - [`cthoyt/pystow`](https://github.com/cthoyt/pystow) — lightweight reproducible
   download + cached storage with an OS-appropriate data dir; code-driven rather
   than manifest-driven.
+
+## Julia alternatives
+
+Single-language counterparts on the Julia side:
+
+- [`DataDeps.jl`](https://github.com/oxinabox/DataDeps.jl) —
+  download-on-first-access with checksum verification; registration lives in
+  code rather than a manifest file.
+- [`DataToolkit.jl`](https://discourse.julialang.org/t/ann-datatoolkit-jl-reproducible-flexible-and-convenient-data-management/104757) —
+  the most comparable: a rich, declarative data-management ecosystem with lazy
+  loading and a broad driver set. It allows in-config code via its meta
+  `@syntax`, where DataManifest prefers references to external code.
+- [`DrWatson.jl`](https://juliadynamics.github.io/DrWatson.jl/dev/) — broader
+  scientific-project organization (simulations, file layout, naming), of which
+  data handling is one part.
+- [`RemoteFiles.jl`](https://github.com/helgee/RemoteFiles.jl) — keep a local
+  file in sync with a remote URL.
+- Pkg Artifacts (`Artifacts.toml`) — Julia's built-in TOML manifest of
+  content-addressed, hash-pinned data/binary bundles tied to packages.
+
+As a rule of thumb: for code-driven download-and-checksum alone, DataDeps.jl
+is lighter; for a rich declarative data ecosystem, DataToolkit.jl is richer;
+DataManifest.jl targets multi-dataset, multi-language projects that want the
+whole dependency declaration — and the derived-data cache — in one shareable
+file.
 
 ## Acknowledgments
 

@@ -4,7 +4,7 @@ Where the [CLI](cli.md) *manages* a project's data, the in-code API *consumes*
 it: your analysis code resolves and loads what the manifest declares, and never
 edits it. This page is the narrative guide; the complete list of functions and
 classes is in the [Python API reference](python-api.md). The Julia tabs show
-the equivalent calls in [DataManifest.jl](https://awi-esc.github.io/DataManifest.jl/),
+the equivalent calls in [DataManifest.jl](https://github.com/awi-esc/DataManifest.jl),
 which reads the same manifest.
 
 === "Python"
@@ -72,9 +72,14 @@ Cache an expensive computation, keyed by its keyword arguments:
     Julia's `@cached` takes the cache key explicitly (`key=` maps the keyword
     arguments to the parameters that identify the result) and saves with the
     stdlib `Serialization` (`jls`) by default — see the
-    [Julia caching page](https://awi-esc.github.io/DataManifest.jl/caching/).
+    [Julia caching page](https://github.com/awi-esc/DataManifest.jl/blob/main/docs/caching.md).
 
-Each distinct keyword combination is stored separately. The result is saved
+Each distinct keyword combination is stored separately. The cache key is
+shared across languages: it is the SHA-256 of the canonical JSON
+([RFC 8785](https://www.rfc-editor.org/rfc/rfc8785)) of the keyword
+arguments, with Python's `json.dumps` float form as the reference — the Julia
+tool computes the identical key, so caches produced in one language are read
+by the other. The result is saved
 with `pickle` by default; pass `format="nc"`/`"csv"`/… to pick a serialization,
 and `version="v2"` to invalidate when the function's *logic* changes.
 `datamanifest list` shows cached results grouped by function with their
@@ -141,6 +146,12 @@ registers **and downloads** either way:
     download_dataset("co2")          # the active project's manifest
     download_dataset(mydb, "co2")    # a specific database
     ```
+
+    In Julia the default manifest comes from the **active project**
+    (`julia --project` / `Pkg.activate`): the first of the recognized
+    manifest names found next to the active `Project.toml`. The
+    `DATAMANIFEST_TOML` (or `DATASETS_TOML`) environment variable points at
+    a manifest explicitly and takes precedence over the project discovery.
 
 The rest of the surface — registering and deleting datasets, downloading in
 bulk, validating loader bindings — is in the

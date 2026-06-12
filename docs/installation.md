@@ -80,8 +80,8 @@ Requirements: Julia ≥ 1.10.
 In Julia, data loaders are ordinary packages (e.g. `CSV.jl`) that you
 `Pkg.add` yourself and reference from the manifest — see
 [language bindings](language-bindings.md). The
-[Julia API reference](julia-api.md) is mirrored on this site; the full Julia
-documentation lives at
-[awi-esc.github.io/DataManifest.jl](https://awi-esc.github.io/DataManifest.jl/).
+[Julia API reference](julia-api.md) is mirrored on this site; the Julia
+walkthrough lives in the
+[DataManifest.jl repository](https://github.com/awi-esc/DataManifest.jl/blob/main/docs/doc.md).
 
 Once installed, head to the [quickstart](quickstart.md).

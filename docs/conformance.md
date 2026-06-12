@@ -5,9 +5,9 @@ the same `datamanifest.toml` can be consumed by sibling implementations (the Jul
 [`DataManifest.jl`](https://github.com/awi-esc/DataManifest.jl)) without conflict, because
 each tool reads the common fields plus its own `_LANG`-namespaced bindings and preserves
 the rest verbatim. The format is defined in its own specification,
-[`datamanifest.toml`](https://perrette.github.io/datamanifest.toml). For a
+[`datamanifest.toml`](manifest-spec.md) (mirrored on this site). For a
 practical summary of the fields, see the [manifest format](manifest-format.md)
-reference.
+page.
 
 You do **not** need this page to use `datamanifest` — the
 [quickstart](quickstart.md) and [use cases](use-cases.md) cover everyday usage. This file is for anyone who needs the cross-tool details: which features
@@ -43,3 +43,12 @@ not automatically on every spec release.
 file against its recorded hash, and runs only the fixtures whose declared
 capabilities are a subset of those implemented above, skipping the rest with a
 reason.
+
+## Julia implementation
+
+[DataManifest.jl](https://github.com/awi-esc/DataManifest.jl) anchors its
+conformance claim the same way: its `test/conformance_pin.toml` pins the same
+spec tag (currently `spec-v5.6`) with the same fixture mechanism — per-file
+content hashes, fixtures filtered by declared capabilities. The one capability
+it does not implement is `sync` (cross-machine `push`/`pull`); the Python CLI
+covers it.

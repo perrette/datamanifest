@@ -5,10 +5,11 @@ Usage: python docs/_sync_julia_api.py <path-to-DataManifest.jl>/docs/api.md
 
 The adaptation is mechanical:
 - a note is inserted after the page title, pointing at the source of truth;
-- relative links to other pages of the Julia docs site (doc.md, storage.md,
-  caching.md, language-bindings.md, ...) are rewritten to absolute URLs under
-  https://awi-esc.github.io/DataManifest.jl/ in mkdocs URL style
-  (doc.md -> /doc/, anchors preserved);
+- relative links to other pages of the Julia docs (doc.md, storage.md,
+  caching.md, language-bindings.md, ...) are rewritten to the GitHub blob
+  URL of the retained Markdown
+  (https://github.com/awi-esc/DataManifest.jl/blob/main/docs/<page>.md,
+  anchors preserved);
 - in-page anchor links (#database, ...) are left untouched.
 
 The output is written next to this script as julia-api.md.
@@ -18,9 +19,9 @@ import re
 import sys
 from pathlib import Path
 
-JULIA_SITE = "https://awi-esc.github.io/DataManifest.jl/"
+JULIA_BLOB = "https://github.com/awi-esc/DataManifest.jl/blob/main/docs"
 
-# The page set of the Julia docs site, per its mkdocs.yml nav.
+# The Markdown pages kept in the DataManifest.jl repo's docs/ directory.
 JULIA_PAGES = {
     "index",
     "installation",
@@ -53,8 +54,7 @@ def rewrite_link(match: re.Match) -> str:
         print(f"warning: unknown Julia docs page {page!r}, link left as-is",
               file=sys.stderr)
         return match.group(0)
-    url = JULIA_SITE if page == "index" else f"{JULIA_SITE}{page}/"
-    return f"({url}{anchor})"
+    return f"({JULIA_BLOB}/{page}.md{anchor})"
 
 
 def adapt(source: str) -> str:

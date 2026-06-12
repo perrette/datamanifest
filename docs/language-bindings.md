@@ -8,11 +8,11 @@ binding names a function by a `module:function` reference (a **ref**, resolved
 via `importlib`) — never inline code — and may optionally carry arguments.
 
 The same manifest drives both tools: the Python `datamanifest` package and
-Julia's [DataManifest.jl](https://awi-esc.github.io/DataManifest.jl/) read one
+Julia's [DataManifest.jl](https://github.com/awi-esc/DataManifest.jl) read one
 file, each running only the bindings written for its own language. This page
 describes how the Python tool reads bindings; the Julia-side rules and API are
-on the
-[Julia documentation site](https://awi-esc.github.io/DataManifest.jl/language-bindings/).
+in the
+[Julia language-bindings notes](https://github.com/awi-esc/DataManifest.jl/blob/main/docs/language-bindings.md).
 
 This page covers the binding forms from the common case to the advanced ones:
 bare bindings for a single-language project, parameterized bindings,
@@ -60,7 +60,7 @@ unchanged.
 
 A full, runnable example manifest — bare loaders/fetchers, a parameterized
 loader, a `shell` fetcher — lives in the spec's
-[examples](https://perrette.github.io/datamanifest.toml).
+[examples](https://github.com/perrette/datamanifest.toml/blob/main/examples/datasets.toml).
 
 ## Parameterized bindings
 
@@ -198,7 +198,7 @@ shared store what the peer wrote there.
     with `DATAMANIFEST_TOML` pointing at the same manifest. When the CLI is
     absent, disabled, or fails, the fetch ends in the ordinary "no fetcher"
     error. See the
-    [Julia documentation](https://awi-esc.github.io/DataManifest.jl/language-bindings/).
+    [Julia language-bindings notes](https://github.com/awi-esc/DataManifest.jl/blob/main/docs/language-bindings.md).
 
 Cross-language fetch applies to fetched
 datasets only (never `@cached` produced datasets); it is on by default and a
@@ -223,7 +223,6 @@ Accepted on read; deprecated:
 A single manifest can be consumed by several tools: each reads the common
 fields and ignores the others' extension keys. The Julia-side API —
 `load_dataset`, `download_dataset`, and the rest of DataManifest.jl — is
-documented on the
-[Julia documentation site](https://awi-esc.github.io/DataManifest.jl/). See
+documented in the [Julia API reference](julia-api.md) on this site. See
 [conformance.md](conformance.md) for the shared manifest format and what this
 implementation supports.

@@ -2,10 +2,11 @@
 
 The manifest is a TOML file that declares the datasets a project depends on:
 where each one comes from, what its content should be, and how to load it. This
-page is a practical reference for the Python implementation. The format itself
-is shared across languages and defined normatively in the
-[`datamanifest.toml` specification](https://perrette.github.io/datamanifest.toml);
-see [Conformance](conformance.md) for which parts this implementation supports.
+page is the narrative treatment. The format itself is shared across languages
+and defined normatively in the
+[manifest specification](manifest-spec.md) (mirrored on this site from the
+`datamanifest.toml` repository); see [Conformance](conformance.md) for which
+parts this implementation supports.
 
 The canonical filename is `datamanifest.toml`; `DataManifest.toml`,
 `datasets.toml` and `Datasets.toml` are also recognized, in that order, when
@@ -28,7 +29,10 @@ checksum = "sha256:…"
   when it is empty, the digest is computed (as `sha256:`) on the first
   successful download and written back; on later fetches the download is
   verified against it, in the algorithm it names. A bare hex value with no
-  `algo:` prefix is read as `sha256`.
+  `algo:` prefix is read as `sha256`. Verification runs when a dataset is
+  (re-)fetched — a completed download is not re-hashed on every load; passing
+  `overwrite` (CLI `--overwrite`) forces a re-fetch and with it
+  re-verification.
 
 ## Common fields
 
@@ -38,7 +42,7 @@ string / empty list / `false` unless noted.
 | Field | Type | Meaning |
 |---|---|---|
 | `uri` | string | Single source URI: HTTP(S), `git`/`*.git`, `ssh`/`sshfs`/`rsync`, object store (`s3://`, `gs://`, …), or `file://`. Mutually exclusive with `uris`. |
-| `uris` | array of string | Several source URIs materialized into one dataset folder. Mutually exclusive with `uri`. |
+| `uris` | array of string | Several source URIs materialized into one dataset folder. Mutually exclusive with `uri`. The dataset's `key` is derived from the URIs' common leading path segments (just the hostname when nothing is shared); an explicit `key =` overrides the derivation. |
 | `checksum` | string | Expected content digest as `<algo>:<hex>` (see above). |
 | `format` | string | Format hint used to pick a loader (`csv`, `nc`, `parquet`, `json`, `zip`, `tar.gz`, …). Inferred from the URI when absent. |
 | `extract` | bool | After download, unpack the archive (`zip` / `tar` / `tar.gz`) and use the extracted directory as the dataset path. |
@@ -166,4 +170,5 @@ extract  = true
 This page is a practical summary, not the contract. The authoritative,
 cross-language definition — the full field list, the resolution order, the
 preservation rules, and the conformance fixtures — is the
-[`datamanifest.toml` specification](https://perrette.github.io/datamanifest.toml).
+[manifest specification](manifest-spec.md), mirrored on this site from the
+[`datamanifest.toml` repository](https://github.com/perrette/datamanifest.toml).

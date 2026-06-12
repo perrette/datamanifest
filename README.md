@@ -22,7 +22,7 @@ them, and caches your own computed results with the same machinery.
   URLs, DOIs, checksums (content hashes used to verify each file), formats — is
   listed in a single `datamanifest.toml` file (the *manifest*) that you can read
   directly and version with git. The format is defined by a
-  [language-agnostic spec](https://perrette.github.io/datamanifest.toml)
+  [language-agnostic spec](https://github.com/perrette/datamanifest.toml/blob/main/SCHEMA.md)
   (implemented in Python and Julia) and can be edited by hand, from code, or
   through the CLI.
 - **Fetch from a wide range of sources.** Direct URLs, Zenodo/figshare and PANGAEA

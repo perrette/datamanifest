@@ -30,6 +30,16 @@ The layout under each folder is flat — the folder you set **is** the location:
 - fetched dataset → `<datasets_dir>/<key>`
 - cached result → `<datacache_dir>/<cachetype>/[<version>/]<hash>`
 
+### Names on disk
+
+A dataset's `version` is part of its key, and hence of the on-disk name:
+`version = "v2.1"` turns `<datasets_dir>/<key>` into
+`<datasets_dir>/<key>#v2.1`, so several versions coexist. For
+`extract = true` datasets, the extracted folder is named after the archive
+with the archive extension stripped (`.zip`, `.tar`, `.tar.gz`); when there
+is no recognizable extension to strip (e.g. a versioned name ending in
+`#v2.1`), a `.d` suffix is appended instead.
+
 To see where a dataset resolves on this machine:
 
 === "CLI"
@@ -151,10 +161,50 @@ format = "nc"
 ## Per-dataset override
 
 A dataset may set `storage_path` — a path expression whose default is
-`$datasets_dir/$key`. A `storage_path` that contains `$key` is a tool-managed
-keyed location. An exact path with no `$key` is a **user-managed** location:
-it is used verbatim, and maintenance commands (`delete`, `move`) never
-touch it.
+`$datasets_dir/$key`. Setting it relocates one dataset without changing
+anything else. It comes in two flavors:
+
+- a `storage_path` that contains `$key` is a **tool-managed** keyed
+  location — maintenance commands may move or delete it like any stored
+  object;
+- an exact path with no `$key` is a **user-managed** location: it is used
+  verbatim, maintenance commands (`delete`, `move`) never touch it, and the
+  [read pools](#read-pools) are not probed for it.
+
+The expression may use `$datasets_dir`, `$key` and the other
+[`$`-symbols](#path-expressions). A relative result is resolved against the
+project root (the manifest's directory) — convenient for committing small
+data files alongside the code. An absolute path is used as-is — handy for a
+NAS, an external drive, or a scratch volume.
+
+The rest of the pipeline is unchanged:
+
+- **Cache hit.** If the file is already at the resolved path, it is returned
+  without ever consulting the URI — exactly the behavior of a file committed
+  to the repository.
+- **Cache miss.** If the file is missing, the normal download from `uri` runs
+  and the result lands at the resolved path — so a fetched dataset can be
+  redirected into the repository instead of the shared store.
+- **Checksum.** A declared `checksum` is still verified against the file at
+  the resolved path.
+
+```toml
+[in_repo_dataset]
+uri = "https://example.com/dataset.csv"   # source
+storage_path = "data/dataset.csv"         # relative → resolved against the project root
+checksum = "sha256:..."                   # still verified
+```
+
+For sources that cannot be fetched automatically (bot protection,
+click-through agreements, manual logins), pair the entry with
+`skip_download = true`: it makes the user-managed nature explicit and
+prevents any download attempt. `skip_download = true` without a
+`storage_path` makes the dataset's local path the `uri` value, returned
+verbatim — useful when the URI already *is* a local path. (One divergence to
+be aware of: on a `skip_download` entry, DataManifest.jl resolves an explicit
+`storage_path` as the location, while the Python tool always returns the
+`uri` — so when both tools read the manifest, keep the `uri` pointing at the
+actual file.)
 
 ## Read pools
 

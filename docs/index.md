@@ -82,8 +82,8 @@ Three ways in, one manifest:
   [Python API reference](python-api.md) lists everything.
 - **Use it from Julia** — the quickstart and guide pages carry Julia tabs for
   the essentials; the [Julia API reference](julia-api.md) lists everything,
-  and the full Julia documentation lives at
-  [awi-esc.github.io/DataManifest.jl](https://awi-esc.github.io/DataManifest.jl/).
+  and the Julia walkthrough lives in the
+  [DataManifest.jl repository](https://github.com/awi-esc/DataManifest.jl/blob/main/docs/doc.md).
 
 This site documents the CLI and the Python library in full, and the essentials
 for Julia.

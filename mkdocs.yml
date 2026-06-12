@@ -71,6 +71,7 @@ nav:
       - Quickstart: quickstart.md
   - Guide:
       - Adding datasets: adding-datasets.md
+      - Manifest format: manifest-format.md
       - Using it from code: api.md
       - Use cases: use-cases.md
       - Storage model: storage.md
@@ -79,7 +80,7 @@ nav:
       - Language bindings: language-bindings.md
       - Related projects: related.md
   - Reference:
-      - Manifest format: manifest-format.md
+      - Manifest specification: manifest-spec.md
       - CLI reference: cli.md
       - Python API: python-api.md
       - Julia API: julia-api.md
