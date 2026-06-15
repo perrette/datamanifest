@@ -2508,13 +2508,13 @@ entry points (all take the optional keywords <code>storage_config=</code>, <code
 </ul>
 <hr />
 <h2 id="caching-the-cached-macro">Caching: the <code>@cached</code> macro<a class="headerlink" href="#caching-the-cached-macro" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>@cached key=(args -&gt; (; …)) [cachetype=&quot;…&quot;] [version=&quot;…&quot;] [ext=&quot;jls&quot;] [basename=&quot;data&quot;] [db=DB] function fn(; kw…) … end
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>@cached key=(args -&gt; (; …)) [cachetype=&quot;…&quot;] [version=&quot;…&quot;] [ext=&quot;jls&quot;] [basename=&quot;data&quot;] [db=DB] function fn(pos…; kw…) … end
 </code></pre></div>
-<p>Wrap a <strong>keyword-only</strong> function with produce-or-load disk caching: the result
-is computed once and saved under <code>&lt;datacache_dir&gt;/&lt;cachetype&gt;/[&lt;version&gt;/]&lt;hash&gt;/</code>;
-later calls with the same parameters load the artifact instead of recomputing.
-Positional arguments are rejected (the cache key is built from named
-parameters). The long-form guide is <a href="https://github.com/awi-esc/DataManifest.jl/blob/main/docs/caching.md">caching.md</a>.</p>
+<p>Wrap a function with produce-or-load disk caching: the result is computed once
+and saved under <code>&lt;datacache_dir&gt;/&lt;cachetype&gt;/[&lt;version&gt;/]&lt;hash&gt;/</code>; later calls
+with the same parameters load the artifact instead of recomputing. Positional
+and keyword arguments both feed the cache key by parameter name (splatted
+<code>args...</code> are rejected). The long-form guide is <a href="https://github.com/awi-esc/DataManifest.jl/blob/main/docs/caching.md">caching.md</a>.</p>
 <p>The cache key is the SHA-256 of the canonical JSON (RFC 8785) of the keyword
 arguments selected by <code>key</code>, computed identically by the Julia and Python
 tools, so caches are shared across languages. Key-table values may be strings,
