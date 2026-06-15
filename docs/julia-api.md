@@ -600,14 +600,14 @@ Storage.ConfigSnapshot
 ## Caching: the `@cached` macro
 
 ```
-@cached key=(args -> (; …)) [cachetype="…"] [version="…"] [ext="jls"] [basename="data"] [db=DB] function fn(; kw…) … end
+@cached key=(args -> (; …)) [cachetype="…"] [version="…"] [ext="jls"] [basename="data"] [db=DB] function fn(pos…; kw…) … end
 ```
 
-Wrap a **keyword-only** function with produce-or-load disk caching: the result
-is computed once and saved under `<datacache_dir>/<cachetype>/[<version>/]<hash>/`;
-later calls with the same parameters load the artifact instead of recomputing.
-Positional arguments are rejected (the cache key is built from named
-parameters). The long-form guide is [caching.md](https://github.com/awi-esc/DataManifest.jl/blob/main/docs/caching.md).
+Wrap a function with produce-or-load disk caching: the result is computed once
+and saved under `<datacache_dir>/<cachetype>/[<version>/]<hash>/`; later calls
+with the same parameters load the artifact instead of recomputing. Positional
+and keyword arguments both feed the cache key by parameter name (splatted
+`args...` are rejected). The long-form guide is [caching.md](https://github.com/awi-esc/DataManifest.jl/blob/main/docs/caching.md).
 
 The cache key is the SHA-256 of the canonical JSON (RFC 8785) of the keyword
 arguments selected by `key`, computed identically by the Julia and Python
