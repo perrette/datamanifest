@@ -948,8 +948,8 @@ def _state_base(db: "Database") -> str:
     ``CachedIndex.locate`` / ``read_or_empty``).
 
     - Manifest-backed database: the manifest's directory — the state file is
-      the usual ``<dir>/.datamanifest/state.toml`` (with the legacy-name and
-      linked-worktree fallbacks).
+      the usual ``<dir>/.datamanifest/state.toml`` (with the legacy-name
+      fallback).
     - In-memory database (no ``datasets_toml``): the persist=false rule — the
       inventory lives under the storage root the database describes, i.e.
       ``<datasets_root>/.datamanifest/state.toml`` (the explicit file path,

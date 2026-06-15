@@ -24,7 +24,7 @@ in this order (the first existing file wins):
 
 1. `datamanifest.toml`
 2. `DataManifest.toml`
-3. `datamanifest.toml`
+3. `datasets.toml`
 4. `Datasets.toml`
 
 An explicitly given path always bypasses discovery. Throughout this document
@@ -127,7 +127,7 @@ Types are TOML types (`string`, `array of string`, `bool`).
 | `checksum` | string | `""` | Expected content digest of the downloaded file/folder as **`<algo>:<hex>`** (e.g. `sha256:abc…`, `md5:…`); a bare hex value with no `algo:` prefix means `sha256`. Auto-filled (as `sha256:`) on first successful download and verified — in the declared algorithm — at fetch time; **not** re-verified on every load (re-verification is opt-in). See *Checksums*. |
 | `sha256` *(legacy)* | string | `""` | **Deprecated alias** for `checksum`, superseded by it. Readers MUST accept `sha256 = "<hex>"` and treat it as `checksum = "sha256:<hex>"`; writers SHOULD emit `checksum`. |
 | `skip_checksum` | bool | `false` | Disable checksum verification for this dataset. |
-| `skip_download` | bool | `false` | **Management mode** — treat the dataset as a *passive, externally-managed dependency*: it is **not** downloaded, **not** checksum-verified, and **never** moved or deleted by maintenance; the documented `uri`/path is returned as-is. For data the user provides and maintains (e.g. a large shared archive that should not be fetched over the network). Distinct from `lazy_access` — this is about *who manages the bytes*, not *how they are read*. |
+| `skip_download` | bool | `false` | **Management mode** — treat the dataset as a *passive, externally-managed dependency*: it is **not** downloaded, **not** checksum-verified, and **never** moved or deleted by maintenance. An explicit `storage_path` is resolved like any other; without one, the documented `uri` is returned as-is. For data the user provides and maintains (e.g. a large shared archive that should not be fetched over the network). Distinct from `lazy_access` — this is about *who manages the bytes*, not *how they are read*. |
 | `lazy_access` | bool | `false` | **Access mode** — access the dataset *in place* instead of materializing a local copy: the `uri` is handed to a **loader** that opens it where it lives (typically a remote object store), with **no local copy, no checksum, and no state-file record**. Requires a loader (a bare `lazy_access` with no loader is an **error**). The access mechanism (streaming, mount, FUSE, …) is **implementation-defined** — the spec fixes only that the bytes are not materialized. Distinct from `skip_download` (a management mode); the two are independent and not meant to combine. |
 | `delegate` | bool | *(run default)* | Force the cross-language fetch rung (rung 3) on (`true`) or off (`false`) for this dataset. When omitted, the tool's run-level default applies (`--delegate` / configuration). Honored under the `delegation` capability; other tools preserve it verbatim. See Cross-language fetch. |
 | `extract` | bool | `false` | After download, extract the archive (`zip` / `tar` / `tar.gz`) and use the extracted directory as the dataset path. |
@@ -472,13 +472,6 @@ git-config style:
 - **`$XDG_CONFIG_HOME/datamanifest/config.toml`** (default
   `~/.config/datamanifest/config.toml`) — user-global.
 
-**Linked `git worktree`s read the main checkout's checkout config** when they have none of
-their own (spec-v5.4) — the same fallback, for the same reason, as the state file
-(spec-v5.1, see *The state file*): a linked worktree starts without the git-ignored
-`.datamanifest/` directory. A `.datamanifest/config.toml` present in the worktree itself
-always wins. The fallback applies to **reads**; a tool that writes checkout config writes
-under the project root it operates in, and that file thereafter takes precedence.
-
 Both files are **`[_STORAGE]`-shaped TOML at the root level**: the folder fields, the pool
 lists, the `project` field, user-defined symbols, and `_HOST.<glob>` sub-tables — host
 scoping included because home directories and checkouts commonly live on filesystems shared
@@ -721,6 +714,15 @@ on these conventions:
   non-positive value.
 
 ## Produced datasets and caching (companion layer)
+
+> **Scoping (non-normative).** A produced dataset's cache context (the
+> `datacache_dir` root, the `$project` namespace, the state-file location) MAY be
+> scoped to a manifest/database context chosen by the caller — a library can hold
+> its own in-memory context and keep a self-contained cache bundle. An in-memory
+> context (no manifest file) SHOULD keep its inventories under the storage roots
+> themselves (`<root>/.datamanifest/state.toml`) rather than writing a project
+> state file. Identity and collision checks are per context; two contexts share
+> artifacts exactly when they resolve the same cache root.
 
 > **Spec-v2.1 — a companion *layer*, not a core capability.** The produce-or-load
 > (`@cached`) layer sits **outside the core fetch engine** as a distinct capability layer
@@ -1122,21 +1124,6 @@ format = "nc"
   is removed only after the canonical one is written). A produced artifact's
   `metadata.toml` carries a `state_file` back-pointer to the file that inventories
   it (audit only).
-- **Linked `git worktree`s share the main checkout's state file** (spec-v5.1). A
-  linked worktree (`git worktree add`) starts without the git-ignored
-  `.datamanifest/` directory, so a per-checkout lookup would come up empty even
-  though the project's inventory exists. When the project directory holds **no**
-  state file under any recognized path and sits inside a linked worktree, a tool
-  SHOULD fall through to the **corresponding directory in the main checkout** —
-  for reads *and* as the write target, so every worktree of a repository maintains
-  **one** shared inventory (consistent with the inventory being per-project state,
-  not per-checkout intent, and keeping one liveness root for maintenance). A state
-  file present in the worktree itself always takes precedence — creating one there
-  opts that worktree out. The main checkout SHOULD be resolved by asking the `git`
-  executable (e.g. `git rev-parse --git-common-dir`; the on-disk worktree layout
-  is git internal); when `git` is unavailable, the main repository is bare, or the
-  directory is not inside a linked worktree, lookups stay local and behavior is
-  unchanged.
 
 #### The state file is read-only inventory (the gold standard)
 

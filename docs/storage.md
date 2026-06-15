@@ -250,16 +250,11 @@ fallbacks, and the next write relocates the inventory to
 `.datamanifest/state.toml`. The full design is in
 [design-state-file.md](https://github.com/perrette/datamanifest/blob/main/design/design-state-file.md).
 
-Linked `git worktree`s share the main checkout's state file. A worktree starts
-without the git-ignored `.datamanifest/` directory; when the project directory
-has no state file of its own and sits inside a linked worktree (`git worktree
-add`), lookups fall through to the corresponding directory in the main
-checkout — reads consult its inventory and writes update it, so all worktrees
-of a repository maintain one shared inventory. A state file present in the
-worktree itself always takes precedence (create one there to opt a worktree
-out). The main checkout is resolved by asking the `git` executable; when `git`
-is not installed, the main repository is bare, or the directory is not inside
-a worktree, lookups stay local.
+State lookups are local to the project directory; a linked `git worktree` gets
+no special treatment. A worktree starts without the git-ignored `.datamanifest/`
+directory, so it has its own (initially empty) inventory unless you arrange
+otherwise — symlink `.datamanifest/` (or `state.toml`) from the main checkout
+into the worktree to share one inventory.
 
 ## Maintenance
 

@@ -62,7 +62,7 @@ except ModuleNotFoundError:  # Python < 3.11
 import tomli_w
 
 from ..store import sort_recursive
-from ..store.locations import PRIVATE_DIR_NAME, _main_checkout_dir, ensure_ignored_dir
+from ..store.locations import PRIVATE_DIR_NAME, ensure_ignored_dir
 
 __all__ = [
     "CachedIndex",
@@ -85,14 +85,6 @@ CACHED_INDEX_NAME = STATE_FILE_NAME
 # project carrying the previous ``.datamanifest-state.toml`` / ``cached.toml``
 # keeps resolving; the next write relocates it to the canonical path).
 _LEGACY_INDEX_NAMES = (".datamanifest-state.toml", "cached.toml")
-
-def _project_dir_of(path: str) -> str:
-    """The project directory a state path belongs to: the grandparent for a
-    ``<root>/.datamanifest/state.toml`` path, else the dirname."""
-    d = os.path.dirname(path) or "."
-    if os.path.basename(d) == PRIVATE_DIR_NAME:
-        return os.path.dirname(d) or "."
-    return d
 
 
 # Produced-recipe fields (one per (cachetype, version)); each instance is a
@@ -201,14 +193,8 @@ class CachedIndex:
         canonical path (which may not exist).
 
         Lets callers find an existing inventory under either name without first
-        knowing which is on disk.
-
-        Linked ``git worktree``s share one inventory (spec-v5.1): when the
-        project directory has no state file of its own and sits inside a linked
-        worktree, the lookup falls through to the corresponding directory in the
-        **main checkout** — for reads and (via :meth:`read_or_empty` /
-        :meth:`write`) as the write target. A state file present in the worktree
-        itself always wins.
+        knowing which is on disk. Resolution is local to *base*'s project
+        directory — no git-worktree fallback.
         """
         base = os.fspath(base)
         if os.path.isfile(base):
@@ -217,9 +203,6 @@ class CachedIndex:
         found = cls._existing_state_in(d)
         if found:
             return found
-        main = _main_checkout_dir(d)
-        if main:
-            return cls._existing_state_in(main) or cls._dir_state_path(main)
         return cls._dir_state_path(d)
 
     # ----- reading -----
@@ -357,21 +340,11 @@ class CachedIndex:
         empty one bound to the canonical path when none exists. A legacy-named
         file stays bound to its own path, so the next :meth:`write` relocates it
         to the canonical ``.datamanifest/state.toml`` (and removes the legacy
-        file). In a linked ``git worktree`` without a state file of its own,
-        :meth:`locate` redirects to the main checkout — the empty index is then
-        bound there, so the first write lands in the shared inventory
-        (spec-v5.1)."""
+        file)."""
         target = cls.locate(path)
         if os.path.isfile(target):
             return cls.read(target)
-        canonical = cls._canonical_path(path)
-        # A redirected target (linked worktree) belongs to a different project
-        # directory than *path* — bind the empty index there rather than to the
-        # local canonical path.
-        if os.path.abspath(_project_dir_of(canonical)) != \
-           os.path.abspath(_project_dir_of(target)):
-            canonical = target
-        return cls(path=canonical)
+        return cls(path=cls._canonical_path(path))
 
     # ----- produced recipes -----
     def register(

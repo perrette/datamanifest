@@ -700,9 +700,8 @@ locate_state(base::AbstractString) -> String
 The state file to read at `base` (a directory or file path): the canonical
 `.datamanifest/state.toml` when present, else a legacy sibling
 (`.datamanifest-state.toml`, `cached.toml`), else the canonical path (which
-may not exist yet). In a linked git worktree without a state file of its own,
-the lookup falls through to the main checkout, so worktrees share one
-inventory.
+may not exist yet). Resolution is local to `base`'s project directory — a
+linked git worktree gets no main-checkout fallback.
 
 ### `read_index` / `read_index_or_empty`
 

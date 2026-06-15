@@ -131,10 +131,11 @@ def test_load_scoped_config_reads_both_files(tmp_path, monkeypatch):
         == "/from-user"
 
 
-def test_load_scoped_config_worktree_falls_back_to_main_checkout(tmp_path, monkeypatch):
-    """A linked git worktree without a ``.datamanifest/config.toml`` of its own
-    reads the main checkout's (the same rationale as the spec-v5.1 state-file
-    fallback); a worktree-local config file always wins."""
+def test_load_scoped_config_worktree_has_no_main_checkout_fallback(tmp_path, monkeypatch):
+    """A linked git worktree gets no special treatment: with no
+    ``.datamanifest/config.toml`` of its own its checkout config is empty, even
+    though the main checkout has one. (Users symlink ``.datamanifest/`` into a
+    worktree themselves to share it.)"""
     import shutil
     import subprocess
 
@@ -160,9 +161,11 @@ def test_load_scoped_config_worktree_falls_back_to_main_checkout(tmp_path, monke
     wt = tmp_path / "wt"
     _git("-C", str(main), "worktree", "add", "-q", str(wt))
 
+    # No fallback to the main checkout: the worktree's checkout config is empty.
     cfg = locations.load_scoped_config(project_root=str(wt))
-    assert cfg.local == {"datasets_dir": "/from-main"}
+    assert cfg.local == {}
 
+    # Its own config file is read, as for any directory.
     (wt / ".datamanifest").mkdir()
     (wt / ".datamanifest" / "config.toml").write_text('datasets_dir = "/from-wt"\n')
     cfg = locations.load_scoped_config(project_root=str(wt))

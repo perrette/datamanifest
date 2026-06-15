@@ -29,10 +29,10 @@ Two refinements:
   (`*` and `?` wildcards). Within a file, a `_HOST` match beats the base
   value. This is how one committed manifest serves a laptop and an HPC
   cluster at once.
-- **Git worktrees.** A linked `git worktree` starts without the git-ignored
-  `.datamanifest/` directory, so when a worktree has no checkout config of
-  its own, the main checkout's file is read instead. A config file created in
-  the worktree itself takes precedence.
+- **Git worktrees.** A linked `git worktree` gets no special treatment: its
+  checkout config is whatever `.datamanifest/config.toml` it holds itself (a
+  worktree starts without one). Symlink `.datamanifest/` (or `config.toml`)
+  from the main checkout into the worktree if you want them to share config.
 
 In code, the manifest scope can also be supplied directly:
 `Database(storage_config={...})` (Julia: `storage_config=Dict(...)`) injects a
