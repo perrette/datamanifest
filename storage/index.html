@@ -1563,16 +1563,11 @@ disposable — delete it and it rebuilds itself as you use your data. When
 fallbacks, and the next write relocates the inventory to
 <code>.datamanifest/state.toml</code>. The full design is in
 <a href="https://github.com/perrette/datamanifest/blob/main/design/design-state-file.md">design-state-file.md</a>.</p>
-<p>Linked <code>git worktree</code>s share the main checkout's state file. A worktree starts
-without the git-ignored <code>.datamanifest/</code> directory; when the project directory
-has no state file of its own and sits inside a linked worktree (<code>git worktree
-add</code>), lookups fall through to the corresponding directory in the main
-checkout — reads consult its inventory and writes update it, so all worktrees
-of a repository maintain one shared inventory. A state file present in the
-worktree itself always takes precedence (create one there to opt a worktree
-out). The main checkout is resolved by asking the <code>git</code> executable; when <code>git</code>
-is not installed, the main repository is bare, or the directory is not inside
-a worktree, lookups stay local.</p>
+<p>State lookups are local to the project directory; a linked <code>git worktree</code> gets
+no special treatment. A worktree starts without the git-ignored <code>.datamanifest/</code>
+directory, so it has its own (initially empty) inventory unless you arrange
+otherwise — symlink <code>.datamanifest/</code> (or <code>state.toml</code>) from the main checkout
+into the worktree to share one inventory.</p>
 <h2 id="maintenance">Maintenance<a class="headerlink" href="#maintenance" title="Permanent link">&para;</a></h2>
 <p>The <a href="../cli/#maintain">maintenance commands</a> operate on the state file and the
 stored bytes:</p>

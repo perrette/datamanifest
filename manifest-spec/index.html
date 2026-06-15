@@ -2828,12 +2828,6 @@ git-config style:</p>
 <li><strong><code>$XDG_CONFIG_HOME/datamanifest/config.toml</code></strong> (default
   <code>~/.config/datamanifest/config.toml</code>) — user-global.</li>
 </ul>
-<p><strong>Linked <code>git worktree</code>s read the main checkout's checkout config</strong> when they have none of
-their own (spec-v5.4) — the same fallback, for the same reason, as the state file
-(spec-v5.1, see <em>The state file</em>): a linked worktree starts without the git-ignored
-<code>.datamanifest/</code> directory. A <code>.datamanifest/config.toml</code> present in the worktree itself
-always wins. The fallback applies to <strong>reads</strong>; a tool that writes checkout config writes
-under the project root it operates in, and that file thereafter takes precedence.</p>
 <p>Both files are <strong><code>[_STORAGE]</code>-shaped TOML at the root level</strong>: the folder fields, the pool
 lists, the <code>project</code> field, user-defined symbols, and <code>_HOST.&lt;glob&gt;</code> sub-tables — host
 scoping included because home directories and checkouts commonly live on filesystems shared
@@ -3476,21 +3470,6 @@ each is greppable on its own. <code>_META.schema = 5</code>:</p>
   is removed only after the canonical one is written). A produced artifact's
   <code>metadata.toml</code> carries a <code>state_file</code> back-pointer to the file that inventories
   it (audit only).</li>
-<li><strong>Linked <code>git worktree</code>s share the main checkout's state file</strong> (spec-v5.1). A
-  linked worktree (<code>git worktree add</code>) starts without the git-ignored
-  <code>.datamanifest/</code> directory, so a per-checkout lookup would come up empty even
-  though the project's inventory exists. When the project directory holds <strong>no</strong>
-  state file under any recognized path and sits inside a linked worktree, a tool
-  SHOULD fall through to the <strong>corresponding directory in the main checkout</strong> —
-  for reads <em>and</em> as the write target, so every worktree of a repository maintains
-  <strong>one</strong> shared inventory (consistent with the inventory being per-project state,
-  not per-checkout intent, and keeping one liveness root for maintenance). A state
-  file present in the worktree itself always takes precedence — creating one there
-  opts that worktree out. The main checkout SHOULD be resolved by asking the <code>git</code>
-  executable (e.g. <code>git rev-parse --git-common-dir</code>; the on-disk worktree layout
-  is git internal); when <code>git</code> is unavailable, the main repository is bare, or the
-  directory is not inside a linked worktree, lookups stay local and behavior is
-  unchanged.</li>
 </ul>
 <h4 id="the-state-file-is-read-only-inventory-the-gold-standard">The state file is read-only inventory (the gold standard)<a class="headerlink" href="#the-state-file-is-read-only-inventory-the-gold-standard" title="Permanent link">&para;</a></h4>
 <p>The guiding invariant: <strong>the state file records where things are and is consulted

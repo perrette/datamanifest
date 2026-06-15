@@ -2037,10 +2037,11 @@ inferred.</p>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    persist::Bool=true,
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    skip_checksum::Bool=false,
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    skip_checksum_folders::Bool=false,
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    datasets::Dict{String, DatasetEntry}=Dict{String, DatasetEntry}()
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>) -&gt; Database
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>Database(datasets_toml::String, datasets_folder::String=&quot;&quot;; kwargs...) -&gt; Database
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    datasets::Dict{String, DatasetEntry}=Dict{String, DatasetEntry}(),
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    storage_config::Union{Nothing,AbstractDict}=nothing
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>) -&gt; Database
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>Database(datasets_toml::String, datasets_folder::String=&quot;&quot;; kwargs...) -&gt; Database
 </code></pre></div>
 <p>Create a dataset database — the in-memory counterpart of a <code>datamanifest.toml</code>
 manifest.</p>
@@ -2056,6 +2057,11 @@ manifest.</p>
 <li>If the TOML file exists, datasets are loaded from it.</li>
 <li>The configuration (storage fields, environment, host) is frozen at
   construction; see <a href="#freeze_config"><code>freeze_config!</code></a> to re-read it.</li>
+<li>An <strong>in-memory</strong> database (<code>persist=false</code>: nothing is ever written back to
+  a manifest, and <code>db.datasets_toml == ""</code>) keeps its state-file inventories
+  under the storage roots it describes — the datasets folder for fetched
+  datasets, the resolved <code>datacache_dir</code> for produced artifacts — never under
+  the caller's project or working directory.</li>
 </ul>
 <p><strong>Arguments:</strong>
 - <code>datasets_toml::String</code>: Path to the TOML file for persistence.
@@ -2063,7 +2069,14 @@ manifest.</p>
 - <code>persist::Bool</code>: Whether to persist changes to disk.
 - <code>skip_checksum::Bool</code>: Skip checksum verification.
 - <code>skip_checksum_folders::Bool</code>: Skip checksum verification for folders.
-- <code>datasets::Dict{String, DatasetEntry}</code>: Initial datasets.</p>
+- <code>datasets::Dict{String, DatasetEntry}</code>: Initial datasets.
+- <code>storage_config</code>: an optional <code>Dict</code> setting the manifest-layer <code>[_STORAGE]</code>
+  table directly — the way to name an in-memory database's cache bundle, e.g.
+  <code>Database(datasets_folder=..., persist=false, storage_config=Dict("project" =&gt; "mylib"))</code>
+  puts produced artifacts under <code>…/projects/mylib/cached</code>. It overrides a
+  <code>[_STORAGE]</code> table read from <code>datasets_toml</code>, sits below the checkout config
+  and <code>DATAMANIFEST_*</code> environment variables, and is never written back to the
+  manifest. See the <code>db=</code> option of <a href="#caching-the-cached-macro"><code>@cached</code></a>.</p>
 <p><strong>Returns:</strong>
 A <code>Database</code> object.</p>
 <hr />
@@ -2495,7 +2508,7 @@ entry points (all take the optional keywords <code>storage_config=</code>, <code
 </ul>
 <hr />
 <h2 id="caching-the-cached-macro">Caching: the <code>@cached</code> macro<a class="headerlink" href="#caching-the-cached-macro" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>@cached key=(args -&gt; (; …)) [cachetype=&quot;…&quot;] [version=&quot;…&quot;] [ext=&quot;jls&quot;] [basename=&quot;data&quot;] function fn(; kw…) … end
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>@cached key=(args -&gt; (; …)) [cachetype=&quot;…&quot;] [version=&quot;…&quot;] [ext=&quot;jls&quot;] [basename=&quot;data&quot;] [db=DB] function fn(; kw…) … end
 </code></pre></div>
 <p>Wrap a <strong>keyword-only</strong> function with produce-or-load disk caching: the result
 is computed once and saved under <code>&lt;datacache_dir&gt;/&lt;cachetype&gt;/[&lt;version&gt;/]&lt;hash&gt;/</code>;
@@ -2507,7 +2520,7 @@ arguments selected by <code>key</code>, computed identically by the Julia and Py
 tools, so caches are shared across languages. Key-table values may be strings,
 integers, booleans, finite floats, and arrays/objects of those; <code>NaN</code>, <code>±Inf</code>,
 and nulls (<code>nothing</code>/<code>missing</code>) raise an error.</p>
-<p><strong>Macro options</strong> (all literals except <code>key</code>):</p>
+<p><strong>Macro options</strong> (all literals except <code>key</code> and <code>db</code>):</p>
 <ul>
 <li><code>key</code> (required): a function receiving the call's keyword arguments as a
   NamedTuple (every declared keyword except <code>_</code>-prefixed runtime knobs) and
@@ -2526,7 +2539,23 @@ and nulls (<code>nothing</code>/<code>missing</code>) raise an error.</p>
   <code>DataManifest.Cache.register_format!(ext, save, load)</code> where <code>save(data,
   path)</code> writes and <code>load(path)</code> reads.</li>
 <li><code>basename</code> (default <code>"data"</code>): the artifact's file name (<code>&lt;basename&gt;.&lt;ext&gt;</code>).</li>
+<li><code>db</code> (optional): an expression whose value is a <code>Database</code>, evaluated in the
+  caller's scope at <strong>call</strong> time (so a <code>const LIBDB = Database(...)</code> defined
+  after the <code>@cached</code> function works). The entire cache context then derives
+  from the database's frozen configuration: artifacts land under <em>its</em>
+  <code>datacache_dir</code> (keyed with <em>its</em> <code>$project</code>), locks use <em>its</em>
+  <code>lock_stale_age</code>, and the produced variation registers in <em>its</em> state file.
+  An in-memory database (<code>persist=false</code>) keeps that inventory under the
+  resolved datacache root itself
+  (<code>&lt;datacache_dir&gt;/.datamanifest/state.toml</code>) — the caller's project / cwd
+  never gains a <code>.datamanifest/</code> from it. See the
+  <a href="#database"><code>Database</code></a> <code>storage_config</code> argument for naming the bundle.</li>
 </ul>
+<p>Without <code>db=</code>, the bare form resolves over the <strong>default database</strong> when a
+manifest is discoverable (environment override or active project) — which
+anchors at the same project, so behavior there is unchanged — and falls back
+to the ambient derivation when none is, so caching keeps working in
+manifest-less projects.</p>
 <p><strong>Per-call behaviour and special keyword arguments.</strong> The macro injects a
 <code>cached::Bool=true</code> keyword: pass <code>cached=false</code> to run the body directly,
 with no disk reads or writes. If the wrapped function declares keyword
@@ -2545,11 +2574,12 @@ arguments with these names, they get extra meaning:</p>
 </ul>
 <hr />
 <h2 id="state-file">State file<a class="headerlink" href="#state-file" title="Permanent link">&para;</a></h2>
-<p>The state file (<code>.datamanifest/state.toml</code>, next to the manifest) records
-where each fetched dataset and produced artifact landed on <em>this</em> machine. It
-is maintained automatically by <code>download_dataset</code> and <code>@cached</code>; the following
-exported helpers read and write it directly (e.g. for custom maintenance
-tooling).</p>
+<p>The state file (<code>.datamanifest/state.toml</code>, next to the manifest; for an
+in-memory database, under its storage roots — see <a href="#database"><code>Database</code></a>)
+records where each fetched dataset and produced artifact landed on <em>this</em>
+machine. It is maintained automatically by <code>download_dataset</code> and <code>@cached</code>;
+the following exported helpers read and write it directly (e.g. for custom
+maintenance tooling).</p>
 <h3 id="cachedindex"><code>CachedIndex</code><a class="headerlink" href="#cachedindex" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>CachedIndex(; recipes=Dict(), datasets=Dict(), path=&quot;&quot;)
 </code></pre></div>
@@ -2564,9 +2594,8 @@ it was read from / will be written to.</p>
 <p>The state file to read at <code>base</code> (a directory or file path): the canonical
 <code>.datamanifest/state.toml</code> when present, else a legacy sibling
 (<code>.datamanifest-state.toml</code>, <code>cached.toml</code>), else the canonical path (which
-may not exist yet). In a linked git worktree without a state file of its own,
-the lookup falls through to the main checkout, so worktrees share one
-inventory.</p>
+may not exist yet). Resolution is local to <code>base</code>'s project directory — a
+linked git worktree gets no main-checkout fallback.</p>
 <h3 id="read_index-read_index_or_empty"><code>read_index</code> / <code>read_index_or_empty</code><a class="headerlink" href="#read_index-read_index_or_empty" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>read_index(path::AbstractString) -&gt; CachedIndex
 <a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>read_index_or_empty(path::AbstractString) -&gt; CachedIndex

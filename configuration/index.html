@@ -1292,10 +1292,10 @@ belongs in git-ignored config files, so it never leaks into the repository.</p>
   (<code>*</code> and <code>?</code> wildcards). Within a file, a <code>_HOST</code> match beats the base
   value. This is how one committed manifest serves a laptop and an HPC
   cluster at once.</li>
-<li><strong>Git worktrees.</strong> A linked <code>git worktree</code> starts without the git-ignored
-  <code>.datamanifest/</code> directory, so when a worktree has no checkout config of
-  its own, the main checkout's file is read instead. A config file created in
-  the worktree itself takes precedence.</li>
+<li><strong>Git worktrees.</strong> A linked <code>git worktree</code> gets no special treatment: its
+  checkout config is whatever <code>.datamanifest/config.toml</code> it holds itself (a
+  worktree starts without one). Symlink <code>.datamanifest/</code> (or <code>config.toml</code>)
+  from the main checkout into the worktree if you want them to share config.</li>
 </ul>
 <p>In code, the manifest scope can also be supplied directly:
 <code>Database(storage_config={...})</code> (Julia: <code>storage_config=Dict(...)</code>) injects a
