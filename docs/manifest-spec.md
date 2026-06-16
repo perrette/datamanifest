@@ -779,11 +779,16 @@ content-pinned by a manifest `sha256`). It is materialized under **`datacache_di
 (default `$user_cache_dir/datamanifest/projects/$project/cached` — per-project, see
 Storage), the producing layer's folder.
 
-> **Keyword-only.** Because the parameters double as identity, the producing function
-> is **keyword-only** for hashing: an ordered positional argument list has no stable
-> name→value identity to hash, so a `cache-produce` tool MUST derive the key table from
-> keyword parameters only. This is a property of the produce-or-load *surface*, not a
-> `datamanifest.toml` rule — fetched datasets keep their positional `args` per spec-v1.1.
+> **Named parameters (spec-v5.8).** Because the parameters double as identity, the key
+> table MUST be derived from the producing function's **named** parameters — its keyword
+> parameters and, where the language offers them, its **named positional** parameters, each
+> contributing by its declared name. A variadic / unnamed positional list (`args…`) has no
+> stable name→value identity and MUST NOT feed the key. Whether a surface accepts positional
+> parameters at all is a non-normative ergonomic choice — a keyword-only surface is equally
+> conformant — so long as the key table comes from named parameters and
+> `<cachetype>/<param-hash>` stays reproducible across tools. This is a property of the
+> produce-or-load *surface*, not a `datamanifest.toml` rule — fetched datasets keep their
+> positional `args` per spec-v1.1.
 
 ### Parameter-hash keying
 
