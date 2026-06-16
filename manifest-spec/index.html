@@ -3118,11 +3118,16 @@ content-pinned by a manifest <code>sha256</code>). It is materialized under <str
 (default <code>$user_cache_dir/datamanifest/projects/$project/cached</code> — per-project, see
 Storage), the producing layer's folder.</p>
 <blockquote>
-<p><strong>Keyword-only.</strong> Because the parameters double as identity, the producing function
-is <strong>keyword-only</strong> for hashing: an ordered positional argument list has no stable
-name→value identity to hash, so a <code>cache-produce</code> tool MUST derive the key table from
-keyword parameters only. This is a property of the produce-or-load <em>surface</em>, not a
-<code>datamanifest.toml</code> rule — fetched datasets keep their positional <code>args</code> per spec-v1.1.</p>
+<p><strong>Named parameters (spec-v5.8).</strong> Because the parameters double as identity, the key
+table MUST be derived from the producing function's <strong>named</strong> parameters — its keyword
+parameters and, where the language offers them, its <strong>named positional</strong> parameters, each
+contributing by its declared name. A variadic / unnamed positional list (<code>args…</code>) has no
+stable name→value identity and MUST NOT feed the key. Whether a surface accepts positional
+parameters at all is a non-normative ergonomic choice — a keyword-only surface is equally
+conformant — so long as the key table comes from named parameters and
+<code>&lt;cachetype&gt;/&lt;param-hash&gt;</code> stays reproducible across tools. This is a property of the
+produce-or-load <em>surface</em>, not a <code>datamanifest.toml</code> rule — fetched datasets keep their
+positional <code>args</code> per spec-v1.1.</p>
 </blockquote>
 <h3 id="parameter-hash-keying">Parameter-hash keying<a class="headerlink" href="#parameter-hash-keying" title="Permanent link">&para;</a></h3>
 <p>A produced dataset's identity is <code>(cachetype, hash-of-its-parameters)</code>. The
