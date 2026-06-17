@@ -240,6 +240,38 @@ def test_lock_stale_age_ladder(monkeypatch):
     assert lock_stale_age({"lock_stale_age": 7}) == 3.0
 
 
+def test_materialize_merge_default_keeps_siblings(tmp_path):
+    """merge defaults to True: publishing a directory into an existing directory
+    keeps the siblings (spec-v5.9 coexistence) — the second publish must not delete
+    ``a.txt`` when it writes ``b.txt``."""
+    target = str(tmp_path / "shared")
+    materialize(target, lambda tmp: (os.makedirs(tmp),
+                                     open(os.path.join(tmp, "a.txt"), "w").write("A")))
+    materialize(target, lambda tmp: (os.makedirs(tmp),
+                                     open(os.path.join(tmp, "b.txt"), "w").write("B")))
+    assert open(os.path.join(target, "a.txt")).read() == "A"   # sibling survived
+    assert open(os.path.join(target, "b.txt")).read() == "B"
+    assert is_complete(target)
+
+
+def test_materialize_merge_false_is_strict(tmp_path):
+    """merge=False refuses to overwrite an existing directory wholesale: it raises
+    rather than silently destroying what is already there, and leaves no staging."""
+    target = str(tmp_path / "strict")
+    materialize(target, lambda tmp: (os.makedirs(tmp),
+                                     open(os.path.join(tmp, "a.txt"), "w").write("A")))
+    with pytest.raises(FileExistsError, match="refusing to overwrite"):
+        materialize(
+            target,
+            lambda tmp: (os.makedirs(tmp),
+                         open(os.path.join(tmp, "b.txt"), "w").write("B")),
+            merge=False,
+        )
+    assert open(os.path.join(target, "a.txt")).read() == "A"      # original preserved
+    assert not os.path.exists(os.path.join(target, "b.txt"))      # nothing published
+    assert not os.path.exists(locations.tmp_path(target))         # no leftover staging
+
+
 def test_remove_path_handles_file_dir_and_absent(tmp_path):
     f = tmp_path / "f"
     f.write_text("x")

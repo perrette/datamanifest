@@ -211,6 +211,30 @@ def test_database_round_trip(tmp_path):
     assert db == db2
 
 
+def test_write_skips_when_unchanged(tmp_path):
+    """A persist whose serialized content matches what is already on disk is skipped,
+    so it neither churns the file nor reformats a hand-authored layout; only a real
+    content change rewrites. The write is also atomic (no leftover .tmp sibling)."""
+    from datamanifest.database import Database
+
+    out = tmp_path / "datamanifest.toml"
+    db = Database(datasets_toml=str(out))
+    db.register_dataset("https://h/a/x.csv", name="x", persist=False)
+    db.write(str(out))
+    assert not list(tmp_path.glob("*.tmp"))                   # atomic: no staging left
+    # Inject a comment: semantically identical, so the next write must skip and leave
+    # the hand-authored layout (the comment) intact.
+    out.write_text("# hand-authored note\n\n" + out.read_text())
+    db.write(str(out))
+    assert "# hand-authored note" in out.read_text()          # not rewritten
+    assert Database(datasets_toml=str(out)) == db             # still valid
+    # A genuine change rewrites (dropping the comment).
+    db.register_dataset("https://h/b/y.csv", name="y", persist=False)
+    db.write(str(out))
+    assert "# hand-authored note" not in out.read_text()      # rewritten
+    assert "y" in Database(datasets_toml=str(out)).datasets
+
+
 def test_extension_keys_preserved(tmp_path):
     """Unknown (other-language) per-dataset keys round-trip verbatim."""
     from datamanifest.database import Database

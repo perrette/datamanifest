@@ -554,6 +554,11 @@ def _download_dataset(
     same target and — unless an explicit overwrite was requested — adopts what
     it published instead of re-fetching (spec-v5.2).
     """
+    # An explicit overwrite is a clean wholesale replace: clear the old artifact so
+    # the re-fetch drops any stale files, rather than merging into the previous
+    # contents (materialize merges into an existing directory by default).
+    if overwrite and os.path.exists(download_path):
+        _remove_path(download_path)
     materialize(
         download_path,
         lambda tmp: _fetch_into_path(

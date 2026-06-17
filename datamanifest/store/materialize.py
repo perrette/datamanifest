@@ -201,7 +201,7 @@ def remove_path(path: str) -> None:
 
 
 def materialize(target: str, write_fn, *, on_locked: str = "wait",
-                stale_age=None, skip_if=None) -> None:
+                stale_age=None, skip_if=None, merge: bool = True) -> None:
     """Atomically publish *target*, holding a pidfile lock for the duration.
 
     ``write_fn(tmp)`` populates the staging path ``<target>.tmp`` (a file or a
@@ -222,6 +222,22 @@ def materialize(target: str, write_fn, *, on_locked: str = "wait",
     *skip_if(target)*, when given, is evaluated **after** the lock is acquired:
     if it returns true the write is skipped entirely — the recheck that lets a
     waiter adopt the entry its peer just published instead of recomputing it.
+
+    *merge* (default ``True``) governs how a **directory** is published over an
+    existing directory — the case where two producers resolve to the same
+    directory under different basenames or formats (spec-v5.9 cache coexistence):
+
+    - ``merge=True``: move each produced entry into ``target`` individually (an
+      atomic per-entry rename), overwriting same-named entries and leaving the
+      existing siblings intact, so the producers coexist instead of one clobbering
+      the other.
+    - ``merge=False``: *strict* — raise :class:`FileExistsError` rather than
+      replace the existing directory wholesale, so a caller that did not expect to
+      share it never silently destroys what is already there. A caller that wants a
+      clean wholesale replace removes *target* first (as the dataset fetch does on
+      ``overwrite``).
+
+    *merge* has no effect when *target* is absent or a file (replaced wholesale).
     """
     if on_locked not in ("wait", "fail", "proceed"):
         raise ValueError(
@@ -243,8 +259,31 @@ def materialize(target: str, write_fn, *, on_locked: str = "wait",
             return
         remove_path(tmp)
         write_fn(tmp)
-        remove_path(target)
-        os.replace(tmp, target)
+        if os.path.isdir(tmp) and os.path.isdir(target):
+            # Publishing a directory over an existing directory: two producers may
+            # resolve to the same directory (same hash dir, a different basename or
+            # format). ``remove_path(target)`` + ``os.replace`` would delete whatever
+            # a sibling produced there.
+            if merge:
+                # Merge (default): move each produced entry into place individually —
+                # an atomic per-entry rename — overwriting same-named entries and
+                # leaving the existing siblings intact.
+                for entry in os.listdir(tmp):
+                    dst = os.path.join(target, entry)
+                    remove_path(dst)
+                    os.replace(os.path.join(tmp, entry), dst)
+                remove_path(tmp)
+            else:
+                # Strict: refuse to destroy the existing directory wholesale.
+                remove_path(tmp)
+                raise FileExistsError(
+                    f"materialize: refusing to overwrite the existing directory "
+                    f"{target!r} with merge=False; pass merge=True to merge into it, "
+                    f"or remove it first."
+                )
+        else:
+            remove_path(target)
+            os.replace(tmp, target)
         with open(locations.marker_path(target), "w"):
             pass
     finally:

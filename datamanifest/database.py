@@ -20,6 +20,7 @@ so a cross-language manifest survives a read/write round-trip intact.
 
 import os
 import sys
+import threading
 from dataclasses import dataclass, field, fields
 from urllib.parse import parse_qs, urlparse
 
@@ -1525,8 +1526,8 @@ class Database:
             result[key] = to_dict(entry)
         return result
 
-    def write(self, datasets_toml: str) -> None:
-        data = self.to_dict()
+    @staticmethod
+    def _ordered_toml(data: dict) -> str:
         # Structural ``_``-tables (``_META`` / ``_STORAGE`` / ``_LOADERS`` /
         # ``_LANG``) at the top, then datasets — both alphabetical. A plain
         # code-point sort would otherwise drop ``_`` (0x5F) *between* the
@@ -1537,8 +1538,44 @@ class Database:
                 data.items(), key=lambda kv: (not kv[0].startswith("_"), kv[0])
             )
         }
-        with open(datasets_toml, "wb") as f:
-            tomli_w.dump(ordered, f)
+        return tomli_w.dumps(ordered)
+
+    def write(self, datasets_toml: str) -> None:
+        payload = self._ordered_toml(self.to_dict())
+        # Skip the write entirely when the on-disk manifest already has the same
+        # semantic content: parse it and re-serialize through the same ordering, then
+        # compare. Equal ⇒ a rewrite would only churn the file (and, the first time,
+        # replace a hand-authored layout) for no content change, so leave it untouched;
+        # only a real content change rewrites. An absent / unparseable file falls
+        # through to a normal write.
+        if os.path.isfile(datasets_toml):
+            try:
+                with open(datasets_toml, "rb") as f:
+                    current = self._ordered_toml(tomllib.load(f))
+            except Exception:
+                current = None
+            if current == payload:
+                return
+        # Atomic write: stage to a per-pid / per-thread ``.tmp`` sibling in the target's
+        # own directory and ``os.replace`` over the target (POSIX rename is atomic within
+        # a filesystem), so a sibling process re-reading the manifest mid-write never
+        # observes a truncated (0-byte) file. A failed write cleans up the staging file
+        # and never truncates the target.
+        d = os.path.dirname(datasets_toml) or "."
+        os.makedirs(d, exist_ok=True)
+        tmp = os.path.join(
+            d, f".{os.path.basename(datasets_toml)}.{os.getpid()}-{threading.get_ident()}.tmp"
+        )
+        try:
+            with open(tmp, "wb") as f:
+                f.write(payload.encode("utf-8"))
+            os.replace(tmp, datasets_toml)
+        except BaseException:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            raise
 
     # ----- registry (Databases.jl:553-792) -----
     def register_dataset(

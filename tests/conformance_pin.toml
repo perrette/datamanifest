@@ -1,4 +1,4 @@
-spec_tag = "spec-v5.6"
+spec_tag = "spec-v5.9"
 
 # Per-file SHA-256 content hashes computed from the actual pinned fixtures.
 # This constitutes the Python tool's conformance claim against the spec.
